@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JobCoach AI | Tailor your next opportunity</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js?v=8" defer></script>
+</head>
+<body>
+  <main class="app-shell">
+    <aside class="sidebar" aria-label="Workflow navigation">
+      <a class="brand" href="#welcome" aria-label="JobCoach AI home">
+        <span class="brand-mark">JC</span>
+        <span>JobCoach <strong>AI</strong></span>
+      </a>
+
+      <div class="sidebar-content">
+        <p class="eyebrow">Your application copilot</p>
+        <h1>Move from<br><span>maybe</span> to ready.</h1>
+        <p class="sidebar-copy">Make every application feel like it was made for you.</p>
+      </div>
+
+      <nav class="stepper" aria-label="Application steps">
+        <a class="step active" data-step="welcome" href="#welcome">
+          <span class="step-number">01</span>
+          <span><strong>Welcome</strong><small>Get started</small></span>
+        </a>
+        <a class="step" data-step="tailor" href="#tailor">
+          <span class="step-number">02</span>
+          <span><strong>Tailor</strong><small>Add a job</small></span>
+        </a>
+        <a class="step" data-step="parsed" href="#parsed">
+          <span class="step-number">03</span>
+          <span><strong>Your fit</strong><small>See your match</small></span>
+        </a>
+      </nav>
+
+      <p class="sidebar-footer">Built for the next chapter <span aria-hidden="true">&rarr;</span></p>
+    </aside>
+
+    <section class="content" aria-live="polite">
+      <div class="topbar">
+        <span class="topbar-label">Job application workspace</span>
+        <span class="secure-note"><span class="status-dot"></span> Your data stays yours</span>
+      </div>
+
+      <section class="screen welcome-screen" data-screen="welcome">
+        <div class="welcome-header">
+          <span class="section-kicker">01 / Welcome</span>
+          <h2>Welcome to <em>JobCoach AI.</em></h2>
+          <p>Make your next application feel like it was made for you.</p>
+        </div>
+
+        <form class="auth-panel" id="auth-form" action="#tailor" method="get">
+          <div class="auth-fields">
+            <div class="field-group">
+              <label for="auth-email">Email address</label>
+              <input id="auth-email" name="email" type="email" placeholder="you@example.com" required>
+            </div>
+            <div class="field-group">
+              <label for="auth-password">Password</label>
+              <input id="auth-password" name="password" type="password" placeholder="Enter your password" required>
+            </div>
+          </div>
+          <div class="auth-actions">
+            <button class="button button-primary" type="submit">Log in <span aria-hidden="true">&rarr;</span></button>
+            <a class="button button-secondary" href="#tailor">Register <span aria-hidden="true">&rarr;</span></a>
+          </div>
+          <a class="guest-link" href="#tailor">Continue as guest</a>
+          <p class="privacy-line">By continuing, you agree to our terms and privacy policy.</p>
+        </form>
+      </section>
+
+      <section class="screen" data-screen="tailor" hidden>
+        <div class="screen-intro">
+          <span class="section-kicker">02 / Tailor</span>
+          <h2>Tell us about<br><em>the opportunity.</em></h2>
+          <p>Paste the role you’re aiming for. We’ll pull out what matters and shape your strongest angle.</p>
+        </div>
+
+        <form class="job-form" id="job-form">
+          <div class="tailor-actions">
+            <button class="button button-primary" type="button" id="create-resume-button">Create Resume <span aria-hidden="true">&rarr;</span></button>
+            <input id="resume-upload" name="resume" type="file" accept=".pdf,.doc,.docx">
+            <label class="button button-secondary upload-button" for="resume-upload">Upload resume <span aria-hidden="true">&uarr;</span></label>
+          </div>
+          <p class="file-name" id="file-name">No resume selected</p>
+          <div class="field-group">
+            <label for="job-title">Job title <span>*</span></label>
+            <input id="job-title" name="job-title" type="text" placeholder="e.g. Product Designer" required>
+          </div>
+          <div class="field-group">
+            <div class="label-row"><label for="job-description">Job description <span>*</span></label><span class="field-hint">Paste the full listing</span></div>
+            <textarea id="job-description" name="job-description" rows="8" placeholder="Paste the job description here..." required></textarea>
+          </div>
+          <div class="form-footer">
+            <a class="text-button" href="#welcome"><span aria-hidden="true">&larr;</span> Back</a>
+          </div>
+        </form>
+      </section>
+
+      <section class="screen" data-screen="parsed" hidden>
+        <div class="parsed-header">
+          <div class="screen-intro">
+            <span class="section-kicker">03 / Your fit</span>
+            <h2>Your resume,<br><em>in focus.</em></h2>
+            <p>Review the parsed details below. Guests can manually populate these fields before moving on.</p>
+          </div>
+          <div class="match-score"><span>Role match</span><strong>84<span>%</span></strong><small>Strong foundation</small></div>
+        </div>
+
+        <div class="parsed-toolbar">
+          <div class="edit-actions"><button class="button button-secondary" type="button" id="edit-uploaded-button" disabled>Edit uploaded resume <span aria-hidden="true">&nearr;</span></button><button class="button button-primary" type="button" id="edit-parsed-button">Edit parsed resume <span aria-hidden="true">&nearr;</span></button></div>
+          <div class="export-actions"><button class="text-button" type="button" id="export-docx-button">Export DOCX</button><button class="text-button" type="button" id="export-pdf-button">Export PDF</button></div>
+        </div>
+        <p class="page-warning" id="page-warning" hidden>Some content may exceed one page. Shorten the resume before exporting.</p>
+
+        <form class="parsed-form" id="parsed-form">
+          <section class="resume-section user-info-section">
+            <div class="collection-header"><div><span class="card-index">00</span><h3>User information</h3></div><span class="field-hint">Shown at the top of your resume</span></div>
+            <div class="user-info-grid">
+              <div class="field-group"><label for="first-name">First name</label><input id="first-name" name="first-name" type="text" value="Jordan" placeholder="First name"></div>
+              <div class="field-group"><label for="last-name">Last name</label><input id="last-name" name="last-name" type="text" value="Lee" placeholder="Last name"></div>
+              <div class="field-group"><label for="phone">Phone</label><input id="phone" name="phone" type="tel" value="(415) 555-0148" placeholder="(555) 555-5555"></div>
+              <div class="field-group"><label for="email">Email</label><input id="email" name="email" type="email" value="jordan.lee@example.com" placeholder="you@example.com"></div>
+            </div>
+          </section>
+          <section class="resume-section" data-collection="summary">
+            <div class="collection-header"><div><span class="card-index">01</span><h3>Professional summary</h3></div><button class="add-button" type="button" data-add="summary">+ Add summary</button></div>
+            <div class="collection-list" id="summary-fields"><div class="editable-row"><textarea name="summary[]" rows="4">Product-minded designer who turns complex problems into clear, intuitive experiences. You bring a thoughtful balance of user empathy, sharp visual craft, and cross-functional momentum.</textarea><button class="remove-button" type="button" data-remove aria-label="Remove professional summary">Remove</button></div></div>
+          </section>
+          <section class="resume-section" data-collection="experience">
+            <div class="collection-header"><div><span class="card-index">02</span><h3>Experience</h3></div><button class="add-button" type="button" data-add="experience">+ Add experience</button></div>
+            <div class="collection-list" id="experience-fields"><div class="editable-row"><textarea name="experience[]" rows="4" placeholder="Role, company, dates, and key accomplishments...">Senior Product Designer | Northstar Labs | 2022 - Present
+Led a redesign of the onboarding experience that improved activation by 28% and created a reusable design system with product and engineering.</textarea><button class="remove-button" type="button" data-remove aria-label="Remove experience">Remove</button></div><div class="editable-row"><textarea name="experience[]" rows="4" placeholder="Role, company, dates, and key accomplishments...">UX Designer | Brightline Studio | 2019 - 2022
+Planned user research, built interactive prototypes, and partnered with clients to launch accessible web products.</textarea><button class="remove-button" type="button" data-remove aria-label="Remove experience">Remove</button></div></div>
+          </section>
+          <section class="resume-section" data-collection="skills">
+            <div class="collection-header"><div><span class="card-index">03</span><h3>Skills</h3></div><button class="add-button" type="button" data-add="skills">+ Add skill</button></div>
+            <div class="collection-list" id="skills-fields"><div class="editable-row"><input name="skills[]" type="text" value="Product strategy" placeholder="e.g. Figma, UX research, prototyping"><button class="remove-button" type="button" data-remove aria-label="Remove skill">Remove</button></div><div class="editable-row"><input name="skills[]" type="text" value="UX research" placeholder="e.g. Figma, UX research, prototyping"><button class="remove-button" type="button" data-remove aria-label="Remove skill">Remove</button></div><div class="editable-row"><input name="skills[]" type="text" value="Figma and prototyping" placeholder="e.g. Figma, UX research, prototyping"><button class="remove-button" type="button" data-remove aria-label="Remove skill">Remove</button></div><div class="editable-row"><input name="skills[]" type="text" value="Design systems" placeholder="e.g. Figma, UX research, prototyping"><button class="remove-button" type="button" data-remove aria-label="Remove skill">Remove</button></div><div class="editable-row"><input name="skills[]" type="text" value="Cross-functional leadership" placeholder="e.g. Figma, UX research, prototyping"><button class="remove-button" type="button" data-remove aria-label="Remove skill">Remove</button></div></div>
+            <p class="field-hint manual-hint">Add each skill as its own field.</p>
+          </section>
+        </form>
+        <section class="document-editor" id="document-editor" hidden>
+          <div class="editor-header"><div><span class="card-index">04</span><h3>Full resume editor</h3></div><span class="field-hint">Guest document workspace</span></div>
+          <div class="editor-paper" id="resume-editor" contenteditable="false" role="textbox" aria-label="Full resume editor">
+            <h1>Your Name</h1>
+            <p class="editor-contact">you@example.com &middot; City, State &middot; portfolio.example.com</p>
+            <h2>Professional Summary</h2>
+            <p>Product-minded designer who turns complex problems into clear, intuitive experiences.</p>
+            <h2>Experience</h2>
+            <p><strong>Product Designer</strong><br>Company Name &middot; 2022 - Present</p>
+            <h2>Skills</h2>
+            <p>Figma &middot; UX research &middot; Prototyping &middot; Design systems</p>
+          </div>
+        </section>
+        <div class="parsed-footer"><a class="text-button" href="#tailor"><span aria-hidden="true">&larr;</span> Change role</a><button class="button button-primary" type="submit" form="parsed-form">Save resume details <span aria-hidden="true">&rarr;</span></button></div>
+      </section>
+    </section>
+  </main>
+</body>
+</html>
