@@ -1,186 +1,153 @@
-# Team1---JobCoachAI
+# JobCoachAI
 
-JobCoachAI is an AI-powered career platform designed to help job seekers build stronger resumes, tailor applications to specific job opportunities, track their job search, prepare for interviews, and plan their career growth. The goal of JobCoachAI is to bring multiple parts of the job-search process into one platform while using AI to provide personalized career assistance.
+JobCoachAI is an AI-powered career platform for helping job seekers build stronger resumes, tailor applications, prepare for interviews, track their job search, and plan their career growth.
 
----
+This repository combines the Team1 product plans and documentation with the working Vite/React and Supabase starter implementation. The application is still an MVP in progress: the current codebase provides the frontend shell and Supabase client setup, while the broader coaching features remain planned work.
 
-## 📌 Project Overview
+## Product scope
 
-Searching for a job often requires candidates to use several different tools for resume creation, job searching, application tracking, and interview preparation.
+JobCoachAI is intended to bring these workflows into one platform:
 
-JobCoachAI aims to simplify this process by providing these tools in one application.
+- Resume creation, editing, organization, and PDF export
+- Job-specific resume tailoring and AI feedback
+- Skill and qualification gap identification
+- Job search, saved jobs, and application tracking
+- Interview question practice and feedback
+- Career goals, skill recommendations, courses, and certifications
 
-Users will be able to:
+AI suggestions should improve the presentation of a user's real qualifications. They must not fabricate employment, education, certifications, skills, or accomplishments.
 
-- Create and manage resumes
-- Tailor resumes to specific job descriptions
-- Receive AI-powered resume feedback
-- Identify missing skills and qualifications
-- Search and save job opportunities
-- Track job applications
-- Prepare for interviews
-- Set career goals
-- Receive skill, course, and certification recommendations
+## Current implementation
 
----
+- Frontend: React 19, TypeScript, Vite, and ESLint
+- Frontend data client: Supabase JavaScript SDK
+- Backend integration: Python 3 and the Supabase Python client
+- Database and authentication: Supabase
+- Planned AI integration: an AI/LLM API for resume analysis, recommendations, and interview preparation
 
-## 🎯 Project Goals
+The current frontend is the Vite starter shell. Backend routes, resume workflows, authentication flows, and AI features are planned but are not fully implemented yet.
 
-The primary goals of JobCoachAI are to:
-
-1. Simplify resume creation and management.
-2. Help candidates tailor resumes for specific job descriptions.
-3. Provide useful AI-generated resume recommendations.
-4. Help users identify skill and qualification gaps.
-5. Organize job searching and application tracking.
-6. Provide AI-assisted interview preparation.
-7. Support long-term career development.
-
----
-
-## ✨ Core Features
-
-### 👤 Onboarding & Access
-
-- Welcome page
-- Country selection
-- Guest access
-- Account registration
-- Login
-- Navigation
-
-### 📄 Resume Builder
-
-Users can create and manage resumes within JobCoachAI.
-
-Planned capabilities include:
-
-- Create a resume from scratch
-- Add resume information using forms
-- Edit resume information
-- Add resume sections
-- Reorder resume sections
-- Maintain multiple resumes
-- Save job-specific resumes
-- Export resumes as PDF
-
-### 🤖 AI Resume Coaching
-
-Users can compare their resume against a specific job description.
-
-JobCoachAI will support:
-
-- Job description analysis
-- AI resume evaluation
-- Job match percentage
-- Missing skills detection
-- Resume improvement recommendations
-- Professional summary generation
-- Skill recommendations
-- Editable AI suggestions
-
-The AI is intended to improve the presentation of a candidate's real
-qualifications and should not fabricate employment, education,
-certifications, skills, or accomplishments.
-
-### 🔎 Job Search & Discovery
-
-Users will be able to:
-
-- Search for jobs
-- Filter job results
-- View job postings
-- Save jobs
-- Select resumes for different opportunities
-
-### 📊 Application Tracking
-
-Users will be able to organize their job-search activity by:
-
-- Tracking applications
-- Recording application status
-- Viewing application activity
-- Connecting resumes with job applications
-
-### 🎤 Interview Preparation
-
-JobCoachAI will provide AI-assisted interview preparation, including:
-
-- Job-specific interview questions
-- Interview answer practice
-- AI feedback
-- Interview improvement recommendations
-
-### 📈 Career Growth
-
-Career coaching features are designed to help users plan beyond a single job application.
-
-Features include:
-
-- Career goals
-- Skill recommendations
-- Course recommendations
-- Certification recommendations
-- Career progress tracking
-
----
-
-## 🛠️ Technology Stack
-
-### Frontend
-
-- React
-- JavaScript
-- HTML
-- CSS
-
-### Backend
-
-- Python
-- Flask
-
-### Database & Authentication
-
-- Supabase
-
-### AI Integration
-
-- AI/LLM API integration for resume analysis, recommendations, and interview preparation
-
-### Development & Collaboration
-
-- GitHub
-- GitHub Projects
-- Miro
-
-> The technology stack may evolve as development progresses.
-
----
-
-## 📁 Proposed Project Structure
+## Repository structure
 
 ```text
 JobCoachAI/
-│
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── services/
-│   │   └── assets/
+├── frontend/                   # React + TypeScript + Vite application
+│   ├── src/                    # Application source
+│   ├── public/                 # Static frontend assets
+│   ├── .env.example            # Frontend environment template
 │   └── package.json
-│
-├── backend/
-│   ├── app.py
-│   ├── routes/
-│   ├── services/
-│   └── models/
-│
+├── backend/                    # Python Supabase integration
+│   ├── supabase_client.py
+│   └── .env.example            # Backend environment template
 ├── docs/
-│   ├── wireframes/
-│   ├── user-flow/
-│   └── roadmap/
-│
-├── .gitignore
-├── README.md
-└── requirements.txt
+│   ├── JobCoachAI_MVP_Definition.docx
+│   ├── db_architecture         # Supabase/Postgres table design
+│   ├── roadmap/                # Product roadmap materials
+│   ├── user-flow/              # User-flow materials
+│   └── wireframes/             # Wireframe materials
+├── requirements.txt
+└── README.md
+```
+
+## Local setup
+
+### Prerequisites
+
+- Node.js LTS and npm
+- Python 3.10+
+- A Supabase project with a URL and publishable key
+
+### Install dependencies
+
+From the repository root:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+Install the frontend packages:
+
+```bash
+cd frontend
+npm install
+```
+
+### Configure environment variables
+
+Create local environment files from the templates:
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+```
+
+Set the values required by the clients. The backend client currently reads:
+
+```env
+SUPABASE_URL=your_supabase_url_here
+SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key_here
+```
+
+The frontend template uses:
+
+```env
+VITE_SUPABASE_URL=your_supabase_url_here
+VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key_here
+VITE_API_URL=your_api_url_here
+```
+
+Do not commit `.env` files or secrets.
+
+### Run the frontend
+
+From `frontend/`:
+
+```bash
+npm run dev
+```
+
+Useful frontend commands:
+
+```bash
+npm run build
+npm run lint
+npm run preview
+```
+
+## Planned features
+
+### Onboarding and access
+
+- Welcome page, country selection, guest access, registration, login, and navigation
+
+### Resume builder
+
+- Create and edit resumes from structured forms
+- Add, reorder, and manage resume sections
+- Maintain multiple resumes and job-specific versions
+- Export resumes as PDF
+
+### AI resume coaching
+
+- Analyze job descriptions
+- Evaluate resume fit and identify missing skills
+- Generate editable recommendations and professional summaries
+- Preserve the master resume while creating tailored versions
+
+### Job search and career growth
+
+- Search, filter, view, and save job opportunities
+- Track application status and activity
+- Set career goals and receive skill, course, and certification recommendations
+
+## Documentation
+
+The MVP definition, database architecture, roadmap, user flows, and wireframes live under `docs/`. The database design uses Supabase/Postgres and includes master resumes, tailored resume snapshots, version history, AI suggestions, and job records.
+
+## Collaboration
+
+GitHub, GitHub Projects, and Miro are used for development and planning. The technology stack may evolve as the MVP is built.
+- GitHub Projects
