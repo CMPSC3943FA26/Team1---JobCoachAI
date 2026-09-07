@@ -1,0 +1,178 @@
+# JobCoachAI — Database Table Architecture
+
+Based on the MVP Definition doc (Section 13: Suggested Core Data Model). Designed for Postgres via Supabase, with Supabase Auth handling anonymous/upgraded users.
+
+---
+
+## users
+Backed by Supabase Auth (`auth.users`). Optional public-schema extension table if you need app-specific fields beyond what Supabase Auth stores:
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid, PK | References `auth.users.id` |
+| is_anonymous | boolean | True until upgraded to permanent account |
+| upgraded_at | timestamptz, nullable | Set when anonymous → permanent |
+| created_at | timestamptz | |
+
+---
+
+## resumes  *(master resume — one source of truth per user)*
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid, PK | |
+| user_id | uuid, FK → users.id | One master resume per user (or allow multiple, TBD) |
+| full_name | text | Contact Info section |
+| email | text | Contact Info section |
+| phone | text, nullable | Contact Info section |
+| location | text, nullable | Contact Info section |
+| professional_summary | text, nullable | Professional Summary section |
+| created_at | timestamptz | |
+| updated_at | timestamptz | Must NOT change from AI tailoring — only manual edits |
+
+---
+
+## work_experience  *(repeatable, belongs to a resume)*
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid, PK | |
+| resume_id | uuid, FK → resumes.id | |
+| job_title | text | |
+| company | text | |
+| location | text, nullable | |
+| start_date | date | |
+| end_date | date, nullable | Null = current role |
+| description | text | Bullet points / responsibilities |
+| sort_order | int | Supports user reordering |
+
+---
+
+## education  *(repeatable)*
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid, PK | |
+| resume_id | uuid, FK → resumes.id | |
+| school | text | |
+| degree | text, nullable | |
+| field_of_study | text, nullable | |
+| start_date | date, nullable | |
+| end_date | date, nullable | |
+| sort_order | int | |
+
+---
+
+## skills  *(repeatable)*
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid, PK | |
+| resume_id | uuid, FK → resumes.id | |
+| skill_name | text | |
+| sort_order | int | |
+
+---
+
+## projects  *(repeatable)*
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid, PK | |
+| resume_id | uuid, FK → resumes.id | |
+| name | text | |
+| description | text, nullable | |
+| link | text, nullable | |
+| sort_order | int | |
+
+---
+
+## certifications  *(repeatable)*
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid, PK | |
+| resume_id | uuid, FK → resumes.id | |
+| name | text | |
+| issuer | text, nullable | |
+| date_earned | date, nullable | |
+| sort_order | int | |
+
+---
+
+## jobs
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid, PK | |
+| user_id | uuid, FK → users.id | Who entered/selected this job |
+| title | text | |
+| company | text, nullable | |
+| description | text | Manually pasted, or pulled from a job source |
+| source | text | e.g. `manual`, `jobpipe` — stretch goal path |
+| created_at | timestamptz | |
+
+---
+
+## tailored_resumes  *(job-specific version, generated from the master)*
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid, PK | |
+| resume_id | uuid, FK → resumes.id | Points to the master; master is never overwritten |
+| job_id | uuid, FK → jobs.id | |
+| content | jsonb | Snapshot of tailored resume content (contact, summary, work experience, education, skills, projects, certifications) — lets the tailored version diverge from the master without touching it |
+| status | text | e.g. `draft`, `finalized` |
+| export_filename | text, nullable | Suggested filename (based on name + job title), user-editable before export |
+| last_exported_at | timestamptz, nullable | |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+---
+
+## tailored_resume_versions  *(snapshot history — enables undo/restore)*
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid, PK | |
+| tailored_resume_id | uuid, FK → tailored_resumes.id | |
+| content | jsonb | Full snapshot of `tailored_resumes.content` at this point in time |
+| created_at | timestamptz | Write a new row here every time an accepted/modified change updates the tailored resume |
+
+Restoring a previous state = copy an older `content` snapshot back into `tailored_resumes.content` (and optionally log that restore as a new version too, so undo itself is undoable).
+
+---
+
+## ai_suggestions  *(granular, per-field recommendations)*
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid, PK | |
+| tailored_resume_id | uuid, FK → tailored_resumes.id | |
+| section | text | e.g. `professional_summary`, `work_experience`, `skills` |
+| field_reference | text, nullable | Identifies which entry/field within the section (e.g. entry id or index) |
+| original_value | text | |
+| suggested_value | text | AI's proposed change |
+| final_value | text, nullable | What the resume field actually ends up as — set when status = `modified` (user's own edit, different from `suggested_value`); can mirror `suggested_value` when status = `accepted` |
+| reason | text | AI's explanation for the change |
+| status | text | `pending`, `accepted`, `rejected`, `modified` |
+| created_at | timestamptz | |
+
+---
+
+## Relationships summary
+
+- `users` 1 ─── * `resumes` (or 1-to-1, if only one master resume per user)
+- `resumes` 1 ─── * `work_experience`, `education`, `skills`, `projects`, `certifications`
+- `resumes` 1 ─── * `tailored_resumes`
+- `jobs` 1 ─── * `tailored_resumes`
+- `tailored_resumes` 1 ─── * `ai_suggestions`
+- `tailored_resumes` 1 ─── * `tailored_resume_versions`
+- `users` 1 ─── * `jobs`
+
+## Notes / open decisions
+- `tailored_resumes.content` uses a JSONB snapshot rather than mirroring every child table — simplest way to let a tailored version diverge from the master without a full parallel schema. Worth confirming this fits your team's comfort level with JSONB in Postgres.
+- `tailored_resume_versions` gives you undo/restore (Section 8 requirement) without needing to reconstruct state from the suggestions log — trade-off is storing full JSONB snapshots rather than diffs, which is simpler but less space-efficient. Fine for an MVP.
+- RLS policies on every table should scope rows to `auth.uid() = user_id` (directly or via the resume/tailored_resume chain).
+- Explicitly excluded per the MVP doc: `Application`, `Job_Cache`, `Career_Goal` tables from earlier drafts — application tracking, job board caching, and goal tracking are all stretch/out-of-scope now.
+
