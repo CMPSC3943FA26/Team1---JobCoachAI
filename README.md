@@ -44,7 +44,7 @@ JobCoachAI/
 │   ├── db_architecture         # Supabase/Postgres table design
 │   ├── roadmap/                # Product roadmap materials
 │   ├── user-flow/              # User-flow materials
-│   └── design/             # Design materials
+│   └── design/                 # Design materials
 ├── requirements.txt
 └── README.md
 ```
