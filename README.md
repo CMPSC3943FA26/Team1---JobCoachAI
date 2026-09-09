@@ -61,22 +61,21 @@ JobCoachAI/
 
 Create and activate a Python environment in the backend folder so the project stays organized:
 
-Windows PowerShell:
+Linux/macOS:
 
 ```powershell
 cd backend
 py -m venv .venv
-.\.venv\Scripts\Activate.ps1
+source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r ..\requirements.txt
 ```
 
-Linux/macOS:
-
+Windows PowerShell:
 ```bash
 cd backend
 python3 -m venv .venv
-source .venv/bin/activate
+.\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r ../requirements.txt
 ```
