@@ -59,19 +59,32 @@ JobCoachAI/
 
 ### Install dependencies
 
-From the repository root:
+Create and activate a Python environment in the backend folder so the project stays organized:
+
+Windows PowerShell:
+
+```powershell
+cd backend
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r ..\requirements.txt
+```
+
+Linux/macOS:
 
 ```bash
+cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m pip install -r ../requirements.txt
 ```
 
 Install the frontend packages:
 
 ```bash
-cd frontend
+cd ../frontend
 npm install
 ```
 
@@ -79,16 +92,26 @@ npm install
 
 Create local environment files from the templates:
 
+Windows PowerShell:
+
+```powershell
+Copy-Item .\backend\.env.example .\backend\.env
+Copy-Item .\frontend\.env.example .\frontend\.env
+```
+
+Linux/macOS:
+
 ```bash
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
 ```
 
-Set the values required by the clients. The backend client currently reads:
+Set the values required by the clients. The backend client reads:
 
 ```env
 SUPABASE_URL=your_supabase_url_here
 SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key_here
+SUPABASE_ANON_KEY=your_supabase_anon_key_here
 ```
 
 The frontend template uses:
