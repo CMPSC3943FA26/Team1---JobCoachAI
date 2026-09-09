@@ -98,6 +98,8 @@ Windows PowerShell:
 Copy-Item .\backend\.env.example .\backend\.env
 Copy-Item .\frontend\.env.example .\frontend\.env
 ```
+Enter the supabase api keys in the .env files
+Review the supabase Api keys.docx in the excel spreadsheet
 
 Linux/macOS:
 
