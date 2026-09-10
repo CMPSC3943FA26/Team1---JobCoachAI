@@ -73,6 +73,7 @@ python -m pip install -r ..\requirements.txt
 
 Windows PowerShell:
 ```bash
+cd ..
 cd backend
 python3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
