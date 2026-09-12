@@ -124,6 +124,12 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key_here
 VITE_API_URL=your_api_url_here
 ```
 
+Alternate Method: 
+- Download 7zip.
+- Extract backendenv.zip and frontendenv.zip.
+- Password is listed in JobSeachAITaskTracker spreadsheet.
+- Place .env file in backend and frontend folder respectively.
+
 Do not commit `.env` files or secrets.
 
 ### Run the frontend
