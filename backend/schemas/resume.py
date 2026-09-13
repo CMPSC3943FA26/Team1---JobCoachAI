@@ -1,7 +1,6 @@
 # schemas/resume.py
 from datetime import date
 from typing import Optional
-from uuid import UUID
 from pydantic import BaseModel
 
 
