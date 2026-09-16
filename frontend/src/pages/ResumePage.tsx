@@ -1,914 +1,436 @@
-import { useRef, useState } from 'react'
-import { Button } from '../components/Button'
+import { useState } from "react";
+import { Button } from "../components/Button";
+import { initialResume } from "../features/resume/resumeData";
 
-type ResumePageProps = {
-  blankResume?: boolean
+type ResumePageProps = { blankResume?: boolean };
+type SectionKey =
+  | "summary"
+  | "education"
+  | "experience"
+  | "skills"
+  | "projects"
+  | "certifications";
+type ResumeSection = {
+  key: SectionKey | string;
+  title: string;
+  entries: string[];
+  custom?: boolean;
+};
+
+const sectionLabels: Record<SectionKey, string> = {
+  summary: "Professional summary",
+  education: "Education",
+  experience: "Experience",
+  skills: "Skills",
+  projects: "Projects",
+  certifications: "Certifications",
+};
+
+function createSections(blankResume: boolean): ResumeSection[] {
+  return [
+    {
+      key: "summary",
+      title: sectionLabels.summary,
+      entries: blankResume ? [""] : initialResume.summary,
+    },
+    {
+      key: "education",
+      title: sectionLabels.education,
+      entries: blankResume
+        ? [""]
+        : [
+            "B.A. in Interaction Design | California College of the Arts | 2015 - 2019",
+          ],
+    },
+    {
+      key: "experience",
+      title: sectionLabels.experience,
+      entries: blankResume ? [""] : initialResume.experience,
+    },
+    {
+      key: "skills",
+      title: sectionLabels.skills,
+      entries: blankResume ? [""] : initialResume.skills,
+    },
+    {
+      key: "projects",
+      title: sectionLabels.projects,
+      entries: blankResume
+        ? [""]
+        : [
+            "Onboarding redesign | Increased activation by 28% through a clearer first-run experience.",
+          ],
+    },
+    {
+      key: "certifications",
+      title: sectionLabels.certifications,
+      entries: blankResume ? [""] : ["Google UX Design Certificate | 2021"],
+    },
+  ];
 }
 
-const defaultEditorHtml = `
-  <h1>Your Name</h1>
-  <p class="editor-contact">you@example.com · City, State · portfolio.example.com</p>
+export function ResumePage({ blankResume = false }: ResumePageProps) {
+  const [profile, setProfile] = useState({
+    firstName: blankResume ? "" : initialResume.firstName,
+    lastName: blankResume ? "" : initialResume.lastName,
+    email: blankResume ? "" : initialResume.email,
+    phone: blankResume ? "" : initialResume.phone,
+  });
+  const [sections, setSections] = useState<ResumeSection[]>(() =>
+    createSections(blankResume),
+  );
+  const [jobTitle, setJobTitle] = useState("");
+  const [status, setStatus] = useState("");
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [resumeDeleted, setResumeDeleted] = useState(false);
 
-  <h2>Professional Summary</h2>
-  <p>Product-minded designer who turns complex problems into clear, intuitive experiences.</p>
+  const updateProfile = (field: keyof typeof profile, value: string) => {
+    setProfile((current) => ({ ...current, [field]: value }));
+  };
 
-  <h2>Experience</h2>
-  <p><strong>Product Designer</strong><br />Company Name · 2022 - Present</p>
-
-  <h2>Skills</h2>
-  <p>Figma · UX research · Prototyping · Design systems</p>
-`
-
-const blankEditorHtml = `
-  <h1>Your Name</h1>
-  <p class="editor-contact">Add your contact information</p>
-
-  <h2>Professional Summary</h2>
-  <p>Add your professional summary.</p>
-
-  <h2>Experience</h2>
-  <p>Add your experience.</p>
-
-  <h2>Skills</h2>
-  <p>Add your skills.</p>
-`
-
-function escapeHtml(value: string) {
-  return value.replace(
-    /[&<>"']/g,
-    (character) =>
-      ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#039;',
-      }[character] ?? character)
-  )
-}
-
-function buildResumePreview(
-  form: HTMLFormElement | null
-) {
-  if (!form) {
-    return blankEditorHtml
-  }
-
-  const firstName =
-    (
-      form.querySelector(
-        '#first-name'
-      ) as HTMLInputElement | null
-    )?.value ?? ''
-
-  const lastName =
-    (
-      form.querySelector(
-        '#last-name'
-      ) as HTMLInputElement | null
-    )?.value ?? ''
-
-  const phone =
-    (
-      form.querySelector(
-        '#phone'
-      ) as HTMLInputElement | null
-    )?.value ?? ''
-
-  const email =
-    (
-      form.querySelector(
-        '#email'
-      ) as HTMLInputElement | null
-    )?.value ?? ''
-
-  const summaryFields = Array.from(
-    form.querySelectorAll(
-      '[name="summary[]"]'
-    )
-  ) as HTMLTextAreaElement[]
-
-  const experienceFields = Array.from(
-    form.querySelectorAll(
-      '[name="experience[]"]'
-    )
-  ) as HTMLTextAreaElement[]
-
-  const skillsFields = Array.from(
-    form.querySelectorAll(
-      '[name="skills[]"]'
-    )
-  ) as HTMLInputElement[]
-
-  const summary = summaryFields
-    .map((field) => field.value.trim())
-    .filter(Boolean)
-
-  const experience = experienceFields
-    .map((field) => field.value.trim())
-    .filter(Boolean)
-
-  const skills = skillsFields
-    .map((field) => field.value.trim())
-    .filter(Boolean)
-
-  const fullName =
-    `${firstName} ${lastName}`.trim() ||
-    'Your Name'
-
-  const contact = [email, phone]
-    .filter(Boolean)
-    .join(' · ')
-
-  const summaryHtml = summary.length
-    ? summary
-        .map(
-          (item) =>
-            `<p>${escapeHtml(item)}</p>`
-        )
-        .join('')
-    : '<p>Add your professional summary.</p>'
-
-  const experienceHtml = experience.length
-    ? experience
-        .map(
-          (item) =>
-            `<p>${escapeHtml(item).replace(
-              /\n/g,
-              '<br>'
-            )}</p>`
-        )
-        .join('')
-    : '<p>Add your experience.</p>'
-
-  const skillText = skills.length
-    ? skills.join(' · ')
-    : 'Add your skills.'
-
-  return `
-    <h1>${escapeHtml(fullName)}</h1>
-
-    <p class="editor-contact">
-      ${escapeHtml(
-        contact ||
-          'Add your contact information'
-      )}
-    </p>
-
-    <h2>Professional Summary</h2>
-    ${summaryHtml}
-
-    <h2>Experience</h2>
-    ${experienceHtml}
-
-    <h2>Skills</h2>
-    <p>${escapeHtml(skillText)}</p>
-  `
-}
-
-export function ResumePage({
-  blankResume = false,
-}: ResumePageProps) {
-
-  const formRef =
-    useRef<HTMLFormElement | null>(null)
-
-  const editorRef =
-    useRef<HTMLDivElement | null>(null)
-
-  const [editorVisible, setEditorVisible] =
-    useState(false)
-
-  const [editorHtml, setEditorHtml] =
-    useState(
-      blankResume
-        ? blankEditorHtml
-        : defaultEditorHtml
-    )
-
-  const [isEditing, setIsEditing] =
-    useState(false)
-
-  const [showWarning, setShowWarning] =
-    useState(false)
-
-  const updatePageWarning = () => {
-    const formText =
-      formRef.current?.textContent ?? ''
-
-    const editorText =
-      editorRef.current?.textContent ?? ''
-
-    const contentLength =
-      `${formText}${editorText}`.replace(
-        /\s/g,
-        ''
-      ).length
-
-    setShowWarning(contentLength >= 1200)
-  }
-
-  const openResumeEditor = (
-    importFields: boolean
+  const updateEntry = (
+    sectionKey: string,
+    entryIndex: number,
+    value: string,
   ) => {
+    setSections((current) =>
+      current.map((section) =>
+        section.key === sectionKey
+          ? {
+              ...section,
+              entries: section.entries.map((entry, index) =>
+                index === entryIndex ? value : entry,
+              ),
+            }
+          : section,
+      ),
+    );
+  };
 
-    if (
-      importFields &&
-      formRef.current
-    ) {
-      setEditorHtml(
-        buildResumePreview(
-          formRef.current
-        )
-      )
-    }
+  const addEntry = (sectionKey: string) => {
+    setSections((current) =>
+      current.map((section) =>
+        section.key === sectionKey
+          ? { ...section, entries: [...section.entries, ""] }
+          : section,
+      ),
+    );
+  };
 
-    setEditorVisible(true)
-    setIsEditing(true)
+  const removeEntry = (sectionKey: string, entryIndex: number) => {
+    setSections((current) =>
+      current.map((section) => {
+        if (section.key !== sectionKey) return section;
+        const entries = section.entries.filter(
+          (_, index) => index !== entryIndex,
+        );
+        return { ...section, entries: entries.length ? entries : [""] };
+      }),
+    );
+  };
 
-    setTimeout(
-      updatePageWarning,
-      0
-    )
-  }
+  const addSection = () => {
+    const title = window.prompt("Name this resume section")?.trim();
+    if (!title) return;
+    setSections((current) => [
+      ...current,
+      { key: `custom-${Date.now()}`, title, entries: [""], custom: true },
+    ]);
+  };
 
-  const handleExportDocx = () => {
-    const documentHtml =
-      `<html><body>${editorHtml}</body></html>`
+  const removeSection = (sectionKey: string) => {
+    setSections((current) =>
+      current.filter((section) => section.key !== sectionKey),
+    );
+  };
 
-    const file = new Blob(
-      [documentHtml],
-      {
-        type:
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      }
-    )
+  const handleDelete = () => {
+    setResumeDeleted(true);
+    setShowDeleteDialog(false);
+    setStatus("Resume deleted from this workspace.");
+  };
 
-    const link =
-      document.createElement('a')
-
-    link.href =
-      URL.createObjectURL(file)
-
-    link.download =
-      'jobcoach-resume.docx'
-
-    link.click()
-
-    URL.revokeObjectURL(
-      link.href
-    )
-  }
-
-  const handleExportPdf = () => {
-    updatePageWarning()
-    window.print()
-  }
-
-  return (
-    <section
-      className="screen"
-      data-screen="parsed"
-    >
-
-      {/* PAGE HEADER */}
-      <div className="parsed-header">
-
-        <div className="screen-intro">
-
-          <span className="section-kicker">
-            03 / Your fit
-          </span>
-
-          <h2>
-            Your resume,
-            <br />
-            <em>in focus.</em>
-          </h2>
-
-          <p>
-            {blankResume
-              ? 'Start building your resume by entering your information below.'
-              : 'Review the parsed details below. Guests can manually populate these fields before moving on.'}
-          </p>
-
-        </div>
-
-
-        {/* Only show match score when resume isn't blank */}
-        {!blankResume && (
-          <div className="match-score">
-
-            <span>
-              Role match
-            </span>
-
-            <strong>
-              84<span>%</span>
-            </strong>
-
-            <small>
-              Strong foundation
-            </small>
-
+  if (resumeDeleted) {
+    return (
+      <section className="screen resume-screen" data-screen="parsed">
+        <div className="resume-empty-state">
+          <span className="section-kicker">03 / Your fit</span>
+          <div className="empty-state-icon" aria-hidden="true">
+            +
           </div>
-        )}
-
-      </div>
-
-
-      {/* TOOLBAR */}
-      <div className="parsed-toolbar">
-
-        <div className="edit-actions">
-
-          <Button
-            variant="secondary"
-            type="button"
-            id="edit-uploaded-button"
-            disabled
-          >
-            Edit uploaded resume
-            <span aria-hidden="true">
-              ↗
-            </span>
-          </Button>
-
+          <h2>
+            Your resume is <em>cleared.</em>
+          </h2>
+          <p>
+            Start a new resume whenever you’re ready to shape your next
+            application.
+          </p>
           <Button
             variant="primary"
             type="button"
-            id="edit-parsed-button"
-            onClick={() =>
-              openResumeEditor(true)
-            }
+            onClick={() => {
+              setResumeDeleted(false);
+              setSections(createSections(true));
+              setStatus("");
+            }}
           >
-            {isEditing
-              ? 'Save changes'
-              : 'Edit resume'}
-
-            <span aria-hidden="true">
-              ↗
-            </span>
+            Create new resume <span aria-hidden="true">→</span>
           </Button>
-
         </div>
+      </section>
+    );
+  }
 
-
-        <div className="export-actions">
-
-          <button
-            className="text-button"
-            type="button"
-            id="export-docx-button"
-            onClick={handleExportDocx}
-          >
-            Export DOCX
-          </button>
-
-          <button
-            className="text-button"
-            type="button"
-            id="export-pdf-button"
-            onClick={handleExportPdf}
-          >
-            Export PDF
-          </button>
-
+  return (
+    <section className="screen resume-screen" data-screen="parsed">
+      <div className="resume-header">
+        <div className="screen-intro">
+          <span className="section-kicker">03 / Your fit</span>
+          <h2>
+            Build your <em>best case.</em>
+          </h2>
+          <p>
+            Keep your experience clear, current, and ready to tailor for the
+            next opportunity.
+          </p>
         </div>
-
+        <div className="resume-status" role="status">
+          <span className="status-dot" aria-hidden="true" />
+          {status || "Draft workspace"}
+        </div>
       </div>
 
+      <div className="resume-toolbar">
+        <div>
+          <strong>Resume editor</strong>
+          <span>Changes stay local until connected to your account.</span>
+        </div>
+        <div className="resume-toolbar-actions">
+          <Button
+            variant="secondary"
+            type="button"
+            onClick={() => setShowDeleteDialog(true)}
+          >
+            Delete resume
+          </Button>
+          <Button
+            variant="primary"
+            type="button"
+            onClick={() => setStatus("Resume saved just now.")}
+          >
+            Save resume <span aria-hidden="true">✓</span>
+          </Button>
+        </div>
+      </div>
 
-      <p
-        className="page-warning"
-        id="page-warning"
-        hidden={!showWarning}
-      >
-        Some content may exceed one page.
-        Shorten the resume before exporting.
-      </p>
-
-
-      {/* RESUME FORM */}
       <form
-        ref={formRef}
-        className="parsed-form"
-        id="parsed-form"
-        onInput={updatePageWarning}
+        className="resume-editor"
         onSubmit={(event) => {
-          event.preventDefault()
-          window.location.hash =
-            '#tailor'
+          event.preventDefault();
+          setStatus("Resume saved just now.");
         }}
       >
-
-        {/* USER INFO */}
-        <section className="resume-section user-info-section">
-
-          <div className="collection-header">
-
+        <section className="resume-card personal-card">
+          <div className="resume-card-heading">
             <div>
-              <span className="card-index">
-                00
-              </span>
-
-              <h3>
-                User information
-              </h3>
+              <span className="card-index">00</span>
+              <h3>Personal information</h3>
             </div>
-
-            <span className="field-hint">
-              Shown at the top of your resume
-            </span>
-
+            <span className="field-hint">Shown at the top of your resume</span>
           </div>
-
-
-          <div className="user-info-grid">
-
-            <div className="field-group">
-
-              <label htmlFor="first-name">
-                First name
-              </label>
-
-              <input
-                id="first-name"
-                name="first-name"
-                type="text"
-                defaultValue={
-                  blankResume
-                    ? ''
-                    : 'Jordan'
-                }
-                placeholder="First name"
-              />
-
-            </div>
-
-
-            <div className="field-group">
-
-              <label htmlFor="last-name">
-                Last name
-              </label>
-
-              <input
-                id="last-name"
-                name="last-name"
-                type="text"
-                defaultValue={
-                  blankResume
-                    ? ''
-                    : 'Lee'
-                }
-                placeholder="Last name"
-              />
-
-            </div>
-
-
-            <div className="field-group">
-
-              <label htmlFor="phone">
-                Phone
-              </label>
-
-              <input
-                id="phone"
-                name="phone"
-                type="tel"
-                defaultValue={
-                  blankResume
-                    ? ''
-                    : '(415) 555-0148'
-                }
-                placeholder="(555) 555-5555"
-              />
-
-            </div>
-
-
-            <div className="field-group">
-
-              <label htmlFor="email">
-                Email
-              </label>
-
-              <input
-                id="email"
-                name="email"
-                type="email"
-                defaultValue={
-                  blankResume
-                    ? ''
-                    : 'jordan.lee@example.com'
-                }
-                placeholder="you@example.com"
-              />
-
-            </div>
-
+          <div className="personal-grid">
+            {(["firstName", "lastName", "email", "phone"] as const).map(
+              (field) => (
+                <div className="field-group" key={field}>
+                  <label htmlFor={`resume-${field}`}>
+                    {field === "firstName"
+                      ? "First name"
+                      : field === "lastName"
+                        ? "Last name"
+                        : field[0].toUpperCase() + field.slice(1)}
+                  </label>
+                  <input
+                    id={`resume-${field}`}
+                    type={
+                      field === "email"
+                        ? "email"
+                        : field === "phone"
+                          ? "tel"
+                          : "text"
+                    }
+                    value={profile[field]}
+                    onChange={(event) =>
+                      updateProfile(field, event.target.value)
+                    }
+                    placeholder={
+                      field === "email"
+                        ? "you@example.com"
+                        : field === "phone"
+                          ? "(555) 555-5555"
+                          : field === "firstName"
+                            ? "First name"
+                            : "Last name"
+                    }
+                  />
+                </div>
+              ),
+            )}
           </div>
-
         </section>
 
-
-        {/* PROFESSIONAL SUMMARY */}
-        <section
-          className="resume-section"
-          data-collection="summary"
-        >
-
-          <div className="collection-header">
-
-            <div>
-
-              <span className="card-index">
-                01
-              </span>
-
-              <h3>
-                Professional summary
-              </h3>
-
-            </div>
-
-            <button
-              className="add-button"
-              type="button"
-              data-add="summary"
-            >
-              + Add summary
-            </button>
-
-          </div>
-
-
-          <div
-            className="collection-list"
-            id="summary-fields"
-          >
-
-            <div className="editable-row">
-
-              <textarea
-                name="summary[]"
-                rows={4}
-                placeholder="Write a short professional summary..."
-                defaultValue={
-                  blankResume
-                    ? ''
-                    : 'Product-minded designer who turns complex problems into clear, intuitive experiences. You bring a thoughtful balance of user empathy, sharp visual craft, and cross-functional momentum.'
-                }
-              />
-
-              <button
-                className="remove-button"
-                type="button"
-                data-remove
-                aria-label="Remove professional summary"
-              >
-                Remove
-              </button>
-
-            </div>
-
-          </div>
-
-        </section>
-
-
-        {/* EXPERIENCE */}
-        <section
-          className="resume-section"
-          data-collection="experience"
-        >
-
-          <div className="collection-header">
-
-            <div>
-
-              <span className="card-index">
-                02
-              </span>
-
-              <h3>
-                Experience
-              </h3>
-
-            </div>
-
-            <button
-              className="add-button"
-              type="button"
-              data-add="experience"
-            >
-              + Add experience
-            </button>
-
-          </div>
-
-
-          <div
-            className="collection-list"
-            id="experience-fields"
-          >
-
-            <div className="editable-row">
-
-              <textarea
-                name="experience[]"
-                rows={4}
-                placeholder="Role, company, dates, and key accomplishments..."
-                defaultValue={
-                  blankResume
-                    ? ''
-                    : `Senior Product Designer | Northstar Labs | 2022 - Present
-Led a redesign of the onboarding experience that improved activation by 28% and created a reusable design system with product and engineering.`
-                }
-              />
-
-              <button
-                className="remove-button"
-                type="button"
-                data-remove
-                aria-label="Remove experience"
-              >
-                Remove
-              </button>
-
-            </div>
-
-            {!blankResume && (
-              <div className="editable-row">
-
-                <textarea
-                  name="experience[]"
-                  rows={4}
-                  placeholder="Role, company, dates, and key accomplishments..."
-                  defaultValue={`UX Designer | Brightline Studio | 2019 - 2022
-Planned user research, built interactive prototypes, and partnered with clients to launch accessible web products.`}
-                />
-
-                <button
-                  className="remove-button"
-                  type="button"
-                  data-remove
-                  aria-label="Remove experience"
-                >
-                  Remove
-                </button>
-
+        {sections.map((section, sectionIndex) => (
+          <section className="resume-card" key={section.key}>
+            <div className="resume-card-heading">
+              <div>
+                <span className="card-index">
+                  {String(sectionIndex + 1).padStart(2, "0")}
+                </span>
+                <h3>{section.title}</h3>
               </div>
-            )}
+              <div className="section-actions">
+                <button
+                  className="add-button"
+                  type="button"
+                  onClick={() => addEntry(section.key)}
+                >
+                  + Add {section.key === "skills" ? "skill" : "entry"}
+                </button>
+                <button
+                  className="remove-section"
+                  type="button"
+                  onClick={() => removeSection(section.key)}
+                >
+                  Remove section
+                </button>
+              </div>
+            </div>
+            <div className="resume-entry-list">
+              {section.entries.map((entry, entryIndex) => (
+                <div
+                  className="resume-entry"
+                  key={`${section.key}-${entryIndex}`}
+                >
+                  {section.key === "skills" ? (
+                    <input
+                      value={entry}
+                      onChange={(event) =>
+                        updateEntry(section.key, entryIndex, event.target.value)
+                      }
+                      placeholder="e.g. Figma, user research, leadership"
+                      aria-label={`${section.title} entry ${entryIndex + 1}`}
+                    />
+                  ) : (
+                    <textarea
+                      rows={section.key === "summary" ? 4 : 3}
+                      value={entry}
+                      onChange={(event) =>
+                        updateEntry(section.key, entryIndex, event.target.value)
+                      }
+                      placeholder={
+                        section.key === "summary"
+                          ? "Write a concise professional summary..."
+                          : `Add your ${section.title.toLowerCase()}...`
+                      }
+                      aria-label={`${section.title} entry ${entryIndex + 1}`}
+                    />
+                  )}
+                  <button
+                    className="remove-entry"
+                    type="button"
+                    onClick={() => removeEntry(section.key, entryIndex)}
+                    aria-label={`Remove ${section.title} entry ${entryIndex + 1}`}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
 
-          </div>
-
-        </section>
-
-
-        {/* SKILLS */}
-        <section
-          className="resume-section"
-          data-collection="skills"
+        <button
+          className="add-section-button"
+          type="button"
+          onClick={addSection}
         >
+          + Add another section
+        </button>
 
-          <div className="collection-header">
-
+        <section className="job-version-card">
+          <div>
+            <span className="panel-icon">JOB-SPECIFIC VERSION</span>
+            <h3>Save a tailored copy</h3>
+            <p>Create a separate version without changing your main resume.</p>
+          </div>
+          <div className="job-version-action">
+            <label htmlFor="job-version-title">Job title or company</label>
             <div>
-
-              <span className="card-index">
-                03
-              </span>
-
-              <h3>
-                Skills
-              </h3>
-
-            </div>
-
-            <button
-              className="add-button"
-              type="button"
-              data-add="skills"
-            >
-              + Add skill
-            </button>
-
-          </div>
-
-
-          <div
-            className="collection-list"
-            id="skills-fields"
-          >
-
-            <div className="editable-row">
-
               <input
-                name="skills[]"
-                type="text"
-                defaultValue={
-                  blankResume
-                    ? ''
-                    : 'Product strategy'
-                }
-                placeholder="e.g. Figma, UX research, prototyping"
+                id="job-version-title"
+                value={jobTitle}
+                onChange={(event) => setJobTitle(event.target.value)}
+                placeholder="e.g. Product Designer at Northstar"
               />
-
-              <button
-                className="remove-button"
+              <Button
+                variant="secondary"
                 type="button"
-                data-remove
-                aria-label="Remove skill"
+                onClick={() =>
+                  setStatus(
+                    jobTitle.trim()
+                      ? `Saved version for ${jobTitle.trim()}.`
+                      : "Add a job title before saving a version.",
+                  )
+                }
               >
-                Remove
-              </button>
-
+                Save job version
+              </Button>
             </div>
-
-
-            {!blankResume && (
-              <>
-                <div className="editable-row">
-
-                  <input
-                    name="skills[]"
-                    type="text"
-                    defaultValue="UX research"
-                    placeholder="e.g. Figma, UX research, prototyping"
-                  />
-
-                  <button
-                    className="remove-button"
-                    type="button"
-                    data-remove
-                    aria-label="Remove skill"
-                  >
-                    Remove
-                  </button>
-
-                </div>
-
-
-                <div className="editable-row">
-
-                  <input
-                    name="skills[]"
-                    type="text"
-                    defaultValue="Figma and prototyping"
-                    placeholder="e.g. Figma, UX research, prototyping"
-                  />
-
-                  <button
-                    className="remove-button"
-                    type="button"
-                    data-remove
-                    aria-label="Remove skill"
-                  >
-                    Remove
-                  </button>
-
-                </div>
-
-
-                <div className="editable-row">
-
-                  <input
-                    name="skills[]"
-                    type="text"
-                    defaultValue="Design systems"
-                    placeholder="e.g. Figma, UX research, prototyping"
-                  />
-
-                  <button
-                    className="remove-button"
-                    type="button"
-                    data-remove
-                    aria-label="Remove skill"
-                  >
-                    Remove
-                  </button>
-
-                </div>
-
-
-                <div className="editable-row">
-
-                  <input
-                    name="skills[]"
-                    type="text"
-                    defaultValue="Cross-functional leadership"
-                    placeholder="e.g. Figma, UX research, prototyping"
-                  />
-
-                  <button
-                    className="remove-button"
-                    type="button"
-                    data-remove
-                    aria-label="Remove skill"
-                  >
-                    Remove
-                  </button>
-
-                </div>
-              </>
-            )}
-
           </div>
-
-
-          <p className="field-hint manual-hint">
-            Add each skill as its own field.
-          </p>
-
         </section>
 
+        <div className="resume-form-footer">
+          <span>Last saved locally in this session</span>
+          <Button variant="primary" type="submit">
+            Save resume <span aria-hidden="true">✓</span>
+          </Button>
+        </div>
       </form>
 
-
-      {/* FULL RESUME EDITOR */}
-      {editorVisible && (
-        <section
-          className="document-editor"
-          id="document-editor"
-        >
-
-          <div className="editor-header">
-
-            <div>
-
-              <span className="card-index">
-                04
-              </span>
-
-              <h3>
-                Full resume editor
-              </h3>
-
-            </div>
-
-            <span className="field-hint">
-              Guest document workspace
-            </span>
-
-          </div>
-
-
+      {showDeleteDialog && (
+        <div className="dialog-backdrop" role="presentation">
           <div
-            ref={editorRef}
-            className={`editor-paper ${
-              isEditing
-                ? 'editing'
-                : ''
-            }`}
-            id="resume-editor"
-            contentEditable={isEditing}
-            role="textbox"
-            aria-label="Full resume editor"
-            suppressContentEditableWarning
-            dangerouslySetInnerHTML={{
-              __html: editorHtml,
-            }}
-            onInput={() =>
-              updatePageWarning()
-            }
-          />
-
-        </section>
+            className="confirm-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-title"
+            aria-describedby="delete-description"
+          >
+            <span className="panel-icon">DELETE RESUME</span>
+            <h3 id="delete-title">Remove this resume?</h3>
+            <p id="delete-description">
+              This will clear the resume from the current workspace. This action
+              cannot be undone.
+            </p>
+            <div className="dialog-actions">
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() => setShowDeleteDialog(false)}
+              >
+                Keep resume
+              </Button>
+              <Button
+                variant="primary"
+                className="danger-button"
+                type="button"
+                onClick={handleDelete}
+              >
+                Delete resume
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
-
-
-      {/* PAGE FOOTER */}
-      <div className="parsed-footer">
-
-        <a
-          className="text-button"
-          href="#tailor"
-        >
-          <span aria-hidden="true">
-            ←
-          </span>
-
-          Change role
-        </a>
-
-
-        <Button
-          variant="primary"
-          type="submit"
-          form="parsed-form"
-        >
-          Save resume details
-
-          <span aria-hidden="true">
-            →
-          </span>
-        </Button>
-
-      </div>
-
     </section>
-  )
+  );
 }
