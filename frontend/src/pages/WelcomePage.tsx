@@ -1,50 +1,80 @@
-// WelcomePage.tsx
-// Screen 01: Welcome / login flow.
-// This matches the first section of the original mockup and keeps the auth flow isolated.
-// The page is intentionally a simple entry screen with email/password controls and
-// a guest path, because the visual focus is on the initial brand and entry actions.
-
-import { Button } from '../components/Button'
+import { useState } from "react";
+import { Button } from "../components/Button";
 
 export function WelcomePage() {
+  const [selectedAction, setSelectedAction] = useState<
+    "login" | "create" | null
+  >(null);
+
   return (
     <section className="screen welcome-screen" data-screen="welcome">
-      <div className="welcome-header">
+      <div className="welcome-hero">
+        <div className="welcome-logo" aria-label="JobCoachAI logo">
+          <span className="welcome-logo-mark">JC</span>
+          <span>
+            JobCoach <strong>AI</strong>
+          </span>
+        </div>
+
         <span className="section-kicker">01 / Welcome</span>
         <h2>
-          Welcome to <em>JobCoach AI.</em>
+          Your next move,
+          <br />
+          <em>made clearer.</em>
         </h2>
-        <p>Make your next application feel like it was made for you.</p>
+        <p>
+          JobCoachAI helps you turn your experience into a focused, confident
+          application for the roles you want.
+        </p>
       </div>
 
-      <form className="auth-panel" id="auth-form" action="#tailor" method="get">
-        <div className="auth-fields">
-          <div className="field-group">
-            <label htmlFor="auth-email">Email address</label>
-            <input id="auth-email" name="email" type="email" placeholder="you@example.com" required />
+      <div className="auth-panel welcome-actions-panel">
+        <div className="auth-panel-heading">
+          <div>
+            <span className="panel-icon">START HERE</span>
+            <h3>Choose how you’d like to begin</h3>
           </div>
-
-          <div className="field-group">
-            <label htmlFor="auth-password">Password</label>
-            <input id="auth-password" name="password" type="password" placeholder="Enter your password" required />
-          </div>
+          <span className="auth-step">1 of 3</span>
         </div>
 
-        <div className="auth-actions">
-          <Button variant="primary" type="submit">
+        <div className="welcome-actions">
+          <Button
+            variant="primary"
+            type="button"
+            onClick={() => setSelectedAction("login")}
+          >
             Log in <span aria-hidden="true">→</span>
           </Button>
-          <a className="button button-secondary" href="#tailor">
-            Register <span aria-hidden="true">→</span>
-          </a>
+          <Button
+            variant="secondary"
+            type="button"
+            onClick={() => setSelectedAction("create")}
+          >
+            Create account <span aria-hidden="true">→</span>
+          </Button>
         </div>
 
-        <a className="guest-link" href="#tailor">
-          Continue as guest
+        <a className="guest-option" href="#tailor">
+          <span>
+            <strong>Continue as guest</strong>
+            <small>Explore the workspace without signing in</small>
+          </span>
+          <span aria-hidden="true">↗️</span>
         </a>
 
-        <p className="privacy-line">By continuing, you agree to our terms and privacy policy.</p>
-      </form>
+        {selectedAction && (
+          <p className="auth-feedback" role="status">
+            {selectedAction === "login"
+              ? "Login will be connected here soon. Continue as a guest to explore the workspace."
+              : "Account creation will be connected here soon. Continue as a guest to explore the workspace."}
+          </p>
+        )}
+
+        <p className="privacy-line">
+          Your workspace stays private. Authentication can be connected when
+          you’re ready.
+        </p>
+      </div>
     </section>
-  )
+  );
 }
