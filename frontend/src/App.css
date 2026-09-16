@@ -23,7 +23,7 @@ body {
   min-height: 100vh;
   color: var(--ink);
   background: var(--blue-pale);
-  font-family: 'DM Sans', sans-serif;
+  font-family: "DM Sans", sans-serif;
 }
 
 button,
@@ -37,7 +37,6 @@ a {
   text-decoration: none;
 }
 
-
 /* =========================================================
    APPLICATION LAYOUT
    ========================================================= */
@@ -47,7 +46,6 @@ a {
   grid-template-columns: minmax(360px, 42%) 1fr;
   min-height: 100vh;
 }
-
 
 /* =========================================================
    LEFT SIDEBAR
@@ -60,10 +58,7 @@ a {
   min-height: 100vh;
   height: 100vh;
 
-  padding:
-    28px
-    clamp(40px, 4.4vw, 64px)
-    22px;
+  padding: 28px clamp(40px, 4.4vw, 64px) 22px;
 
   color: var(--white);
   background: var(--blue);
@@ -73,7 +68,6 @@ a {
 
   overflow: hidden;
 }
-
 
 /* =========================================================
    BRAND / LOGO
@@ -87,7 +81,7 @@ a {
 
   color: var(--white);
 
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: "Space Grotesk", sans-serif;
   font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.3px;
@@ -119,7 +113,6 @@ a {
   letter-spacing: 0;
 }
 
-
 /* =========================================================
    COMMON LABELS
    ========================================================= */
@@ -135,7 +128,6 @@ a {
   letter-spacing: 1.8px;
   text-transform: uppercase;
 }
-
 
 /* =========================================================
    SIDEBAR INTRO
@@ -156,9 +148,7 @@ a {
   color: var(--white);
 
   font:
-    600
-    clamp(44px, 4vw, 60px) / 0.98
-    'Space Grotesk',
+    600 clamp(44px, 4vw, 60px) / 0.98 "Space Grotesk",
     sans-serif;
 
   letter-spacing: -2.7px;
@@ -177,7 +167,6 @@ a {
   font-size: 15px;
   line-height: 1.55;
 }
-
 
 /* =========================================================
    SIDEBAR NAVIGATION
@@ -254,7 +243,6 @@ a {
   opacity: 0.75;
 }
 
-
 /* =========================================================
    SIDEBAR FOOTER
    ========================================================= */
@@ -280,7 +268,6 @@ a {
   font-size: 17px;
 }
 
-
 /* =========================================================
    MAIN CONTENT
    ========================================================= */
@@ -288,14 +275,10 @@ a {
 .content {
   min-width: 0;
 
-  padding:
-    0
-    clamp(28px, 7vw, 120px)
-    54px;
+  padding: 0 clamp(28px, 7vw, 120px) 54px;
 
   background: var(--blue-pale);
 }
-
 
 /* =========================================================
    TOP BAR
@@ -331,7 +314,6 @@ a {
 
   background: #29b982;
 }
-
 
 /* =========================================================
    SCREEN LAYOUT
@@ -371,9 +353,7 @@ a {
   margin: 19px 0 21px;
 
   font:
-    600
-    clamp(44px, 5.5vw, 76px) / 0.98
-    'Space Grotesk',
+    600 clamp(44px, 5.5vw, 76px) / 0.98 "Space Grotesk",
     sans-serif;
 
   letter-spacing: -3px;
@@ -393,7 +373,6 @@ a {
   font-size: 16px;
   line-height: 1.65;
 }
-
 
 /* =========================================================
    AUTHENTICATION / JOB FORM CARDS
@@ -441,9 +420,7 @@ a {
   color: var(--blue);
 
   font:
-    700
-    11px
-    'Space Grotesk',
+    700 11px "Space Grotesk",
     sans-serif;
 
   letter-spacing: 1px;
@@ -453,9 +430,7 @@ a {
   margin: 0 0 6px;
 
   font:
-    600
-    19px
-    'Space Grotesk',
+    600 19px "Space Grotesk",
     sans-serif;
 }
 
@@ -475,7 +450,6 @@ a {
 
   margin-top: 25px;
 }
-
 
 /* =========================================================
    BUTTONS
@@ -554,7 +528,6 @@ a {
   font-size: 10px;
 }
 
-
 /* =========================================================
    TAILOR PAGE
    ========================================================= */
@@ -605,7 +578,6 @@ a {
 
   white-space: nowrap;
 }
-
 
 /* =========================================================
    FORM FIELDS
@@ -666,9 +638,7 @@ input:focus,
 textarea:focus {
   border-color: var(--blue);
 
-  box-shadow:
-    0 0 0 3px
-    rgba(23, 105, 224, 0.1);
+  box-shadow: 0 0 0 3px rgba(23, 105, 224, 0.1);
 }
 
 textarea {
@@ -683,7 +653,6 @@ input::placeholder,
 textarea::placeholder {
   color: #8ca2c0;
 }
-
 
 /* =========================================================
    FORM FOOTERS
@@ -715,7 +684,6 @@ textarea::placeholder {
 
   font-size: 16px;
 }
-
 
 /* =========================================================
    RESUME / PARSED PAGE HEADER
@@ -788,7 +756,6 @@ textarea::placeholder {
   font-size: 12px;
 }
 
-
 /* =========================================================
    MATCH SCORE
    ========================================================= */
@@ -816,9 +783,7 @@ textarea::placeholder {
   margin: 5px 0 3px;
 
   font:
-    600
-    45px / 0.9
-    'Space Grotesk',
+    600 45px / 0.9 "Space Grotesk",
     sans-serif;
 
   letter-spacing: -2px;
@@ -833,7 +798,6 @@ textarea::placeholder {
 .match-score small {
   color: #c4dbff;
 }
-
 
 /* =========================================================
    PARSED / RESUME GRID
@@ -858,7 +822,6 @@ textarea::placeholder {
 
   margin-top: 48px;
 }
-
 
 /* =========================================================
    DOCUMENT EDITOR
@@ -895,9 +858,7 @@ textarea::placeholder {
   margin: 0;
 
   font:
-    600
-    19px
-    'Space Grotesk',
+    600 19px "Space Grotesk",
     sans-serif;
 }
 
@@ -915,9 +876,7 @@ textarea::placeholder {
 
   background: var(--white);
 
-  box-shadow:
-    0 15px 28px
-    rgba(17, 40, 79, 0.1);
+  box-shadow: 0 15px 28px rgba(17, 40, 79, 0.1);
 
   font-family: Georgia, serif;
 
@@ -932,9 +891,7 @@ textarea::placeholder {
   margin: 0;
 
   font:
-    700
-    32px
-    'Space Grotesk',
+    700 32px "Space Grotesk",
     sans-serif;
 }
 
@@ -944,9 +901,7 @@ textarea::placeholder {
   color: var(--blue);
 
   font:
-    700
-    13px
-    'Space Grotesk',
+    700 13px "Space Grotesk",
     sans-serif;
 
   letter-spacing: 1px;
@@ -966,11 +921,9 @@ textarea::placeholder {
   color: var(--muted);
 
   font:
-    12px
-    'DM Sans',
+    12px "DM Sans",
     sans-serif;
 }
-
 
 /* =========================================================
    RESUME SECTIONS
@@ -981,9 +934,7 @@ textarea::placeholder {
 
   background: var(--white);
 
-  box-shadow:
-    0 14px 35px
-    rgba(17, 40, 79, 0.06);
+  box-shadow: 0 14px 35px rgba(17, 40, 79, 0.06);
 }
 
 .user-info-grid {
@@ -1021,9 +972,7 @@ textarea::placeholder {
   margin: 0;
 
   font:
-    600
-    19px
-    'Space Grotesk',
+    600 19px "Space Grotesk",
     sans-serif;
 }
 
@@ -1085,7 +1034,6 @@ textarea::placeholder {
   background: transparent;
 }
 
-
 /* =========================================================
    INSIGHT CARDS
    ========================================================= */
@@ -1097,9 +1045,7 @@ textarea::placeholder {
 
   background: var(--white);
 
-  box-shadow:
-    0 14px 35px
-    rgba(17, 40, 79, 0.06);
+  box-shadow: 0 14px 35px rgba(17, 40, 79, 0.06);
 }
 
 .card-top {
@@ -1120,9 +1066,7 @@ textarea::placeholder {
   margin: 0 0 17px;
 
   font:
-    600
-    18px
-    'Space Grotesk',
+    600 18px "Space Grotesk",
     sans-serif;
 }
 
@@ -1132,9 +1076,7 @@ textarea::placeholder {
   margin-bottom: 10px;
 
   font:
-    600
-    17px
-    'Space Grotesk',
+    600 17px "Space Grotesk",
     sans-serif;
 }
 
@@ -1241,13 +1183,11 @@ textarea::placeholder {
   margin-top: 30px;
 }
 
-
 /* =========================================================
    TABLET / SMALLER SCREENS
    ========================================================= */
 
 @media (max-width: 850px) {
-
   .app-shell {
     grid-template-columns: 1fr;
   }
@@ -1321,13 +1261,11 @@ textarea::placeholder {
   }
 }
 
-
 /* =========================================================
    MOBILE
    ========================================================= */
 
 @media (max-width: 600px) {
-
   .brand {
     font-size: 16px;
   }
@@ -1485,13 +1423,11 @@ textarea::placeholder {
   }
 }
 
-
 /* =========================================================
    PRINT
    ========================================================= */
 
 @media print {
-
   .sidebar,
   .topbar,
   .parsed-header,
@@ -1528,5 +1464,408 @@ textarea::placeholder {
     outline: 0;
 
     box-shadow: none;
+  }
+}
+
+/* =========================================================
+   WELCOME AND RESUME EDITOR
+   ========================================================= */
+
+.welcome-hero {
+  max-width: 620px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.welcome-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 48px;
+  color: var(--ink);
+  font:
+    600 19px "Space Grotesk",
+    sans-serif;
+}
+
+.welcome-logo strong {
+  color: var(--blue);
+}
+
+.welcome-logo-mark {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  color: var(--white);
+  background: var(--blue);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.welcome-hero p {
+  max-width: 490px;
+}
+
+.welcome-actions-panel {
+  margin-top: 38px;
+}
+
+.auth-panel-heading,
+.resume-card-heading,
+.resume-toolbar,
+.job-version-card,
+.resume-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.auth-panel-heading {
+  padding-bottom: 21px;
+  border-bottom: 1px solid #e4ecf8;
+}
+.auth-panel-heading h3,
+.resume-card-heading h3,
+.job-version-card h3 {
+  margin: 6px 0 0;
+  font:
+    600 19px "Space Grotesk",
+    sans-serif;
+}
+.auth-step {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.welcome-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 24px;
+}
+.welcome-actions .button {
+  width: 100%;
+}
+
+.guest-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 10px;
+  padding: 15px 17px;
+  color: var(--blue);
+  border: 1px solid var(--line);
+  background: var(--blue-pale);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.guest-option small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+.guest-option:hover {
+  border-color: var(--blue);
+}
+.auth-feedback {
+  margin: 17px 0 0;
+  padding: 12px;
+  color: var(--blue-deep);
+  background: var(--blue-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.resume-screen {
+  max-width: 980px;
+  margin-top: 9vh;
+}
+.resume-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 30px;
+}
+.resume-header h2 {
+  margin-bottom: 16px;
+}
+.resume-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 11px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.resume-toolbar {
+  margin-top: 40px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  background: var(--white);
+}
+.resume-toolbar strong,
+.resume-toolbar span {
+  display: block;
+}
+.resume-toolbar strong {
+  font:
+    600 16px "Space Grotesk",
+    sans-serif;
+}
+.resume-toolbar span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.resume-toolbar-actions {
+  display: flex;
+  gap: 9px;
+}
+.resume-editor {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+.resume-card {
+  padding: 24px;
+  background: var(--white);
+  box-shadow: 0 14px 35px rgba(17, 40, 79, 0.06);
+}
+.resume-card-heading {
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+.resume-card-heading > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.personal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 14px;
+}
+.personal-grid .field-group + .field-group {
+  margin-top: 0;
+}
+.resume-entry-list {
+  display: grid;
+  gap: 10px;
+}
+.resume-entry {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: 12px;
+}
+.resume-entry textarea {
+  min-height: 104px;
+  font-size: 13px;
+}
+.resume-entry input {
+  min-height: 45px;
+  font-size: 13px;
+}
+.remove-entry,
+.remove-section {
+  padding: 10px 0;
+  color: var(--muted);
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+.remove-entry:hover,
+.remove-section:hover {
+  color: var(--blue);
+  text-decoration: underline;
+}
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+.add-section-button {
+  padding: 18px;
+  color: var(--blue);
+  border: 1px dashed var(--line);
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+.add-section-button:hover {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+.job-version-card {
+  align-items: flex-end;
+  padding: 24px;
+  border-left: 3px solid var(--blue);
+  background: var(--blue-soft);
+}
+.job-version-card p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.job-version-action {
+  min-width: 48%;
+}
+.job-version-action label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.job-version-action > div {
+  display: flex;
+  gap: 8px;
+}
+.job-version-action .button {
+  flex: 0 0 auto;
+}
+.resume-form-footer {
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.resume-empty-state {
+  max-width: 540px;
+  margin: 12vh auto 0;
+  padding: 42px;
+  text-align: center;
+  background: var(--white);
+  box-shadow: var(--shadow);
+}
+.empty-state-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  margin: 28px auto 20px;
+  place-items: center;
+  color: var(--blue);
+  border: 1px solid var(--line);
+  font-size: 25px;
+}
+.resume-empty-state h2 {
+  margin: 0 0 14px;
+  font-size: 48px;
+}
+.resume-empty-state p {
+  margin: 0 auto 24px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(17, 40, 79, 0.35);
+}
+.confirm-dialog {
+  width: min(100%, 430px);
+  padding: 30px;
+  background: var(--white);
+  box-shadow: 0 24px 60px rgba(17, 40, 79, 0.2);
+}
+.confirm-dialog h3 {
+  margin: 9px 0;
+  font:
+    600 25px "Space Grotesk",
+    sans-serif;
+}
+.confirm-dialog p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 25px;
+}
+.danger-button {
+  background: #b83c4a;
+}
+.danger-button:hover {
+  background: #932d3a;
+}
+
+@media (max-width: 600px) {
+  .welcome-logo {
+    margin-bottom: 34px;
+  }
+  .welcome-actions,
+  .personal-grid {
+    grid-template-columns: 1fr;
+  }
+  .auth-panel-heading,
+  .resume-toolbar,
+  .job-version-card,
+  .resume-form-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .resume-header {
+    display: block;
+  }
+  .resume-status {
+    margin-top: 25px;
+  }
+  .resume-toolbar {
+    gap: 17px;
+  }
+  .resume-toolbar-actions,
+  .resume-toolbar-actions .button,
+  .resume-form-footer .button {
+    width: 100%;
+  }
+  .resume-toolbar-actions {
+    flex-direction: column-reverse;
+  }
+  .resume-card {
+    padding: 20px;
+  }
+  .resume-card-heading {
+    flex-direction: column;
+  }
+  .section-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .resume-entry {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+  .remove-entry {
+    justify-self: start;
+  }
+  .job-version-action,
+  .job-version-action > div {
+    width: 100%;
+  }
+  .job-version-action > div {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .job-version-action .button {
+    justify-content: center;
+  }
+  .resume-empty-state {
+    padding: 30px 20px;
   }
 }
