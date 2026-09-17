@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import jobCoachLogo from '../assets/jobcoach-logo.png'
 
 type LayoutProps = {
   children: ReactNode
@@ -40,7 +41,9 @@ export function Layout({ children, currentScreen }: LayoutProps) {
             window.dispatchEvent(new Event('resetWelcomeForm'))
           }}
         >
-          <span className="brand-mark">JC</span>
+          <span className="brand-logo"> 
+            <img src={jobCoachLogo} alt="JobCoach AI logo"/>
+          </span>
 
           <span className="brand-name">
             JobCoach <strong>AI</strong>
