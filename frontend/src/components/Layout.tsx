@@ -36,6 +36,9 @@ export function Layout({ children, currentScreen }: LayoutProps) {
           className="brand"
           href="#welcome"
           aria-label="JobCoach AI home"
+          onClick={() => {
+            window.dispatchEvent(new Event('resetWelcomeForm'))
+          }}
         >
           <span className="brand-mark">JC</span>
 

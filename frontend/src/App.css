@@ -267,9 +267,7 @@ a {
 }
 
 
-/* =========================================================
-   MAIN CONTENT
-   ========================================================= */
+/* MAIN CONTENT*/
 
 .content {
   min-width: 0;
@@ -283,9 +281,7 @@ a {
 }
 
 
-/* =========================================================
-   TOP BAR
-   ========================================================= */
+/* TOP BAR*/
 
 .topbar {
   display: flex;
@@ -319,9 +315,7 @@ a {
 }
 
 
-/* =========================================================
-   SCREEN LAYOUT
-   ========================================================= */
+/* SCREEN LAYOUT */
 
 .screen {
   max-width: 900px;
@@ -381,9 +375,7 @@ a {
 }
 
 
-/* =========================================================
-   AUTHENTICATION / JOB FORM CARDS
-   ========================================================= */
+/* AUTHENTICATION / JOB FORM CARDS */
 
 .auth-panel,
 .job-form {
@@ -462,10 +454,31 @@ a {
   margin-top: 25px;
 }
 
+.auth-actions.register-mode {
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
 
-/* =========================================================
-   BUTTONS
-   ========================================================= */
+.auth-actions.register-mode .button {
+  width: 220px;
+}
+
+.success-message {
+  margin: 20px 0 14px;
+  color: #178c5c;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.success-divider {
+  width: 100%;
+  height: 1px;
+  margin-bottom: 20px;
+  background: #e4ecf8;
+}
+
+/* BUTTONS*/
 
 .button {
   display: inline-flex;
@@ -541,9 +554,7 @@ a {
 }
 
 
-/* =========================================================
-   TAILOR PAGE
-   ========================================================= */
+/* TAILOR PAGE */
 
 .job-form {
   margin-top: 52px;
@@ -593,9 +604,7 @@ a {
 }
 
 
-/* =========================================================
-   FORM FIELDS
-   ========================================================= */
+/* FORM FIELDS*/
 
 .field-group + .field-group {
   margin-top: 27px;
@@ -671,9 +680,7 @@ textarea::placeholder {
 }
 
 
-/* =========================================================
-   FORM FOOTERS
-   ========================================================= */
+/* FORM FOOTERS */
 
 .form-footer,
 .parsed-footer {
@@ -703,9 +710,7 @@ textarea::placeholder {
 }
 
 
-/* =========================================================
-   RESUME / PARSED PAGE HEADER
-   ========================================================= */
+/* RESUME / PARSED PAGE HEADER */
 
 .parsed-header {
   display: flex;
@@ -775,9 +780,7 @@ textarea::placeholder {
 }
 
 
-/* =========================================================
-   MATCH SCORE
-   ========================================================= */
+/* MATCH SCORE*/
 
 .match-score {
   min-width: 172px;
@@ -821,9 +824,7 @@ textarea::placeholder {
 }
 
 
-/* =========================================================
-   PARSED / RESUME GRID
-   ========================================================= */
+/* PARSED / RESUME GRID*/
 
 .parsed-grid {
   display: grid;
@@ -846,9 +847,7 @@ textarea::placeholder {
 }
 
 
-/* =========================================================
-   DOCUMENT EDITOR
-   ========================================================= */
+/* DOCUMENT EDITOR */
 
 .document-editor {
   margin-top: 12px;
@@ -958,9 +957,7 @@ textarea::placeholder {
 }
 
 
-/* =========================================================
-   RESUME SECTIONS
-   ========================================================= */
+/* RESUME SECTIONS */
 
 .resume-section {
   padding: 23px;
@@ -1072,9 +1069,7 @@ textarea::placeholder {
 }
 
 
-/* =========================================================
-   INSIGHT CARDS
-   ========================================================= */
+/* INSIGHT CARDS*/
 
 .insight-card {
   min-height: 250px;
@@ -1228,9 +1223,7 @@ textarea::placeholder {
 }
 
 
-/* =========================================================
-   TABLET / SMALLER SCREENS
-   ========================================================= */
+/* TABLET / SMALLER SCREENS */
 
 @media (max-width: 850px) {
 
@@ -1308,9 +1301,7 @@ textarea::placeholder {
 }
 
 
-/* =========================================================
-   MOBILE
-   ========================================================= */
+/* MOBILE */
 
 @media (max-width: 600px) {
 
@@ -1472,9 +1463,7 @@ textarea::placeholder {
 }
 
 
-/* =========================================================
-   PRINT
-   ========================================================= */
+/* PRINT*/
 
 @media print {
 
