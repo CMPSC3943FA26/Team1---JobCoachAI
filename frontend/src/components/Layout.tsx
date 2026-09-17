@@ -4,14 +4,14 @@ import jobCoachLogo from '../assets/jobcoach-logo.png'
 type LayoutProps = {
   children: ReactNode
   currentScreen: 'welcome' | 'tailor' | 'parsed'
-  isGuest: boolean
+  profileInitials: string | null
   onHomeClick: () => void
 }
 
 export function Layout({
   children,
   currentScreen,
-  isGuest,
+  profileInitials,
   onHomeClick,
 }: LayoutProps) {
   const steps = [
@@ -129,15 +129,17 @@ export function Layout({
         className="content"
         aria-live="polite"
       >
-      {isGuest && currentScreen !== 'welcome' && (
-        <div
-          className="guest-indicator"
-          aria-label="Guest user"
-          title="Guest"
-        >
-          G
-        </div>
-      )}
+        {profileInitials &&
+          currentScreen !== 'welcome' && (
+            <button
+              className="profile-avatar"
+              type="button"
+              aria-label="Profile"
+              title="Profile"
+            >
+              {profileInitials}
+            </button>
+          )}
 
         {children}
       </section>

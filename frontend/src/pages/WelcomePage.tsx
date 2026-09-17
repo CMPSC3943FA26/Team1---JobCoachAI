@@ -1,15 +1,23 @@
 import { useEffect, useState } from 'react'
-import { Button } from '../components/Button'
 
 type WelcomePageProps = {
   onContinueAsGuest: () => void
+  onLogin: (
+    firstName: string,
+    lastName: string
+  ) => void
 }
 
 export function WelcomePage({
   onContinueAsGuest,
+  onLogin,
 }: WelcomePageProps) {
   const [isRegistering, setIsRegistering] = useState(false)
   const [accountCreated, setAccountCreated] = useState(false)
+
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
 
@@ -17,6 +25,9 @@ export function WelcomePage({
     const resetWelcomeForm = () => {
       setIsRegistering(false)
       setAccountCreated(false)
+
+      setFirstName('')
+      setLastName('')
       setEmail('')
       setPassword('')
     }
@@ -35,6 +46,17 @@ export function WelcomePage({
 
     setAccountCreated(true)
     setIsRegistering(false)
+  }
+
+  const handleLoginSubmit = (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault()
+
+    onLogin(
+      firstName || 'User',
+      lastName || ''
+    )
   }
 
   return (
@@ -61,12 +83,10 @@ export function WelcomePage({
       <form
         className="auth-panel"
         id="auth-form"
-        action="#tailor"
-        method="get"
         onSubmit={
           isRegistering
             ? handleRegisterSubmit
-            : undefined
+            : handleLoginSubmit
         }
       >
         <div className="auth-fields">
@@ -82,6 +102,10 @@ export function WelcomePage({
                   name="firstName"
                   type="text"
                   placeholder="First name"
+                  value={firstName}
+                  onChange={(event) =>
+                    setFirstName(event.target.value)
+                  }
                   required
                 />
               </div>
@@ -96,6 +120,10 @@ export function WelcomePage({
                   name="lastName"
                   type="text"
                   placeholder="Last name"
+                  value={lastName}
+                  onChange={(event) =>
+                    setLastName(event.target.value)
+                  }
                   required
                 />
               </div>
@@ -159,15 +187,15 @@ export function WelcomePage({
           }`}
         >
           {!isRegistering && (
-            <Button
-              variant="primary"
+            <button
+              className="button button-primary"
               type="submit"
             >
               Log in
               <span aria-hidden="true">
                 →
               </span>
-            </Button>
+            </button>
           )}
 
           {!accountCreated && (

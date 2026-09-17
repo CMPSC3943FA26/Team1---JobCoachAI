@@ -28,8 +28,14 @@ function App() {
   const [createBlankResume, setCreateBlankResume] =
     useState(false)
 
-  const [isGuest, setIsGuest] =
-    useState(false)
+  /*
+   * Profile icon initials:
+   * G  = Guest
+   * SB = Example logged-in user initials
+   * null = No active profile
+   */
+  const [profileInitials, setProfileInitials] =
+    useState<string | null>(null)
 
   useEffect(() => {
     const onHashChange = () => {
@@ -49,13 +55,41 @@ function App() {
     }
   }, [])
 
+  /*
+   * Guest login
+   */
   const handleContinueAsGuest = () => {
-    setIsGuest(true)
+    setProfileInitials('G')
     window.location.hash = '#tailor'
   }
 
+  /*
+   * Later, when account login is connected,
+   * call this with the user's first and last name.
+   *
+   * Example:
+   * handleAccountLogin('Suprit', 'Bijukshe')
+   * Profile icon becomes "SB"
+   */
+  
+  const handleAccountLogin = (
+    firstName: string,
+    lastName: string
+  ) => {
+    const initials =
+      `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
+
+    setProfileInitials(initials)
+
+    window.location.hash = '#tailor'
+  }
+
+  /*
+   * Clicking JobCoach AI Home clears
+   * the current guest/account profile.
+   */
   const handleHomeClick = () => {
-    setIsGuest(false)
+    setProfileInitials(null)
     setCreateBlankResume(false)
 
     window.dispatchEvent(
@@ -65,6 +99,9 @@ function App() {
     window.location.hash = '#welcome'
   }
 
+  /*
+   * Create / Edit Resume
+   */
   const handleOpenResume = (
     source: ResumeSource,
     _file: File | null
@@ -73,6 +110,9 @@ function App() {
     window.location.hash = '#parsed'
   }
 
+  /*
+   * Submit Tailor form
+   */
   const handleTailorSubmit = (
     submission: TailorSubmission
   ) => {
@@ -83,6 +123,10 @@ function App() {
     window.location.hash = '#parsed'
   }
 
+  /*
+   * Return to Welcome.
+   * This does NOT clear the current profile.
+   */
   const handleBackToWelcome = () => {
     window.location.hash = '#welcome'
   }
@@ -93,6 +137,7 @@ function App() {
         return (
           <WelcomePage
             onContinueAsGuest={handleContinueAsGuest}
+            onLogin={handleAccountLogin}
           />
         )
 
@@ -112,19 +157,20 @@ function App() {
           />
         )
 
-      default:
-        return (
-          <WelcomePage
-            onContinueAsGuest={handleContinueAsGuest}
-          />
-        )
+        default:
+          return (
+            <WelcomePage
+              onContinueAsGuest={handleContinueAsGuest}
+              onLogin={handleAccountLogin}
+            />
+          )
     }
   }
 
   return (
     <Layout
       currentScreen={currentScreen}
-      isGuest={isGuest}
+      profileInitials={profileInitials}
       onHomeClick={handleHomeClick}
     >
       {renderCurrentPage()}
