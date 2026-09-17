@@ -35,7 +35,7 @@ export function WelcomePage() {
         <span className="section-kicker">01 / Welcome</span>
 
         <h2>
-          Welcome to <em>JobCoach AI.</em>
+          Welcome to <em>JobCoach AI</em>
         </h2>
 
         <p>
