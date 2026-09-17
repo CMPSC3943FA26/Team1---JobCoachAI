@@ -543,20 +543,45 @@ a {
 
 .guest-link {
   display: block;
-
   width: max-content;
 
   margin: 18px auto 0;
+  padding: 0;
+
+  border: none;
+  background: transparent;
 
   color: var(--blue);
 
   font-size: 12px;
   font-weight: 700;
+
+  cursor: pointer;
 }
 
-.guest-link:hover,
-.edit-link:hover {
+.guest-link:hover {
   text-decoration: underline;
+}
+
+.guest-indicator {
+  position: absolute;
+  top: 24px;
+  right: 28px;
+
+  display: flex;
+  width: 36px;
+  height: 36px;
+
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  color: var(--white);
+  background: var(--blue);
+
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .privacy-line {
@@ -706,17 +731,23 @@ textarea::placeholder {
 }
 
 .text-button {
+  padding: 0;
+  border: none;
+  background: transparent;
   color: var(--muted);
+  cursor: pointer;
 
   font-size: 12px;
   font-weight: 700;
 }
 
+.text-button:hover {
+  color: var(--blue);
+}
+
 .text-button span {
   margin-right: 7px;
-
   color: var(--blue);
-
   font-size: 16px;
 }
 

@@ -3,7 +3,10 @@ import './App.css'
 
 import { Layout } from './components/Layout'
 import { WelcomePage } from './pages/WelcomePage'
-import { TailorPage } from './pages/TailorPage'
+import TailorPage, {
+  type ResumeSource,
+  type TailorSubmission,
+} from './pages/TailorPage'
 import { ResumePage } from './pages/ResumePage'
 
 const screenNames = ['welcome', 'tailor', 'parsed'] as const
@@ -22,49 +25,83 @@ function App() {
   const [currentScreen, setCurrentScreen] =
     useState<ScreenName>(getCurrentScreen)
 
-  /*
-   * Determines whether Page 3 should open as
-   * a completely blank resume.
-   */
   const [createBlankResume, setCreateBlankResume] =
+    useState(false)
+
+  const [isGuest, setIsGuest] =
     useState(false)
 
   useEffect(() => {
     const onHashChange = () => {
-      setCurrentScreen(getCurrentScreen())
+      const nextScreen = getCurrentScreen()
+
+      setCurrentScreen(nextScreen)
+
+      if (nextScreen === 'tailor') {
+        setCreateBlankResume(false)
+      }
     }
 
     window.addEventListener('hashchange', onHashChange)
 
     return () => {
-      window.removeEventListener(
-        'hashchange',
-        onHashChange
-      )
+      window.removeEventListener('hashchange', onHashChange)
     }
   }, [])
 
-  /*
-   * Create Resume button:
-   *
-   * 1. Tell ResumePage to use empty fields.
-   * 2. Navigate to Page 3.
-   */
-  const handleCreateResume = () => {
-    setCreateBlankResume(true)
+  const handleContinueAsGuest = () => {
+    setIsGuest(true)
+    window.location.hash = '#tailor'
+  }
+
+  const handleHomeClick = () => {
+    setIsGuest(false)
+    setCreateBlankResume(false)
+
+    window.dispatchEvent(
+      new Event('resetWelcomeForm')
+    )
+
+    window.location.hash = '#welcome'
+  }
+
+  const handleOpenResume = (
+    source: ResumeSource,
+    _file: File | null
+  ) => {
+    setCreateBlankResume(source === 'scratch')
     window.location.hash = '#parsed'
+  }
+
+  const handleTailorSubmit = (
+    submission: TailorSubmission
+  ) => {
+    setCreateBlankResume(
+      submission.source === 'scratch'
+    )
+
+    window.location.hash = '#parsed'
+  }
+
+  const handleBackToWelcome = () => {
+    window.location.hash = '#welcome'
   }
 
   const renderCurrentPage = () => {
     switch (currentScreen) {
-
       case 'welcome':
-        return <WelcomePage />
+        return (
+          <WelcomePage
+            onContinueAsGuest={handleContinueAsGuest}
+          />
+        )
 
       case 'tailor':
         return (
           <TailorPage
-            onCreateResume={handleCreateResume}
+            onOpenResume={handleOpenResume}
+            onSubmit={handleTailorSubmit}
+            onBack={handleBackToWelcome}
           />
         )
 
@@ -76,12 +113,20 @@ function App() {
         )
 
       default:
-        return <WelcomePage />
+        return (
+          <WelcomePage
+            onContinueAsGuest={handleContinueAsGuest}
+          />
+        )
     }
   }
 
   return (
-    <Layout currentScreen={currentScreen}>
+    <Layout
+      currentScreen={currentScreen}
+      isGuest={isGuest}
+      onHomeClick={handleHomeClick}
+    >
       {renderCurrentPage()}
     </Layout>
   )

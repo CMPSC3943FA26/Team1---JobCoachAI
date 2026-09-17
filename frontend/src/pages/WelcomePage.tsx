@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Button } from '../components/Button'
 
-export function WelcomePage() {
+type WelcomePageProps = {
+  onContinueAsGuest: () => void
+}
+
+export function WelcomePage({
+  onContinueAsGuest,
+}: WelcomePageProps) {
   const [isRegistering, setIsRegistering] = useState(false)
   const [accountCreated, setAccountCreated] = useState(false)
   const [email, setEmail] = useState('')
@@ -22,7 +28,9 @@ export function WelcomePage() {
     }
   }, [])
 
-  const handleRegisterSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleRegisterSubmit = (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
     event.preventDefault()
 
     setAccountCreated(true)
@@ -30,9 +38,14 @@ export function WelcomePage() {
   }
 
   return (
-    <section className="screen welcome-screen" data-screen="welcome">
+    <section
+      className="screen welcome-screen"
+      data-screen="welcome"
+    >
       <div className="welcome-header">
-        <span className="section-kicker">01 / Welcome</span>
+        <span className="section-kicker">
+          01 / Welcome
+        </span>
 
         <h2>
           Welcome to <em>JobCoach AI</em>
@@ -50,13 +63,20 @@ export function WelcomePage() {
         id="auth-form"
         action="#tailor"
         method="get"
-        onSubmit={isRegistering ? handleRegisterSubmit : undefined}
+        onSubmit={
+          isRegistering
+            ? handleRegisterSubmit
+            : undefined
+        }
       >
         <div className="auth-fields">
           {isRegistering && (
             <>
               <div className="field-group">
-                <label htmlFor="auth-first-name">First Name</label>
+                <label htmlFor="auth-first-name">
+                  First Name
+                </label>
+
                 <input
                   id="auth-first-name"
                   name="firstName"
@@ -67,7 +87,10 @@ export function WelcomePage() {
               </div>
 
               <div className="field-group">
-                <label htmlFor="auth-last-name">Last Name</label>
+                <label htmlFor="auth-last-name">
+                  Last Name
+                </label>
+
                 <input
                   id="auth-last-name"
                   name="lastName"
@@ -80,39 +103,49 @@ export function WelcomePage() {
           )}
 
           <div className="field-group">
-            <label htmlFor="auth-email">Email address</label>
-              <input
-                id="auth-email"
-                name="email"
-                type="email"
-                placeholder="Enter your email address"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-              />
+            <label htmlFor="auth-email">
+              Email address
+            </label>
+
+            <input
+              id="auth-email"
+              name="email"
+              type="email"
+              placeholder="Enter your email address"
+              value={email}
+              onChange={(event) =>
+                setEmail(event.target.value)
+              }
+              required
+            />
           </div>
 
           <div className="field-group">
-            <label htmlFor="auth-password">Password</label>
-              <input
-                id="auth-password"
-                name="password"
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-              />
+            <label htmlFor="auth-password">
+              Password
+            </label>
+
+            <input
+              id="auth-password"
+              name="password"
+              type="password"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(event) =>
+                setPassword(event.target.value)
+              }
+              required
+            />
           </div>
         </div>
 
         {accountCreated && (
           <>
-          <p className="success-message">
-            Account created successfully! Please log in or continue as guest.
-          </p>
+            <p className="success-message">
+              Account created successfully! Please log in or continue as guest.
+            </p>
 
-          <div className="success-divider" />
+            <div className="success-divider" />
           </>
         )}
 
@@ -126,8 +159,14 @@ export function WelcomePage() {
           }`}
         >
           {!isRegistering && (
-            <Button variant="primary" type="submit">
-              Log in <span aria-hidden="true">→</span>
+            <Button
+              variant="primary"
+              type="submit"
+            >
+              Log in
+              <span aria-hidden="true">
+                →
+              </span>
             </Button>
           )}
 
@@ -138,7 +177,11 @@ export function WelcomePage() {
                   ? 'button button-primary'
                   : 'button button-secondary'
               }
-              type={isRegistering ? 'submit' : 'button'}
+              type={
+                isRegistering
+                  ? 'submit'
+                  : 'button'
+              }
               onClick={() => {
                 if (!isRegistering) {
                   setIsRegistering(true)
@@ -146,15 +189,22 @@ export function WelcomePage() {
                 }
               }}
             >
-              Create Account <span aria-hidden="true">→</span>
+              Create Account
+              <span aria-hidden="true">
+                →
+              </span>
             </button>
           )}
         </div>
 
         {!isRegistering && (
-          <a className="guest-link" href="#tailor">
+          <button
+            className="guest-link"
+            type="button"
+            onClick={onContinueAsGuest}
+          >
             Continue as guest
-          </a>
+          </button>
         )}
 
         <p className="privacy-line">

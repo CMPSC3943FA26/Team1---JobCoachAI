@@ -4,9 +4,16 @@ import jobCoachLogo from '../assets/jobcoach-logo.png'
 type LayoutProps = {
   children: ReactNode
   currentScreen: 'welcome' | 'tailor' | 'parsed'
+  isGuest: boolean
+  onHomeClick: () => void
 }
 
-export function Layout({ children, currentScreen }: LayoutProps) {
+export function Layout({
+  children,
+  currentScreen,
+  isGuest,
+  onHomeClick,
+}: LayoutProps) {
   const steps = [
     {
       key: 'welcome',
@@ -31,18 +38,25 @@ export function Layout({ children, currentScreen }: LayoutProps) {
   return (
     <main className="app-shell">
       {/* LEFT SIDEBAR */}
-      <aside className="sidebar" aria-label="Workflow navigation">
+      <aside
+        className="sidebar"
+        aria-label="Workflow navigation"
+      >
         {/* BRAND */}
         <a
           className="brand"
           href="#welcome"
           aria-label="JobCoach AI home"
-          onClick={() => {
-            window.dispatchEvent(new Event('resetWelcomeForm'))
+          onClick={(event) => {
+            event.preventDefault()
+            onHomeClick()
           }}
         >
-          <span className="brand-logo"> 
-            <img src={jobCoachLogo} alt="JobCoach AI logo"/>
+          <span className="brand-logo">
+            <img
+              src={jobCoachLogo}
+              alt="JobCoach AI logo"
+            />
           </span>
 
           <span className="brand-name">
@@ -59,29 +73,42 @@ export function Layout({ children, currentScreen }: LayoutProps) {
           <h1>
             Build your resume with
             <br />
-            <span>confidence</span>{' '}
+            <span>confidence</span>
           </h1>
         </div>
 
         {/* NAVIGATION */}
-        <nav className="stepper" aria-label="Application steps">
+        <nav
+          className="stepper"
+          aria-label="Application steps"
+        >
           {steps.map((step) => {
-            const isActive = currentScreen === step.key
+            const isActive =
+              currentScreen === step.key
 
             return (
               <a
                 key={step.key}
                 href={`#${step.key}`}
-                className={`step ${isActive ? 'active' : ''}`}
-                aria-current={isActive ? 'page' : undefined}
+                className={`step ${
+                  isActive ? 'active' : ''
+                }`}
+                aria-current={
+                  isActive ? 'page' : undefined
+                }
               >
                 <span className="step-number">
                   {step.number}
                 </span>
 
                 <span className="step-text">
-                  <strong>{step.title}</strong>
-                  <small>{step.subtitle}</small>
+                  <strong>
+                    {step.title}
+                  </strong>
+
+                  <small>
+                    {step.subtitle}
+                  </small>
                 </span>
               </a>
             )
@@ -91,7 +118,9 @@ export function Layout({ children, currentScreen }: LayoutProps) {
         {/* SIDEBAR FOOTER */}
         <p className="sidebar-footer">
           Built for the next chapter
-          <span aria-hidden="true">→</span>
+          <span aria-hidden="true">
+            →
+          </span>
         </p>
       </aside>
 
@@ -100,6 +129,16 @@ export function Layout({ children, currentScreen }: LayoutProps) {
         className="content"
         aria-live="polite"
       >
+      {isGuest && currentScreen !== 'welcome' && (
+        <div
+          className="guest-indicator"
+          aria-label="Guest user"
+          title="Guest"
+        >
+          G
+        </div>
+      )}
+
         {children}
       </section>
     </main>

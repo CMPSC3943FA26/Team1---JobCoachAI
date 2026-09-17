@@ -1,45 +1,200 @@
-import { Button } from '../components/Button'
+import {
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from 'react'
 
-type TailorPageProps = {
-  onCreateResume: () => void
+/**
+ * Tailor / intake page (page 2).
+ *   #1  Add/Upload Resume
+ *   #2  Paste Job Description
+ *   #11 Create Resume from Scratch
+ */
+
+export type ResumeSource =
+  | 'uploaded'
+  | 'scratch'
+
+export interface TailorSubmission {
+  jobTitle: string
+  jobDescription: string
+  resumeFile: File | null
+  source: ResumeSource
 }
 
-export function TailorPage({ onCreateResume }: TailorPageProps) {
+export interface TailorPageProps {
+  onOpenResume: (
+    source: ResumeSource,
+    file: File | null
+  ) => void
+
+  onSubmit: (
+    submission: TailorSubmission
+  ) => void
+
+  onBack?: () => void
+
+  hasSavedResume?: boolean
+}
+
+export default function TailorPage({
+  onOpenResume,
+  onSubmit,
+  onBack,
+  hasSavedResume = false,
+}: TailorPageProps) {
+  const [resumeFile, setResumeFile] =
+    useState<File | null>(null)
+
+  const [jobTitle, setJobTitle] =
+    useState('')
+
+  const [
+    jobDescription,
+    setJobDescription,
+  ] = useState('')
+
+  const [error, setError] =
+    useState('')
+
+  const hasResume =
+    resumeFile !== null ||
+    hasSavedResume
+
+  /* Upload resume */
+  function handleFileChange(
+    event: ChangeEvent<HTMLInputElement>
+  ) {
+    const file =
+      event.target.files?.[0] ?? null
+
+    setResumeFile(file)
+    setError('')
+  }
+
+  /*
+   * Create Resume / Edit Resume
+   * Opens Page 3.
+   */
+  function handleOpenResume() {
+    setError('')
+
+    const source: ResumeSource =
+      resumeFile
+        ? 'uploaded'
+        : 'scratch'
+
+    onOpenResume(
+      source,
+      resumeFile
+    )
+  }
+
+  /*
+   * Submit Tailor form.
+   * Validation happens here first.
+   * If successful, App.tsx navigates to Page 3.
+   */
+  function handleSubmit(
+    event: FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault()
+
+    if (!hasResume) {
+      setError(
+        'Please create or upload a resume.'
+      )
+      return
+    }
+
+    if (
+      !jobTitle.trim() ||
+      !jobDescription.trim()
+    ) {
+      setError(
+        'Add the job title and paste the job description before submitting.'
+      )
+      return
+    }
+
+    setError('')
+
+    const source: ResumeSource =
+      resumeFile
+        ? 'uploaded'
+        : 'scratch'
+
+    onSubmit({
+      jobTitle:
+        jobTitle.trim(),
+
+      jobDescription:
+        jobDescription.trim(),
+
+      resumeFile,
+
+      source,
+    })
+  }
+
   return (
-    <section className="screen" data-screen="tailor">
+    <section
+      className="screen"
+      data-screen="tailor"
+    >
       <div className="screen-intro">
-        <span className="section-kicker">02 / Tailor</span>
+        <span className="section-kicker">
+          02 / Tailor
+        </span>
 
         <h2>
-          Tell us about
+          Tailor smarter.
           <br />
-          <em>the opportunity.</em>
+
+          <em>
+            Apply stronger.
+          </em>
         </h2>
 
         <p>
-          Paste the role you’re aiming for. We’ll pull out what matters
-          and shape your strongest angle.
+          Upload or create your resume,
+          add the job description, then
+          click{' '}
+          <strong>
+            Submit
+          </strong>
+          . JobCoachAI will analyze the
+          match and help you strengthen
+          your resume.
         </p>
       </div>
 
-      <form className="job-form" id="job-form">
+      <form
+        className="job-form"
+        noValidate
+        onSubmit={handleSubmit}
+      >
         <div className="tailor-actions">
-
-          <Button
-            variant="primary"
+          <button
+            className="button button-primary"
             type="button"
-            id="create-resume-button"
-            onClick={onCreateResume}
+            onClick={handleOpenResume}
           >
-            Create Resume
-            <span aria-hidden="true">→</span>
-          </Button>
+            {hasResume
+              ? 'Edit Resume'
+              : 'Create Resume'}
+
+            <span aria-hidden="true">
+              &rarr;
+            </span>
+          </button>
 
           <input
             id="resume-upload"
             name="resume"
             type="file"
             accept=".pdf,.doc,.docx"
+            onChange={handleFileChange}
           />
 
           <label
@@ -47,18 +202,23 @@ export function TailorPage({ onCreateResume }: TailorPageProps) {
             htmlFor="resume-upload"
           >
             Upload resume
-            <span aria-hidden="true">↑</span>
-          </label>
 
+            <span aria-hidden="true">
+              &uarr;
+            </span>
+          </label>
         </div>
 
-        <p className="file-name" id="file-name">
-          No resume selected
+        <p className="file-name">
+          {resumeFile
+            ? resumeFile.name
+            : 'No resume selected'}
         </p>
 
         <div className="field-group">
           <label htmlFor="job-title">
-            Job title <span>*</span>
+            Job title{' '}
+            <span>*</span>
           </label>
 
           <input
@@ -66,15 +226,20 @@ export function TailorPage({ onCreateResume }: TailorPageProps) {
             name="job-title"
             type="text"
             placeholder="e.g. Product Designer"
-            required
+            value={jobTitle}
+            onChange={(event) =>
+              setJobTitle(
+                event.target.value
+              )
+            }
           />
         </div>
 
         <div className="field-group">
-
           <div className="label-row">
             <label htmlFor="job-description">
-              Job description <span>*</span>
+              Job description{' '}
+              <span>*</span>
             </label>
 
             <span className="field-hint">
@@ -87,18 +252,47 @@ export function TailorPage({ onCreateResume }: TailorPageProps) {
             name="job-description"
             rows={8}
             placeholder="Paste the job description here..."
-            required
+            value={jobDescription}
+            onChange={(event) =>
+              setJobDescription(
+                event.target.value
+              )
+            }
           />
-
         </div>
+
+        {error && (
+          <p
+            className="field-error"
+            role="alert"
+          >
+            {error}
+          </p>
+        )}
 
         <div className="form-footer">
-          <a className="text-button" href="#welcome">
-            <span aria-hidden="true">←</span>
+          <button
+            className="text-button"
+            type="button"
+            onClick={onBack}
+          >
+            <span aria-hidden="true">
+              &larr;
+            </span>{' '}
             Back
-          </a>
-        </div>
+          </button>
 
+          <button
+            className="button button-primary"
+            type="submit"
+          >
+            Submit
+
+            <span aria-hidden="true">
+              &rarr;
+            </span>
+          </button>
+        </div>
       </form>
     </section>
   )
