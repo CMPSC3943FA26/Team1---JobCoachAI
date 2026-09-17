@@ -463,6 +463,15 @@ a {
   width: 220px;
 }
 
+.auth-actions.login-only {
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
+
+.auth-actions.login-only .button {
+  width: 120px;
+}
+
 .success-message {
   margin: 20px 0 14px;
   color: #178c5c;

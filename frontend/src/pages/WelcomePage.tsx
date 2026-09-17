@@ -4,11 +4,15 @@ import { Button } from '../components/Button'
 export function WelcomePage() {
   const [isRegistering, setIsRegistering] = useState(false)
   const [accountCreated, setAccountCreated] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
 
   useEffect(() => {
     const resetWelcomeForm = () => {
       setIsRegistering(false)
       setAccountCreated(false)
+      setEmail('')
+      setPassword('')
     }
 
     window.addEventListener('resetWelcomeForm', resetWelcomeForm)
@@ -19,10 +23,10 @@ export function WelcomePage() {
   }, [])
 
   const handleRegisterSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-  event.preventDefault()
+    event.preventDefault()
 
-  setAccountCreated(true)
-  setIsRegistering(false)
+    setAccountCreated(true)
+    setIsRegistering(false)
   }
 
   return (
@@ -77,24 +81,28 @@ export function WelcomePage() {
 
           <div className="field-group">
             <label htmlFor="auth-email">Email address</label>
-            <input
-              id="auth-email"
-              name="email"
-              type="email"
-              placeholder="Enter your email address"
-              required
-            />
+              <input
+                id="auth-email"
+                name="email"
+                type="email"
+                placeholder="Enter your email address"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+              />
           </div>
 
           <div className="field-group">
             <label htmlFor="auth-password">Password</label>
-            <input
-              id="auth-password"
-              name="password"
-              type="password"
-              placeholder="Enter your password"
-              required
-            />
+              <input
+                id="auth-password"
+                name="password"
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+              />
           </div>
         </div>
 
@@ -108,29 +116,39 @@ export function WelcomePage() {
           </>
         )}
 
-        <div className={`auth-actions ${isRegistering ? 'register-mode' : ''}`}>
+        <div
+          className={`auth-actions ${
+            isRegistering
+              ? 'register-mode'
+              : accountCreated
+              ? 'login-only'
+              : ''
+          }`}
+        >
           {!isRegistering && (
             <Button variant="primary" type="submit">
               Log in <span aria-hidden="true">→</span>
             </Button>
           )}
 
-          <button
-            className={
-              isRegistering
-                ? 'button button-primary'
-                : 'button button-secondary'
-            }
-            type={isRegistering ? 'submit' : 'button'}
-            onClick={() => {
-              if (!isRegistering) {
-                setIsRegistering(true)
-                setAccountCreated(false)
+          {!accountCreated && (
+            <button
+              className={
+                isRegistering
+                  ? 'button button-primary'
+                  : 'button button-secondary'
               }
-            }}
-          >
-            Create Account <span aria-hidden="true">→</span>
-          </button>
+              type={isRegistering ? 'submit' : 'button'}
+              onClick={() => {
+                if (!isRegistering) {
+                  setIsRegistering(true)
+                  setAccountCreated(false)
+                }
+              }}
+            >
+              Create Account <span aria-hidden="true">→</span>
+            </button>
+          )}
         </div>
 
         {!isRegistering && (
