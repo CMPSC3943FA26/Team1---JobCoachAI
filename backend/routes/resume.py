@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from backend.schemas.resume import ResumeUpdateRequest
 from backend.services.resume import create_resume, get_resume, delete_resume, update_resume
 
 resume_bp = Blueprint("resume",__name__,url_prefix='/resume')
@@ -14,8 +15,8 @@ def insert(user_id):
 
 @resume_bp.route('/update_resume/<uuid:user_id>/<uuid:resume_id>',methods=['PATCH'])
 def put(user_id,resume_id):
-   data = request.get_json()
-   result = update_resume(user_id,resume_id,data)
+   data = ResumeUpdateRequest(**request.get_json())
+   result = update_resume(resume_id,user_id,data)
    if result:
       return jsonify({'message':'resume updated successfully'}),200
    else:

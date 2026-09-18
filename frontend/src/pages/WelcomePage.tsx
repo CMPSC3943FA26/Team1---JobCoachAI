@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { signInAsGuest } from '../lib/supabase'
 
 type WelcomePageProps = {
   onContinueAsGuest: () => void
@@ -58,6 +59,8 @@ export function WelcomePage({
       lastName || ''
     )
   }
+  const [error,setError] = useState(false)
+  
 
   return (
     <section
@@ -224,17 +227,28 @@ export function WelcomePage({
             </button>
           )}
         </div>
-
+        
+        
         {!isRegistering && (
           <button
             className="guest-link"
             type="button"
-            onClick={onContinueAsGuest}
+            onClick= {async () => {
+              try {
+                setError(false)
+                await signInAsGuest()
+              }
+              catch(err) {setError(true); return err}
+              setError(false)
+              return onContinueAsGuest()
+              
+            }}
+            
           >
             Continue as guest
           </button>
         )}
-
+        {error && (<div>error signing in, try again later</div>)}
         <p className="privacy-line">
           By continuing, you agree to our terms and privacy policy.
         </p>
