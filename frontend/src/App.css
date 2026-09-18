@@ -1,13 +1,23 @@
 :root {
-  --ink: #11284f;
-  --blue: #1769e0;
-  --blue-deep: #0d4bb6;
-  --blue-soft: #e9f2ff;
-  --blue-pale: #f6faff;
-  --line: #c9d9ef;
-  --muted: #5f7599;
+  --ink: #172033;
+
+  --sidebar: #222f43;
+  --sidebar-soft: #93c5fd;
+  --sidebar-muted: #bfdbfe;
+
+  --blue: #3678b8;
+  --blue-deep: #285f91;
+  --blue-soft: #dbeafe;
+  --blue-pale: #f6f8fb;
+
+  --line: #d5dde8;
+  --muted: #68768a;
   --white: #ffffff;
-  --shadow: 0 24px 60px rgba(17, 40, 79, 0.09);
+
+  --success: #178c5c;
+  --divider: #e2e8f0;
+
+  --shadow: 0 24px 60px rgba(23, 32, 51, 0.11);
 }
 
 * {
@@ -38,9 +48,7 @@ a {
 }
 
 
-/* =========================================================
-   APPLICATION LAYOUT
-   ========================================================= */
+/* APPLICATION LAYOUT */
 
 .app-shell {
   display: grid;
@@ -49,9 +57,7 @@ a {
 }
 
 
-/* =========================================================
-   LEFT SIDEBAR
-   ========================================================= */
+/* LEFT SIDEBAR */
 
 .sidebar {
   display: flex;
@@ -66,8 +72,7 @@ a {
     22px;
 
   color: var(--white);
-  background: var(--blue);
-
+  background: linear-gradient( 160deg,#222f43 0%, #172033 100%);
   position: sticky;
   top: 0;
 
@@ -75,9 +80,7 @@ a {
 }
 
 
-/* =========================================================
-   BRAND / LOGO
-   ========================================================= */
+/* BRAND / LOGO */
 
 .brand {
   display: inline-flex;
@@ -101,28 +104,22 @@ a {
   font-weight: 700;
 }
 
-.brand-mark {
-  display: grid;
-
-  width: 34px;
-  height: 34px;
-
-  place-items: center;
-
-  border: 1px solid rgba(255, 255, 255, 0.48);
-  border-radius: 10px;
-
-  color: var(--white);
-
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0;
+.brand-logo {
+  display: flex;
+  width: 46px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
 }
 
+.brand-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
 
-/* =========================================================
-   COMMON LABELS
-   ========================================================= */
+/* COMMON LABELS */
 
 .eyebrow,
 .section-kicker,
@@ -137,17 +134,15 @@ a {
 }
 
 
-/* =========================================================
-   SIDEBAR INTRO
-   ========================================================= */
+/* SIDEBAR INTRO*/
 
 .sidebar-intro {
-  margin-top: clamp(120px, 18vh, 180px);
+  margin-top: clamp(40px, 8vh, 80px);
   max-width: 410px;
 }
 
 .sidebar .eyebrow {
-  color: #bcd5ff;
+  color: var(--sidebar-muted);
 }
 
 .sidebar h1 {
@@ -165,7 +160,7 @@ a {
 }
 
 .sidebar h1 span {
-  color: #a9c9ff;
+  color: var(--sidebar-soft);
 }
 
 .sidebar-copy {
@@ -179,9 +174,7 @@ a {
 }
 
 
-/* =========================================================
-   SIDEBAR NAVIGATION
-   ========================================================= */
+/* SIDEBAR NAVIGATION */
 
 .stepper {
   display: grid;
@@ -204,7 +197,7 @@ a {
 
   border-left: 2px solid rgba(255, 255, 255, 0.32);
 
-  color: #aacbff;
+  color: var(--sidebar-soft);
 
   transition:
     color 0.2s ease,
@@ -255,9 +248,7 @@ a {
 }
 
 
-/* =========================================================
-   SIDEBAR FOOTER
-   ========================================================= */
+/* SIDEBAR FOOTER */
 
 .sidebar-footer {
   margin-top: auto;
@@ -265,7 +256,7 @@ a {
 
   padding-top: 20px;
 
-  color: #bdd5ff;
+  color: var(--sidebar-muted);
 
   font-size: 12px;
 
@@ -281,9 +272,7 @@ a {
 }
 
 
-/* =========================================================
-   MAIN CONTENT
-   ========================================================= */
+/* MAIN CONTENT*/
 
 .content {
   min-width: 0;
@@ -297,9 +286,7 @@ a {
 }
 
 
-/* =========================================================
-   TOP BAR
-   ========================================================= */
+/* TOP BAR*/
 
 .topbar {
   display: flex;
@@ -333,9 +320,7 @@ a {
 }
 
 
-/* =========================================================
-   SCREEN LAYOUT
-   ========================================================= */
+/* SCREEN LAYOUT */
 
 .screen {
   max-width: 900px;
@@ -395,9 +380,7 @@ a {
 }
 
 
-/* =========================================================
-   AUTHENTICATION / JOB FORM CARDS
-   ========================================================= */
+/* AUTHENTICATION / JOB FORM CARDS */
 
 .auth-panel,
 .job-form {
@@ -424,6 +407,15 @@ a {
 
 .auth-fields .field-group + .field-group {
   margin-top: 0;
+}
+
+.field-error {
+  margin: 16px 0 0;
+
+  color: var(--success);
+
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .panel-heading {
@@ -476,10 +468,40 @@ a {
   margin-top: 25px;
 }
 
+.auth-actions.register-mode {
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
 
-/* =========================================================
-   BUTTONS
-   ========================================================= */
+.auth-actions.register-mode .button {
+  width: 220px;
+}
+
+.auth-actions.login-only {
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
+
+.auth-actions.login-only .button {
+  width: 120px;
+}
+
+.success-message {
+  margin: 20px 0 14px;
+  color: var(--success);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.success-divider {
+  width: 100%;
+  height: 1px;
+  margin-bottom: 20px;
+  background: var(--divider);
+}
+
+/* BUTTONS*/
 
 .button {
   display: inline-flex;
@@ -530,20 +552,54 @@ a {
 
 .guest-link {
   display: block;
-
   width: max-content;
 
   margin: 18px auto 0;
+  padding: 0;
+
+  border: none;
+  background: transparent;
 
   color: var(--blue);
 
   font-size: 12px;
   font-weight: 700;
+
+  cursor: pointer;
 }
 
-.guest-link:hover,
-.edit-link:hover {
+.guest-link:hover {
   text-decoration: underline;
+}
+
+.profile-avatar {
+  position: absolute;
+  top: 24px;
+  right: 28px;
+
+  display: flex;
+  width: 38px;
+  height: 38px;
+
+  align-items: center;
+  justify-content: center;
+
+  padding: 0;
+
+  border: none;
+  border-radius: 50%;
+
+  color: var(--white);
+  background: var(--blue);
+
+  font-size: 13px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.profile-avatar:hover {
+  background: var(--blue-deep);
 }
 
 .privacy-line {
@@ -555,9 +611,7 @@ a {
 }
 
 
-/* =========================================================
-   TAILOR PAGE
-   ========================================================= */
+/* TAILOR PAGE */
 
 .job-form {
   margin-top: 52px;
@@ -607,9 +661,7 @@ a {
 }
 
 
-/* =========================================================
-   FORM FIELDS
-   ========================================================= */
+/* FORM FIELDS*/
 
 .field-group + .field-group {
   margin-top: 27px;
@@ -665,10 +717,7 @@ textarea {
 input:focus,
 textarea:focus {
   border-color: var(--blue);
-
-  box-shadow:
-    0 0 0 3px
-    rgba(23, 105, 224, 0.1);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 textarea {
@@ -685,9 +734,7 @@ textarea::placeholder {
 }
 
 
-/* =========================================================
-   FORM FOOTERS
-   ========================================================= */
+/* FORM FOOTERS */
 
 .form-footer,
 .parsed-footer {
@@ -702,24 +749,28 @@ textarea::placeholder {
 }
 
 .text-button {
+  padding: 0;
+  border: none;
+  background: transparent;
   color: var(--muted);
+  cursor: pointer;
 
   font-size: 12px;
   font-weight: 700;
 }
 
+.text-button:hover {
+  color: var(--blue);
+}
+
 .text-button span {
   margin-right: 7px;
-
   color: var(--blue);
-
   font-size: 16px;
 }
 
 
-/* =========================================================
-   RESUME / PARSED PAGE HEADER
-   ========================================================= */
+/* RESUME / PARSED PAGE HEADER */
 
 .parsed-header {
   display: flex;
@@ -789,9 +840,7 @@ textarea::placeholder {
 }
 
 
-/* =========================================================
-   MATCH SCORE
-   ========================================================= */
+/* MATCH SCORE*/
 
 .match-score {
   min-width: 172px;
@@ -835,9 +884,7 @@ textarea::placeholder {
 }
 
 
-/* =========================================================
-   PARSED / RESUME GRID
-   ========================================================= */
+/* PARSED / RESUME GRID*/
 
 .parsed-grid {
   display: grid;
@@ -860,9 +907,7 @@ textarea::placeholder {
 }
 
 
-/* =========================================================
-   DOCUMENT EDITOR
-   ========================================================= */
+/* DOCUMENT EDITOR */
 
 .document-editor {
   margin-top: 12px;
@@ -972,9 +1017,7 @@ textarea::placeholder {
 }
 
 
-/* =========================================================
-   RESUME SECTIONS
-   ========================================================= */
+/* RESUME SECTIONS */
 
 .resume-section {
   padding: 23px;
@@ -1086,9 +1129,7 @@ textarea::placeholder {
 }
 
 
-/* =========================================================
-   INSIGHT CARDS
-   ========================================================= */
+/* INSIGHT CARDS*/
 
 .insight-card {
   min-height: 250px;
@@ -1242,9 +1283,7 @@ textarea::placeholder {
 }
 
 
-/* =========================================================
-   TABLET / SMALLER SCREENS
-   ========================================================= */
+/* TABLET / SMALLER SCREENS */
 
 @media (max-width: 850px) {
 
@@ -1253,6 +1292,8 @@ textarea::placeholder {
   }
 
   .sidebar {
+    background: linear-gradient(160deg, #222f43 0%, #172033 100%);
+
     position: static;
 
     min-height: auto;
@@ -1292,12 +1333,10 @@ textarea::placeholder {
 
   .step {
     grid-template-columns: 34px 1fr;
-
     min-height: 58px;
-
     padding: 8px;
-
     border-left-width: 2px;
+    color: var(--sidebar-soft);
   }
 
   .sidebar-footer {
@@ -1305,7 +1344,15 @@ textarea::placeholder {
   }
 
   .content {
-    padding: 0 28px 45px;
+    position: relative;
+    min-width: 0;
+
+    padding:
+      0
+      clamp(28px, 7vw, 120px)
+      54px;
+
+    background: var(--blue-pale);
   }
 
   .topbar {
@@ -1322,9 +1369,7 @@ textarea::placeholder {
 }
 
 
-/* =========================================================
-   MOBILE
-   ========================================================= */
+/* MOBILE */
 
 @media (max-width: 600px) {
 
@@ -1332,9 +1377,9 @@ textarea::placeholder {
     font-size: 16px;
   }
 
-  .brand-mark {
-    width: 32px;
-    height: 32px;
+  .brand-logo {
+    width: 40px;
+    height: 34px;
   }
 
   .sidebar-intro {
@@ -1486,9 +1531,7 @@ textarea::placeholder {
 }
 
 
-/* =========================================================
-   PRINT
-   ========================================================= */
+/* PRINT*/
 
 @media print {
 
@@ -1527,6 +1570,501 @@ textarea::placeholder {
 
     outline: 0;
 
+    box-shadow: none;
+  }
+}
+
+/* Resume page */
+
+/*
+ * Page 3 intentionally reuses the global .button, .button-primary,
+ * .button-secondary, .field-group, input, and textarea rules above so
+ * controls match the Welcome and Tailor pages.
+ */
+
+.resume-editor-page {
+  padding: 0;
+  color: var(--ink);
+  background: transparent;
+}
+
+.resume-editor-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 30px;
+  margin-bottom: 30px;
+}
+
+.resume-editor-header .screen-intro {
+  flex: 1;
+}
+
+.resume-editor-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.resume-local-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 22px;
+  padding: 13px 15px;
+  color: var(--blue-deep);
+  border-left: 3px solid var(--blue);
+  background: var(--blue-soft);
+  font-size: 12px;
+}
+
+.resume-info-icon {
+  display: inline-flex;
+  width: 21px;
+  height: 21px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 21px;
+  border-radius: 50%;
+  color: var(--white);
+  background: var(--blue);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* RESUME SECTIONS */
+
+.resume-section {
+  margin-bottom: 14px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--white);
+  box-shadow: 0 14px 35px rgba(17, 40, 79, 0.06);
+}
+
+.resume-section-header {
+  width: 100%;
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  border: 0;
+  background: transparent;
+}
+
+/* Personal Information has no right-side action button.
+ * The empty fourth grid column keeps its chevron aligned with the
+ * chevrons in all other section headers.
+ */
+button.resume-section-header {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 28px 145px;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.resume-section-main {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.resume-section-number {
+  display: inline-flex;
+  width: 46px;
+  height: 46px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+  color: var(--blue);
+  background: var(--blue-soft);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.resume-section-heading {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  text-align: left;
+}
+
+.resume-section-heading strong {
+  color: var(--ink);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.resume-section-heading small {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.resume-section-chevron {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  color: var(--blue);
+  font-size: 10px;
+  line-height: 1;
+  transform: rotate(0deg);
+  transition: transform 0.2s ease;
+}
+
+.resume-section-chevron.open {
+  transform: rotate(180deg);
+}
+
+.resume-section-action {
+  min-width: 145px;
+  flex-shrink: 0;
+  justify-content: center;
+}
+
+.resume-section-content {
+  padding: 22px;
+  border-top: 1px solid var(--divider);
+}
+
+/* PERSONAL INFORMATION
+ * Desktop/tablet: first + last name on row one; email + phone on row two.
+ */
+
+.resume-personal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 24px;
+}
+
+.resume-personal-grid .field-group + .field-group,
+.resume-entry-grid .field-group + .field-group,
+.resume-skill-field .field-group + .field-group {
+  margin-top: 0;
+}
+
+/* COLLECTION ENTRIES */
+
+.resume-entry-card {
+  margin-bottom: 16px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  background: var(--blue-pale);
+}
+
+.resume-entry-card:last-child {
+  margin-bottom: 0;
+}
+
+.resume-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.resume-entry-card > .field-group + .field-group {
+  margin-top: 20px;
+}
+
+.resume-remove-entry {
+  margin-top: 16px;
+  color: var(--muted);
+}
+
+.resume-remove-entry:hover {
+  color: var(--blue);
+}
+
+.resume-empty-message {
+  margin: 0;
+  padding: 4px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* SKILLS */
+
+.resume-skills-editor {
+  display: grid;
+  gap: 14px;
+}
+
+.resume-skill-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 14px;
+}
+
+.resume-skill-field .text-button {
+  min-height: 45px;
+  padding-bottom: 14px;
+}
+
+/* TIP */
+
+.resume-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 24px 0;
+  padding: 15px 17px;
+  border-left: 3px solid var(--blue);
+  background: var(--blue-soft);
+}
+
+.resume-tip strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.resume-tip p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* RESUME PREVIEW */
+
+.resume-preview-section {
+  margin-top: 28px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--white);
+}
+
+.resume-preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.resume-preview-heading h3 {
+  margin: 8px 0 4px;
+  font: 600 20px 'Space Grotesk', sans-serif;
+}
+
+.resume-preview-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.resume-preview-background {
+  display: flex;
+  justify-content: center;
+  padding: 30px;
+  background: #dce8f7;
+}
+
+.resume-preview-page-frame {
+  width: min(100%, 720px);
+  min-height: 920px;
+  padding: 48px 42px;
+  color: #182c4e;
+  border: 1px solid #c4d4e9;
+  background: var(--white);
+  box-shadow: 0 15px 28px rgba(17, 40, 79, 0.1);
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.preview-header {
+  padding-bottom: 14px;
+  border-bottom: 1px solid #64748b;
+  text-align: center;
+}
+
+.preview-header h1 {
+  margin: 0 0 7px;
+  color: #182c4e;
+  font: 700 30px 'Space Grotesk', sans-serif;
+}
+
+.preview-header p {
+  margin: 0;
+  color: var(--muted);
+  font: 12px 'DM Sans', sans-serif;
+}
+
+.preview-section {
+  margin-top: 19px;
+}
+
+.preview-section h3 {
+  margin: 0 0 7px;
+  padding-bottom: 4px;
+  color: var(--blue);
+  border-bottom: 1px solid #94a3b8;
+  font: 700 12px 'Space Grotesk', sans-serif;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.preview-section p {
+  margin: 4px 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.preview-entry {
+  margin-bottom: 12px;
+}
+
+.preview-entry-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+}
+
+.preview-company {
+  font-style: italic;
+}
+
+/* BOTTOM SAVE / EXPORT ACTIONS */
+
+.resume-bottom-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 42px;
+  padding-bottom: 18px;
+}
+
+/* RESUME PAGE RESPONSIVE */
+
+@media (max-width: 900px) {
+  .resume-editor-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .resume-entry-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 650px) {
+  .resume-editor-header-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .resume-editor-header-actions .button {
+    width: 100%;
+  }
+
+  .resume-section-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  button.resume-section-header {
+    grid-template-columns: 46px minmax(0, 1fr) 28px;
+  }
+
+  .resume-section-main {
+    width: 100%;
+    grid-template-columns: 46px minmax(0, 1fr) 28px;
+  }
+
+  .resume-section-action {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .resume-personal-grid,
+  .resume-entry-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .resume-skill-field {
+    grid-template-columns: 1fr;
+  }
+
+  .resume-skill-field .text-button {
+    min-height: auto;
+    justify-self: start;
+    padding-bottom: 0;
+  }
+
+  .resume-preview-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .resume-preview-heading .button {
+    width: 100%;
+  }
+
+  .resume-preview-background {
+    padding: 12px;
+  }
+
+  .resume-preview-page-frame {
+    min-height: 700px;
+    padding: 30px 24px;
+  }
+
+  .resume-bottom-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+    margin-top: 30px;
+  }
+
+  .resume-bottom-actions .button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* RESUME PRINT / EXPORT */
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .resume-preview-page-frame,
+  .resume-preview-page-frame * {
+    visibility: visible;
+  }
+
+  .resume-preview-page-frame {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    min-height: auto;
+    padding: 0;
+    border: 0;
     box-shadow: none;
   }
 }

@@ -1,11 +1,19 @@
 import type { ReactNode } from 'react'
+import jobCoachLogo from '../assets/jobcoach-logo.png'
 
 type LayoutProps = {
   children: ReactNode
   currentScreen: 'welcome' | 'tailor' | 'parsed'
+  profileInitials: string | null
+  onHomeClick: () => void
 }
 
-export function Layout({ children, currentScreen }: LayoutProps) {
+export function Layout({
+  children,
+  currentScreen,
+  profileInitials,
+  onHomeClick,
+}: LayoutProps) {
   const steps = [
     {
       key: 'welcome',
@@ -29,21 +37,26 @@ export function Layout({ children, currentScreen }: LayoutProps) {
 
   return (
     <main className="app-shell">
-
       {/* LEFT SIDEBAR */}
       <aside
         className="sidebar"
         aria-label="Workflow navigation"
       >
-
         {/* BRAND */}
         <a
           className="brand"
           href="#welcome"
           aria-label="JobCoach AI home"
+          onClick={(event) => {
+            event.preventDefault()
+            onHomeClick()
+          }}
         >
-          <span className="brand-mark">
-            JC
+          <span className="brand-logo">
+            <img
+              src={jobCoachLogo}
+              alt="JobCoach AI logo"
+            />
           </span>
 
           <span className="brand-name">
@@ -51,57 +64,44 @@ export function Layout({ children, currentScreen }: LayoutProps) {
           </span>
         </a>
 
-
         {/* SIDEBAR INTRO */}
         <div className="sidebar-intro">
-
           <p className="eyebrow">
-            Your application copilot
+            Your personal AI Job Coach
           </p>
 
           <h1>
-            Move from
+            Build your resume with
             <br />
-
-            <span>
-              maybe
-            </span>{' '}
-
-            to ready.
+            <span>confidence</span>
           </h1>
-
-          <p className="sidebar-copy">
-            Make every application feel like
-            <br />
-            it was made for you.
-          </p>
-
         </div>
-
 
         {/* NAVIGATION */}
         <nav
           className="stepper"
           aria-label="Application steps"
         >
-
           {steps.map((step) => {
-            const isActive = currentScreen === step.key
+            const isActive =
+              currentScreen === step.key
 
             return (
               <a
                 key={step.key}
                 href={`#${step.key}`}
-                className={`step ${isActive ? 'active' : ''}`}
-                aria-current={isActive ? 'page' : undefined}
+                className={`step ${
+                  isActive ? 'active' : ''
+                }`}
+                aria-current={
+                  isActive ? 'page' : undefined
+                }
               >
-
                 <span className="step-number">
                   {step.number}
                 </span>
 
                 <span className="step-text">
-
                   <strong>
                     {step.title}
                   </strong>
@@ -109,59 +109,40 @@ export function Layout({ children, currentScreen }: LayoutProps) {
                   <small>
                     {step.subtitle}
                   </small>
-
                 </span>
-
               </a>
             )
           })}
-
         </nav>
-
 
         {/* SIDEBAR FOOTER */}
         <p className="sidebar-footer">
-
           Built for the next chapter
-
           <span aria-hidden="true">
             →
           </span>
-
         </p>
-
       </aside>
-
 
       {/* RIGHT SIDE CONTENT */}
       <section
         className="content"
         aria-live="polite"
       >
-
-        <div className="topbar">
-
-          <span className="topbar-label">
-            Job application workspace
-          </span>
-
-          <span className="secure-note">
-
-            <span
-              className="status-dot"
-              aria-hidden="true"
-            />
-
-            Your data stays yours
-
-          </span>
-
-        </div>
+        {profileInitials &&
+          currentScreen !== 'welcome' && (
+            <button
+              className="profile-avatar"
+              type="button"
+              aria-label="Profile"
+              title="Profile"
+            >
+              {profileInitials}
+            </button>
+          )}
 
         {children}
-
       </section>
-
     </main>
   )
 }
