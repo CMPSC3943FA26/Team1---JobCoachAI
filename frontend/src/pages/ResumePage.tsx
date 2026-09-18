@@ -362,9 +362,9 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
           <Button
             variant="primary"
             type="button"
-            onClick={() => setStatus("Resume ready to export.")}
+            onClick={() => window.print()}
           >
-            Export resume <span aria-hidden="true">✓</span>
+            Export resume <span aria-hidden="true">↗</span>
           </Button>
         </div>
       </div>
@@ -375,6 +375,7 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
       </div>
 
       <form
+        id="resume-form"
         className="resume-editor"
         onSubmit={async (event) => {
           event.preventDefault();
@@ -549,18 +550,14 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
         <section className="job-version-card">
           <div>
             <span className="panel-icon">JOB-SPECIFIC VERSION</span>
-            <h3>Save a tailored copy</h3>
-            <p>Create a separate version without changing your main resume.</p>
+            <h3>Save a tailored version</h3>
+            <p>Create a copy for a specific role without changing your main resume.</p>
           </div>
+
           <div className="job-version-action">
-            <label htmlFor="job-version-title">Job title or company</label>
-            <div>
-              <input
-                id="job-version-title"
-                value={jobTitle}
-                onChange={(event) => setJobTitle(event.target.value)}
-                placeholder="e.g. Product Designer at Northstar"
-              />
+            <div className="job-version-label-row">
+              <label htmlFor="job-version-title">Job title or company</label>
+
               <Button
                 variant="secondary"
                 type="button"
@@ -575,15 +572,16 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
                 Save job version
               </Button>
             </div>
+
+            <input
+              id="job-version-title"
+              value={jobTitle}
+              onChange={(event) => setJobTitle(event.target.value)}
+              placeholder="e.g. Product Designer at Northstar"
+            />
           </div>
         </section>
 
-        <div className="resume-form-footer">
-          <span>Last saved locally in this session</span>
-          <Button variant="primary" type="submit">
-            Save resume <span aria-hidden="true">✓</span>
-          </Button>
-        </div>
       </form>
 
       <section className="resume-preview-section">
@@ -628,11 +626,117 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
 
                       {section.entries
                         .filter(hasEntryContent)
-                        .map((entry, index) => (
-                          <p key={`${section.key}-${index}`}>{formatEntryPreview(entry)}</p>
-                        ))}
+                        .map((entry, index) => {
+                          // Clean professional layout for work experience
+                          if (
+                            section.key === "work_experience" &&
+                            typeof entry !== "string"
+                          ) {
+                            const experience = entry as WorkExperience;
+
+                            return (
+                              <div
+                                className="preview-experience"
+                                key={`${section.key}-${index}`}
+                              >
+                                <div className="preview-experience-header">
+                                  <div className="preview-experience-title-group">
+                                    {experience.job_title && (
+                                      <h3>{experience.job_title}</h3>
+                                    )}
+
+                                    {(experience.company || experience.location) && (
+                                      <p className="preview-company">
+                                        {experience.company}
+
+                                        {experience.company && experience.location
+                                          ? " | "
+                                          : ""}
+
+                                        {experience.location}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {(experience.start_date || experience.end_date) && (
+                                    <span className="preview-experience-date">
+                                      {experience.start_date}
+
+                                      {experience.start_date && experience.end_date
+                                        ? " – "
+                                        : ""}
+
+                                      {experience.end_date}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {experience.description && (
+                                  <p className="preview-experience-description">
+                                    {experience.description}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          }
+
+                          // Clean professional layout for education
+                          if (
+                            section.key === "education" &&
+                            typeof entry !== "string"
+                          ) {
+                            const education = entry as Education;
+
+                            return (
+                              <div
+                                className="preview-education"
+                                key={`${section.key}-${index}`}
+                              >
+                                <div className="preview-education-header">
+                                  <div className="preview-education-title-group">
+                                    {education.school && (
+                                      <h3>{education.school}</h3>
+                                    )}
+
+                                    {(education.degree || education.field_of_study) && (
+                                      <p className="preview-education-degree">
+                                        {education.degree}
+
+                                        {education.degree && education.field_of_study
+                                          ? " in "
+                                          : ""}
+
+                                        {education.field_of_study}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {(education.start_date || education.end_date) && (
+                                    <span className="preview-education-date">
+                                      {education.start_date}
+
+                                      {education.start_date && education.end_date
+                                        ? " – "
+                                        : ""}
+
+                                      {education.end_date}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // Other resume sections continue using existing formatting
+                          return (
+                            <p key={`${section.key}-${index}`}>
+                              {formatEntryPreview(entry)}
+                            </p>
+                          );
+                        })}
                     </div>
                   ))}
+                
               </>
             ) : (
               <p className="resume-empty-message">
@@ -642,6 +746,30 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
           </div>
         </div>
       </section>
+
+      <div className="resume-bottom-actions">
+        <span className="resume-save-status">
+          {status || "Last saved locally in this session"}
+        </span>
+
+        <div className="resume-bottom-action-buttons">
+          <Button
+            variant="secondary"
+            type="submit"
+            form="resume-form"
+          >
+            Save resume <span aria-hidden="true">✓</span>
+          </Button>
+
+          <Button
+            variant="primary"
+            type="button"
+            onClick={() => window.print()}
+          >
+            Export resume <span aria-hidden="true">↗</span>
+          </Button>
+        </div>
+      </div>
 
       {showDeleteDialog && (
         <div className="dialog-backdrop" role="presentation">

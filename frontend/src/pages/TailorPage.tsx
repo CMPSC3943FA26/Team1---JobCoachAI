@@ -100,20 +100,26 @@ export default function TailorPage({
   ) {
     event.preventDefault()
 
-    if (!hasResume) {
-      setError(
-        'Please create or upload a resume.'
-      )
-      return
-    }
-
+    /*
+     * Job title and job description are required.
+     * Show a browser alert if either field is empty.
+     */
     if (
       !jobTitle.trim() ||
       !jobDescription.trim()
     ) {
-      setError(
-        'Add the job title and paste the job description before submitting.'
-      )
+      const message =
+        'Please enter the job title and job description to proceed.'
+
+      setError(message)
+      return
+    }
+
+    if (!hasResume) {
+      const message =
+        'Please create or upload a resume to proceed.'
+
+      setError(message)
       return
     }
 
@@ -227,11 +233,15 @@ export default function TailorPage({
             type="text"
             placeholder="e.g. Product Designer"
             value={jobTitle}
-            onChange={(event) =>
+            onChange={(event) => {
               setJobTitle(
                 event.target.value
               )
-            }
+
+              if (error) {
+                setError('')
+              }
+            }}
           />
         </div>
 
@@ -253,11 +263,15 @@ export default function TailorPage({
             rows={8}
             placeholder="Paste the job description here..."
             value={jobDescription}
-            onChange={(event) =>
+            onChange={(event) => {
               setJobDescription(
                 event.target.value
               )
-            }
+
+              if (error) {
+                setError('')
+              }
+            }}
           />
         </div>
 
