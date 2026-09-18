@@ -117,6 +117,14 @@ export function ResumePage({ blankResume = false }: ResumePageProps) {
   const [sections, setSections] = useState<ResumeSection[]>(() =>
     createSections(blankResume),
   );
+  const [openSections, setOpenSections] = useState<string[]>([]);
+  const toggleSection = (key: string) => {
+    setOpenSections((current) =>
+      current.includes(key)
+        ? current.filter((item) => item !== key)
+        : [...current, key]
+    );
+  };
   const [jobTitle, setJobTitle] = useState("");
   const [status, setStatus] = useState("");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -270,9 +278,9 @@ export function ResumePage({ blankResume = false }: ResumePageProps) {
           <Button
             variant="primary"
             type="button"
-            onClick={() => setStatus("Resume saved just now.")}
+            onClick={() => setStatus("Resume ready to export.")}
           >
-            Save resume <span aria-hidden="true">✓</span>
+            Export resume <span aria-hidden="true">✓</span>
           </Button>
         </div>
       </div>
@@ -323,7 +331,6 @@ export function ResumePage({ blankResume = false }: ResumePageProps) {
             ))}
           </div>
         </section>
-
         {sections.map((section, sectionIndex) => (
           <section className="resume-card" key={section.key}>
             <div className="resume-card-heading">
@@ -335,10 +342,18 @@ export function ResumePage({ blankResume = false }: ResumePageProps) {
               </div>
               <div className="section-actions">
                 <button
+                className="collapse-button"
+               type="button"
+                onClick={() => toggleSection(section.key)}
+              >
+                {openSections.includes(section.key) ? "▲ Hide" : "▼ Show"}
+              </button>
+
+              <button
                   className="add-button"
                   type="button"
                   onClick={() => addEntry(section.key)}
-                >
+                > 
                   + Add {section.key === "skills" ? "skill" : "entry"}
                 </button>
                 <button
@@ -470,6 +485,69 @@ export function ResumePage({ blankResume = false }: ResumePageProps) {
           </Button>
         </div>
       </form>
+
+      <section className="resume-preview-section">
+        <div className="resume-preview-header">
+          <span className="panel-icon">PREVIEW</span>
+          <div>
+            <h2>Resume Preview</h2>
+            <p>Review your completed resume before exporting.</p>
+          </div>
+        </div>
+
+        <div className="resume-preview">
+          {(profile.firstName ||
+            profile.lastName ||
+            profile.email ||
+            profile.phone ||
+            sections.some((section) =>
+              section.entries.some((entry) => entry.trim())
+            )) ? (
+            <>
+              <div className="resume-preview-profile">
+                <h1>
+                  {[profile.firstName, profile.lastName]
+                    .filter(Boolean)
+                    .join(" ")}
+                </h1>
+
+                {(profile.email || profile.phone) && (
+                  <p>
+                    {[profile.email, profile.phone]
+                      .filter(Boolean)
+                      .join(" • ")}
+                  </p>
+                )}
+              </div>
+
+              {((section) => {
+                const entries = section.entries.filter(
+                  (entry) => entry.trim() !== ""
+                );
+
+                if (entries.length === 0) return null;
+
+                return (
+                  <div
+                    className="resume-preview-block"
+                    key={section.key}
+                  >sections.map
+                    <h2>{section.title}</h2>
+
+                    {entries.map((entry, index) => (
+                      <p key={index}>{entry}</p>
+                    ))}
+                  </div>
+                );
+              })}
+            </>
+          ) : (
+            <p className="resume-preview-empty">
+              Your resume preview will appear here as you add information.
+            </p>
+          )}
+        </div>
+      </section>
 
       {showDeleteDialog && (
         <div className="dialog-backdrop" role="presentation">
