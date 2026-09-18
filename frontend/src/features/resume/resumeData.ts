@@ -65,6 +65,8 @@ export type Resume = {
   last_name: string
   email: string
   phone: string
+  location: string
+  professional_summary: string
   summary: string
   work_experience: WorkExperience[]
   education: Education[]
@@ -79,6 +81,9 @@ export const initialResume: Resume = {
   last_name: 'Lee',
   email: 'jordan.lee@example.com',
   phone: '(415) 555-0148',
+  location: 'San Francisco, CA',
+  professional_summary:
+    'Product-minded designer who turns complex problems into clear, intuitive experiences. You bring a thoughtful balance of user empathy, sharp visual craft, and cross-functional momentum.',
   summary:
     'Product-minded designer who turns complex problems into clear, intuitive experiences. You bring a thoughtful balance of user empathy, sharp visual craft, and cross-functional momentum.',
   work_experience: [

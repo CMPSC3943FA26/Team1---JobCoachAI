@@ -13,6 +13,23 @@ import {
 
 type ResumePageProps = { blankResume?: boolean };
 
+const emptyProfile: ResumeProfile = {
+  first_name: "",
+  last_name: "",
+  email: "",
+  phone: "",
+  location: "",
+  professional_summary: "",
+};
+
+const personalFields: Array<{ key: keyof ResumeProfile; label: string; type?: string }> = [
+  { key: "first_name", label: "First name" },
+  { key: "last_name", label: "Last name" },
+  { key: "email", label: "Email", type: "email" },
+  { key: "phone", label: "Phone", type: "tel" },
+  { key: "location", label: "Location" },
+];
+
 type SectionKey =
   | "summary"
   | "education"
@@ -44,6 +61,15 @@ const sectionLabels: Record<SectionKey, string> = {
   projects: "Projects",
   certifications: "Certifications",
 };
+
+const sectionOrder: SectionKey[] = [
+  "summary",
+  "education",
+  "work_experience",
+  "skills",
+  "projects",
+  "certifications",
+];
 
 const getBlankSectionEntry = (sectionKey: SectionKey): SectionEntry => {
   switch (sectionKey) {
@@ -103,28 +129,22 @@ function createSections(blankResume: boolean): ResumeSection[] {
   ];
 }
 
-export function ResumePage({ blankResume = false }: ResumePageProps) {
-  const [profile, setProfile] = useState<ResumeProfile>({
-    first_name: blankResume ? resumeSectionEntries.resume.first_name : initialResume.first_name,
-    last_name: blankResume ? resumeSectionEntries.resume.last_name : initialResume.last_name,
-    email: blankResume ? resumeSectionEntries.resume.email : initialResume.email,
-    phone: blankResume ? resumeSectionEntries.resume.phone : initialResume.phone,
-    location: blankResume ? resumeSectionEntries.resume.location : initialResume.location,
-    professional_summary: blankResume
-      ? resumeSectionEntries.resume.professional_summary
-      : initialResume.professional_summary,
-  });
+export function ResumePage({ blankResume = true }: ResumePageProps) {
+  const [profile, setProfile] = useState<ResumeProfile>(() =>
+    blankResume
+      ? { ...emptyProfile }
+      : {
+          first_name: initialResume.first_name,
+          last_name: initialResume.last_name,
+          email: initialResume.email,
+          phone: initialResume.phone,
+          location: initialResume.location,
+          professional_summary: initialResume.professional_summary,
+        },
+  );
   const [sections, setSections] = useState<ResumeSection[]>(() =>
     createSections(blankResume),
   );
-  const [openSections, setOpenSections] = useState<string[]>([]);
-  const toggleSection = (key: string) => {
-    setOpenSections((current) =>
-      current.includes(key)
-        ? current.filter((item) => item !== key)
-        : [...current, key]
-    );
-  };
   const [jobTitle, setJobTitle] = useState("");
   const [status, setStatus] = useState("");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -189,15 +209,46 @@ export function ResumePage({ blankResume = false }: ResumePageProps) {
   };
 
   const addSection = () => {
-    // This does not work because custom sections do not match the typed resume model.
-    // The page expects SectionKey values like "education" or "work_experience",
-    // and each entry must be a valid typed object or string summary.
-    const title = window.prompt("Name this resume section")?.trim();
-    if (!title) return;
+    const nextSection = sectionOrder.find(
+      (sectionKey) => !sections.some((section) => section.key === sectionKey),
+    );
+
+    if (!nextSection) return;
+
     setSections((current) => [
       ...current,
-      { key: `custom-${Date.now()}`, title, entries: [""], custom: true },
+      {
+        key: nextSection,
+        title: sectionLabels[nextSection],
+        entries: [getBlankSectionEntry(nextSection)],
+      },
     ]);
+  };
+
+  const hasEntryContent = (entry: SectionEntry) => {
+    if (typeof entry === "string") return entry.trim() !== "";
+    return Object.values(entry).some(
+      (value) => typeof value === "string" && value.trim() !== "",
+    );
+  };
+
+  const formatEntryPreview = (entry: SectionEntry) => {
+    if (typeof entry === "string") return entry.trim();
+
+    return Object.entries(entry)
+      .filter(([, value]) => typeof value === "string" && value.trim() !== "")
+      .map(([fieldKey, value]) => {
+        const fieldLabel = fieldKey
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (char) => char.toUpperCase());
+
+        if (fieldKey === "description" || fieldKey === "skill_name") {
+          return value;
+        }
+
+        return `${fieldLabel}: ${value}`;
+      })
+      .join(" • ");
   };
 
   const removeSection = (sectionKey: string) => {
@@ -301,13 +352,7 @@ export function ResumePage({ blankResume = false }: ResumePageProps) {
             <span className="field-hint">Shown at the top of your resume</span>
           </div>
           <div className="personal-grid">
-            {([
-              { key: "first_name", label: "First name" },
-              { key: "last_name", label: "Last name" },
-              { key: "email", label: "Email", type: "email" },
-              { key: "phone", label: "Phone", type: "tel" },
-              { key: "location", label: "Location" },
-            ] as const).map((field) => (
+            {personalFields.map((field) => (
               <div className="field-group" key={field.key}>
                 <label htmlFor={`resume-${field.key}`}>{field.label}</label>
                 <input
@@ -342,18 +387,10 @@ export function ResumePage({ blankResume = false }: ResumePageProps) {
               </div>
               <div className="section-actions">
                 <button
-                className="collapse-button"
-               type="button"
-                onClick={() => toggleSection(section.key)}
-              >
-                {openSections.includes(section.key) ? "▲ Hide" : "▼ Show"}
-              </button>
-
-              <button
                   className="add-button"
                   type="button"
                   onClick={() => addEntry(section.key)}
-                > 
+                >
                   + Add {section.key === "skills" ? "skill" : "entry"}
                 </button>
                 <button
@@ -496,50 +533,44 @@ export function ResumePage({ blankResume = false }: ResumePageProps) {
         </div>
 
         <div className="resume-preview">
-          {(profile.firstName ||
-            profile.lastName ||
+          {(profile.first_name ||
+            profile.last_name ||
             profile.email ||
             profile.phone ||
-            sections.some((section) =>
-              section.entries.some((entry) => entry.trim())
-            )) ? (
+            profile.location ||
+            sections.some((section) => section.entries.some(hasEntryContent))) ? (
             <>
               <div className="resume-preview-profile">
                 <h1>
-                  {[profile.firstName, profile.lastName]
+                  {[profile.first_name, profile.last_name]
                     .filter(Boolean)
-                    .join(" ")}
+                    .join(" ") || "Your name"}
                 </h1>
 
-                {(profile.email || profile.phone) && (
+                {(profile.email || profile.phone || profile.location) && (
                   <p>
-                    {[profile.email, profile.phone]
+                    {[profile.email, profile.phone, profile.location]
                       .filter(Boolean)
                       .join(" • ")}
                   </p>
                 )}
               </div>
 
-              {((section) => {
-                const entries = section.entries.filter(
-                  (entry) => entry.trim() !== ""
-                );
-
-                if (entries.length === 0) return null;
-
-                return (
-                  <div
-                    className="resume-preview-block"
-                    key={section.key}
-                  >sections.map
+              {sections
+                .filter((section) => section.entries.some(hasEntryContent))
+                .map((section) => (
+                  <div className="resume-preview-block" key={section.key}>
                     <h2>{section.title}</h2>
 
-                    {entries.map((entry, index) => (
-                      <p key={index}>{entry}</p>
-                    ))}
+                    {section.entries
+                      .filter(hasEntryContent)
+                      .map((entry, index) => (
+                        <p key={`${section.key}-${index}`}>
+                          {formatEntryPreview(entry)}
+                        </p>
+                      ))}
                   </div>
-                );
-              })}
+                ))}
             </>
           ) : (
             <p className="resume-preview-empty">
