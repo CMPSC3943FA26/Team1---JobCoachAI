@@ -151,6 +151,21 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
   const [status, setStatus] = useState("");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [resumeDeleted, setResumeDeleted] = useState(false);
+  const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
+    summary: false,
+    education: false,
+    work_experience: false,
+    skills: false,
+    projects: false,
+    certifications: false,
+  });
+
+  const toggleSection = (sectionKey: SectionKey) => {
+    setOpenSections((current) => ({
+      ...current,
+      [sectionKey]: !current[sectionKey],
+    }));
+  };
 
   const updateProfile = (field: keyof ResumeProfile, value: string) => {
     setProfile((current) => ({ ...current, [field]: value }));
@@ -211,14 +226,21 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
 
     if (!nextSection) return;
 
-    setSections((current) => [
-      ...current,
-      {
+    setSections((current) =>
+      [...current, {
         key: nextSection,
         title: sectionLabels[nextSection],
         entries: [getBlankSectionEntry(nextSection)],
-      },
-    ]);
+      }].sort(
+        (left, right) => sectionOrder.indexOf(left.key) - sectionOrder.indexOf(right.key),
+      ),
+    );
+    setOpenSections((current) => ({ ...current, [nextSection]: true }));
+  };
+
+  const removeSection = (sectionKey: SectionKey) => {
+    setSections((current) => current.filter((section) => section.key !== sectionKey));
+    setOpenSections((current) => ({ ...current, [sectionKey]: false }));
   };
 
   const hasEntryContent = (entry: SectionEntry) => {
@@ -245,10 +267,6 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
         return `${fieldLabel}: ${value}`;
       })
       .join(" • ");
-  };
-
-  const removeSection = (sectionKey: string) => {
-    setSections((current) => current.filter((section) => section.key !== sectionKey));
   };
 
   const handleDelete = () => {
@@ -289,8 +307,8 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
   }
 
   return (
-    <section className="screen resume-screen" data-screen="parsed">
-      <div className="resume-header">
+    <section className="screen resume-editor-page" data-screen="parsed">
+      <div className="resume-editor-header">
         <div className="screen-intro">
           <span className="section-kicker">03 / Your fit</span>
           <h2>
@@ -301,18 +319,8 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
             next opportunity.
           </p>
         </div>
-        <div className="resume-status" role="status">
-          <span className="status-dot" aria-hidden="true" />
-          {status || "Draft workspace"}
-        </div>
-      </div>
 
-      <div className="resume-toolbar">
-        <div>
-          <strong>Resume editor</strong>
-          <span>Changes stay local until connected to your account.</span>
-        </div>
-        <div className="resume-toolbar-actions">
+        <div className="resume-editor-header-actions">
           <Button
             variant="secondary"
             type="button"
@@ -330,6 +338,11 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
         </div>
       </div>
 
+      <div className="resume-local-notice">
+        <span className="resume-info-icon">i</span>
+        <span>{status || "Changes stay local until connected to your account."}</span>
+      </div>
+
       <form
         className="resume-editor"
         onSubmit={(event) => {
@@ -337,136 +350,161 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
           setStatus("Resume saved just now.");
         }}
       >
-        <section className="resume-card personal-card">
-          <div className="resume-card-heading">
-            <div>
-              <span className="card-index">00</span>
-              <h3>Personal information</h3>
+        <section className="resume-section">
+          <button className="resume-section-header" type="button">
+            <span className="resume-section-number">00</span>
+            <span className="resume-section-heading">
+              <strong>Personal information</strong>
+              <small>Shown at the top of your resume</small>
+            </span>
+            <span className="resume-section-chevron open">⌄</span>
+            <span className="resume-section-action" />
+          </button>
+
+          <div className="resume-section-content">
+            <div className="resume-personal-grid">
+              {personalFields.map((field) => (
+                <div className="field-group" key={field.key}>
+                  <label htmlFor={`resume-${field.key}`}>{field.label}</label>
+                  <input
+                    id={`resume-${field.key}`}
+                    type={field.type ?? "text"}
+                    value={profile[field.key]}
+                    onChange={(event) => updateProfile(field.key, event.target.value)}
+                    placeholder={
+                      field.key === "email"
+                        ? "you@example.com"
+                        : field.key === "phone"
+                          ? "(555) 555-5555"
+                          : field.key === "location"
+                            ? "City, State"
+                            : field.label
+                    }
+                  />
+                </div>
+              ))}
             </div>
-            <span className="field-hint">Shown at the top of your resume</span>
-          </div>
-          <div className="personal-grid">
-            {personalFields.map((field) => (
-              <div className="field-group" key={field.key}>
-                <label htmlFor={`resume-${field.key}`}>{field.label}</label>
-                <input
-                  id={`resume-${field.key}`}
-                  type={field.type ?? "text"}
-                  value={profile[field.key]}
-                  onChange={(event) => updateProfile(field.key, event.target.value)}
-                  placeholder={
-                    field.key === "email"
-                      ? "you@example.com"
-                      : field.key === "phone"
-                        ? "(555) 555-5555"
-                        : field.key === "location"
-                          ? "City, State"
-                          : field.label
-                  }
-                />
-              </div>
-            ))}
           </div>
         </section>
 
-        {sections.map((section, sectionIndex) => (
-          <section className="resume-card" key={section.key}>
-            <div className="resume-card-heading">
-              <div>
-                <span className="card-index">
-                  {String(sectionIndex + 1).padStart(2, "0")}
-                </span>
-                <h3>{section.title}</h3>
-              </div>
-              <div className="section-actions">
-                <button
-                  className="add-button"
-                  type="button"
-                  onClick={() => addEntry(section.key)}
-                >
-                  + Add {section.key === "skills" ? "skill" : "entry"}
-                </button>
-                <button
-                  className="remove-section"
-                  type="button"
-                  onClick={() => removeSection(section.key)}
-                >
-                  Remove section
-                </button>
-              </div>
-            </div>
-            <div className="resume-entry-list">
-              {section.entries.map((entry, entryIndex) => {
-                if (typeof entry === "string") {
-                  return (
-                    <div className="resume-entry" key={`${section.key}-${entryIndex}`}>
-                      <textarea
-                        rows={4}
-                        value={entry}
-                        onChange={(event) =>
-                          updateEntry(section.key, entryIndex, "value", event.target.value)
-                        }
-                        placeholder="Write a concise professional summary..."
-                        aria-label={`${section.title} entry ${entryIndex + 1}`}
-                      />
-                      <button
-                        className="remove-entry"
-                        type="button"
-                        onClick={() => removeEntry(section.key, entryIndex)}
-                        aria-label={`Remove ${section.title} entry ${entryIndex + 1}`}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  );
-                }
+        {sections.map((section, sectionIndex) => {
+          const isOpen = openSections[section.key];
 
-                return (
-                  <div className="resume-entry" key={`${section.key}-${entryIndex}`}>
-                    <div className="resume-entry-fields">
-                      {Object.entries(entry).map(([fieldKey, value]) => (
-                        <div className="field-group" key={`${section.key}-${entryIndex}-${fieldKey}`}>
-                          <label htmlFor={`${section.key}-${entryIndex}-${fieldKey}`}>
-                            {fieldKey
-                              .replace(/_/g, " ")
-                              .replace(/\b\w/g, (char) => char.toUpperCase())}
-                          </label>
-                          {fieldKey === "description" ? (
+          return (
+            <section className="resume-section" key={section.key}>
+              <div className="resume-section-header">
+                <button
+                  className="resume-section-main"
+                  type="button"
+                  onClick={() => toggleSection(section.key)}
+                  aria-expanded={isOpen}
+                >
+                  <span className="resume-section-number">
+                    {String(sectionIndex + 1).padStart(2, "0")}
+                  </span>
+                  <span className="resume-section-heading">
+                    <strong>{section.title}</strong>
+                    <small>Resume details</small>
+                  </span>
+                  <span className={`resume-section-chevron ${isOpen ? "open" : ""}`}>
+                    ⌄
+                  </span>
+                </button>
+                <span className="resume-section-action">
+                  <button
+                    className="remove-button"
+                    type="button"
+                    onClick={() => removeSection(section.key)}
+                  >
+                    Remove section
+                  </button>
+                </span>
+              </div>
+
+              {isOpen && (
+                <div className="resume-section-content">
+                  {section.entries.length === 0 ? (
+                    <p className="resume-empty-message">No entries yet.</p>
+                  ) : (
+                    section.entries.map((entry, entryIndex) => {
+                      if (typeof entry === "string") {
+                        return (
+                          <div className="resume-entry-card" key={`${section.key}-${entryIndex}`}>
                             <textarea
-                              id={`${section.key}-${entryIndex}-${fieldKey}`}
-                              rows={3}
-                              value={value}
+                              rows={4}
+                              value={entry}
                               onChange={(event) =>
-                                updateEntry(section.key, entryIndex, fieldKey, event.target.value)
+                                updateEntry(section.key, entryIndex, "value", event.target.value)
                               }
+                              placeholder="Write a concise professional summary..."
+                              aria-label={`${section.title} entry ${entryIndex + 1}`}
                             />
-                          ) : (
-                            <input
-                              id={`${section.key}-${entryIndex}-${fieldKey}`}
-                              type="text"
-                              value={value}
-                              onChange={(event) =>
-                                updateEntry(section.key, entryIndex, fieldKey, event.target.value)
-                              }
-                            />
-                          )}
+                            <button
+                              className="text-button resume-remove-entry"
+                              type="button"
+                              onClick={() => removeEntry(section.key, entryIndex)}
+                              aria-label={`Remove ${section.title} entry ${entryIndex + 1}`}
+                            >
+                              Remove entry
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="resume-entry-card" key={`${section.key}-${entryIndex}`}>
+                          <div className="resume-entry-grid">
+                            {Object.entries(entry).map(([fieldKey, value]) => (
+                              <div className="field-group" key={`${section.key}-${entryIndex}-${fieldKey}`}>
+                                <label htmlFor={`${section.key}-${entryIndex}-${fieldKey}`}>
+                                  {fieldKey
+                                    .replace(/_/g, " ")
+                                    .replace(/\b\w/g, (char) => char.toUpperCase())}
+                                </label>
+                                {fieldKey === "description" ? (
+                                  <textarea
+                                    id={`${section.key}-${entryIndex}-${fieldKey}`}
+                                    rows={3}
+                                    value={value}
+                                    onChange={(event) =>
+                                      updateEntry(section.key, entryIndex, fieldKey, event.target.value)
+                                    }
+                                  />
+                                ) : (
+                                  <input
+                                    id={`${section.key}-${entryIndex}-${fieldKey}`}
+                                    type="text"
+                                    value={value}
+                                    onChange={(event) =>
+                                      updateEntry(section.key, entryIndex, fieldKey, event.target.value)
+                                    }
+                                  />
+                                )}
+                              </div>
+                            ))}
+                          </div>
+
+                          <button
+                            className="text-button resume-remove-entry"
+                            type="button"
+                            onClick={() => removeEntry(section.key, entryIndex)}
+                            aria-label={`Remove ${section.title} entry ${entryIndex + 1}`}
+                          >
+                            Remove entry
+                          </button>
                         </div>
-                      ))}
-                    </div>
-                    <button
-                      className="remove-entry"
-                      type="button"
-                      onClick={() => removeEntry(section.key, entryIndex)}
-                      aria-label={`Remove ${section.title} entry ${entryIndex + 1}`}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        ))}
+                      );
+                    })
+                  )}
+
+                  <button className="add-button" type="button" onClick={() => addEntry(section.key)}>
+                    + Add {section.key === "skills" ? "skill" : "entry"}
+                  </button>
+                </div>
+              )}
+            </section>
+          );
+        })}
 
         <button className="add-section-button" type="button" onClick={addSection}>
           + Add another section
@@ -513,57 +551,59 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
       </form>
 
       <section className="resume-preview-section">
-        <div className="resume-preview-header">
-          <span className="panel-icon">PREVIEW</span>
+        <div className="resume-preview-heading">
           <div>
-            <h2>Resume Preview</h2>
+            <span className="panel-icon">PREVIEW</span>
+            <h3>Resume preview</h3>
             <p>Review your completed resume before exporting.</p>
           </div>
         </div>
 
-        <div className="resume-preview">
-          {(profile.first_name ||
-            profile.last_name ||
-            profile.email ||
-            profile.phone ||
-            profile.location ||
-            sections.some((section) => section.entries.some(hasEntryContent))) ? (
-            <>
-              <div className="resume-preview-profile">
-                <h1>
-                  {[profile.first_name, profile.last_name]
-                    .filter(Boolean)
-                    .join(" ") || "Your name"}
-                </h1>
-
-                {(profile.email || profile.phone || profile.location) && (
-                  <p>
-                    {[profile.email, profile.phone, profile.location]
+        <div className="resume-preview-background">
+          <div className="resume-preview-page-frame">
+            {(profile.first_name ||
+              profile.last_name ||
+              profile.email ||
+              profile.phone ||
+              profile.location ||
+              sections.some((section) => section.entries.some(hasEntryContent))) ? (
+              <>
+                <div className="preview-header">
+                  <h1>
+                    {[profile.first_name, profile.last_name]
                       .filter(Boolean)
-                      .join(" • ")}
-                  </p>
-                )}
-              </div>
+                      .join(" ") || "Your name"}
+                  </h1>
 
-              {sections
-                .filter((section) => section.entries.some(hasEntryContent))
-                .map((section) => (
-                  <div className="resume-preview-block" key={section.key}>
-                    <h2>{section.title}</h2>
+                  {(profile.email || profile.phone || profile.location) && (
+                    <p>
+                      {[profile.email, profile.phone, profile.location]
+                        .filter(Boolean)
+                        .join(" • ")}
+                    </p>
+                  )}
+                </div>
 
-                    {section.entries
-                      .filter(hasEntryContent)
-                      .map((entry, index) => (
-                        <p key={`${section.key}-${index}`}>{formatEntryPreview(entry)}</p>
-                      ))}
-                  </div>
-                ))}
-            </>
-          ) : (
-            <p className="resume-preview-empty">
-              Your resume preview will appear here as you add information.
-            </p>
-          )}
+                {sections
+                  .filter((section) => section.entries.some(hasEntryContent))
+                  .map((section) => (
+                    <div className="preview-section" key={section.key}>
+                      <h2>{section.title}</h2>
+
+                      {section.entries
+                        .filter(hasEntryContent)
+                        .map((entry, index) => (
+                          <p key={`${section.key}-${index}`}>{formatEntryPreview(entry)}</p>
+                        ))}
+                    </div>
+                  ))}
+              </>
+            ) : (
+              <p className="resume-empty-message">
+                Your resume preview will appear here as you add information.
+              </p>
+            )}
+          </div>
         </div>
       </section>
 
