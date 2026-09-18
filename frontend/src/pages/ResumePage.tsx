@@ -1,29 +1,67 @@
 import { useState } from "react";
 import { Button } from "../components/Button";
-import { initialResume } from "../features/resume/resumeData";
+import {
+  initialResume,
+  resumeSectionEntries,
+  type Certification,
+  type Education,
+  type Project,
+  type ResumeProfile,
+  type Skill,
+  type WorkExperience,
+} from "../features/resume/resumeData";
 
 type ResumePageProps = { blankResume?: boolean };
+
 type SectionKey =
   | "summary"
   | "education"
-  | "experience"
+  | "work_experience"
   | "skills"
   | "projects"
   | "certifications";
+
+type SectionEntry =
+  | string
+  | WorkExperience
+  | Education
+  | Skill
+  | Project
+  | Certification;
+
 type ResumeSection = {
   key: SectionKey | string;
   title: string;
-  entries: string[];
+  entries: SectionEntry[];
   custom?: boolean;
 };
 
 const sectionLabels: Record<SectionKey, string> = {
   summary: "Professional summary",
   education: "Education",
-  experience: "Experience",
+  work_experience: "Experience",
   skills: "Skills",
   projects: "Projects",
   certifications: "Certifications",
+};
+
+const getBlankSectionEntry = (sectionKey: SectionKey): SectionEntry => {
+  switch (sectionKey) {
+    case "summary":
+      return "";
+    case "education":
+      return { ...resumeSectionEntries.education };
+    case "work_experience":
+      return { ...resumeSectionEntries.work_experience };
+    case "skills":
+      return { ...resumeSectionEntries.skills };
+    case "projects":
+      return { ...resumeSectionEntries.projects };
+    case "certifications":
+      return { ...resumeSectionEntries.certifications };
+    default:
+      return "";
+  }
 };
 
 function createSections(blankResume: boolean): ResumeSection[] {
@@ -31,50 +69,50 @@ function createSections(blankResume: boolean): ResumeSection[] {
     {
       key: "summary",
       title: sectionLabels.summary,
-      entries: blankResume ? [""] : initialResume.summary,
+      entries: blankResume ? [""] : [initialResume.summary],
     },
     {
       key: "education",
       title: sectionLabels.education,
-      entries: blankResume
-        ? [""]
-        : [
-            "B.A. in Interaction Design | California College of the Arts | 2015 - 2019",
-          ],
+      entries: blankResume ? [getBlankSectionEntry("education")] : initialResume.education,
     },
     {
-      key: "experience",
-      title: sectionLabels.experience,
-      entries: blankResume ? [""] : initialResume.experience,
+      key: "work_experience",
+      title: sectionLabels.work_experience,
+      entries: blankResume
+        ? [getBlankSectionEntry("work_experience")]
+        : initialResume.work_experience,
     },
     {
       key: "skills",
       title: sectionLabels.skills,
-      entries: blankResume ? [""] : initialResume.skills,
+      entries: blankResume ? [getBlankSectionEntry("skills")] : initialResume.skills,
     },
     {
       key: "projects",
       title: sectionLabels.projects,
-      entries: blankResume
-        ? [""]
-        : [
-            "Onboarding redesign | Increased activation by 28% through a clearer first-run experience.",
-          ],
+      entries: blankResume ? [getBlankSectionEntry("projects")] : initialResume.projects,
     },
     {
       key: "certifications",
       title: sectionLabels.certifications,
-      entries: blankResume ? [""] : ["Google UX Design Certificate | 2021"],
+      entries: blankResume
+        ? [getBlankSectionEntry("certifications")]
+        : initialResume.certifications,
     },
   ];
 }
 
 export function ResumePage({ blankResume = false }: ResumePageProps) {
-  const [profile, setProfile] = useState({
-    firstName: blankResume ? "" : initialResume.firstName,
-    lastName: blankResume ? "" : initialResume.lastName,
-    email: blankResume ? "" : initialResume.email,
-    phone: blankResume ? "" : initialResume.phone,
+  const [profile, setProfile] = useState<ResumeProfile>({
+    first_name: blankResume ? resumeSectionEntries.resume.first_name : initialResume.first_name,
+    last_name: blankResume ? resumeSectionEntries.resume.last_name : initialResume.last_name,
+    email: blankResume ? resumeSectionEntries.resume.email : initialResume.email,
+    phone: blankResume ? resumeSectionEntries.resume.phone : initialResume.phone,
+    location: blankResume ? resumeSectionEntries.resume.location : initialResume.location,
+    professional_summary: blankResume
+      ? resumeSectionEntries.resume.professional_summary
+      : initialResume.professional_summary,
   });
   const [sections, setSections] = useState<ResumeSection[]>(() =>
     createSections(blankResume),
@@ -84,34 +122,42 @@ export function ResumePage({ blankResume = false }: ResumePageProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [resumeDeleted, setResumeDeleted] = useState(false);
 
-  const updateProfile = (field: keyof typeof profile, value: string) => {
+  const updateProfile = (field: keyof ResumeProfile, value: string) => {
     setProfile((current) => ({ ...current, [field]: value }));
   };
 
   const updateEntry = (
     sectionKey: string,
     entryIndex: number,
+    fieldKey: string,
     value: string,
   ) => {
     setSections((current) =>
-      current.map((section) =>
-        section.key === sectionKey
-          ? {
-              ...section,
-              entries: section.entries.map((entry, index) =>
-                index === entryIndex ? value : entry,
-              ),
-            }
-          : section,
-      ),
+      current.map((section) => {
+        if (section.key !== sectionKey) return section;
+
+        return {
+          ...section,
+          entries: section.entries.map((entry, index) => {
+            if (index !== entryIndex) return entry;
+            if (typeof entry === "string") return value;
+            return { ...entry, [fieldKey]: value } as typeof entry;
+          }),
+        };
+      }),
     );
   };
 
   const addEntry = (sectionKey: string) => {
+    const blankEntry =
+      sectionKey === "summary"
+        ? ""
+        : getBlankSectionEntry(sectionKey as SectionKey);
+
     setSections((current) =>
       current.map((section) =>
         section.key === sectionKey
-          ? { ...section, entries: [...section.entries, ""] }
+          ? { ...section, entries: [...section.entries, blankEntry] }
           : section,
       ),
     );
@@ -124,12 +170,20 @@ export function ResumePage({ blankResume = false }: ResumePageProps) {
         const entries = section.entries.filter(
           (_, index) => index !== entryIndex,
         );
-        return { ...section, entries: entries.length ? entries : [""] };
+        return {
+          ...section,
+          entries: entries.length
+            ? entries
+            : [getBlankSectionEntry(sectionKey as SectionKey)],
+        };
       }),
     );
   };
 
   const addSection = () => {
+    // This does not work because custom sections do not match the typed resume model.
+    // The page expects SectionKey values like "education" or "work_experience",
+    // and each entry must be a valid typed object or string summary.
     const title = window.prompt("Name this resume section")?.trim();
     if (!title) return;
     setSections((current) => [
@@ -239,42 +293,34 @@ export function ResumePage({ blankResume = false }: ResumePageProps) {
             <span className="field-hint">Shown at the top of your resume</span>
           </div>
           <div className="personal-grid">
-            {(["firstName", "lastName", "email", "phone"] as const).map(
-              (field) => (
-                <div className="field-group" key={field}>
-                  <label htmlFor={`resume-${field}`}>
-                    {field === "firstName"
-                      ? "First name"
-                      : field === "lastName"
-                        ? "Last name"
-                        : field[0].toUpperCase() + field.slice(1)}
-                  </label>
-                  <input
-                    id={`resume-${field}`}
-                    type={
-                      field === "email"
-                        ? "email"
-                        : field === "phone"
-                          ? "tel"
-                          : "text"
-                    }
-                    value={profile[field]}
-                    onChange={(event) =>
-                      updateProfile(field, event.target.value)
-                    }
-                    placeholder={
-                      field === "email"
-                        ? "you@example.com"
-                        : field === "phone"
-                          ? "(555) 555-5555"
-                          : field === "firstName"
-                            ? "First name"
-                            : "Last name"
-                    }
-                  />
-                </div>
-              ),
-            )}
+            {([
+              { key: "first_name", label: "First name" },
+              { key: "last_name", label: "Last name" },
+              { key: "email", label: "Email", type: "email" },
+              { key: "phone", label: "Phone", type: "tel" },
+              { key: "location", label: "Location" },
+            ] as const).map((field) => (
+              <div className="field-group" key={field.key}>
+                <label htmlFor={`resume-${field.key}`}>{field.label}</label>
+                <input
+                  id={`resume-${field.key}`}
+                  type={field.type ?? "text"}
+                  value={profile[field.key]}
+                  onChange={(event) =>
+                    updateProfile(field.key, event.target.value)
+                  }
+                  placeholder={
+                    field.key === "email"
+                      ? "you@example.com"
+                      : field.key === "phone"
+                        ? "(555) 555-5555"
+                        : field.key === "location"
+                          ? "City, State"
+                          : field.label
+                  }
+                />
+              </div>
+            ))}
           </div>
         </section>
 
@@ -305,45 +351,74 @@ export function ResumePage({ blankResume = false }: ResumePageProps) {
               </div>
             </div>
             <div className="resume-entry-list">
-              {section.entries.map((entry, entryIndex) => (
-                <div
-                  className="resume-entry"
-                  key={`${section.key}-${entryIndex}`}
-                >
-                  {section.key === "skills" ? (
-                    <input
-                      value={entry}
-                      onChange={(event) =>
-                        updateEntry(section.key, entryIndex, event.target.value)
-                      }
-                      placeholder="e.g. Figma, user research, leadership"
-                      aria-label={`${section.title} entry ${entryIndex + 1}`}
-                    />
-                  ) : (
-                    <textarea
-                      rows={section.key === "summary" ? 4 : 3}
-                      value={entry}
-                      onChange={(event) =>
-                        updateEntry(section.key, entryIndex, event.target.value)
-                      }
-                      placeholder={
-                        section.key === "summary"
-                          ? "Write a concise professional summary..."
-                          : `Add your ${section.title.toLowerCase()}...`
-                      }
-                      aria-label={`${section.title} entry ${entryIndex + 1}`}
-                    />
-                  )}
-                  <button
-                    className="remove-entry"
-                    type="button"
-                    onClick={() => removeEntry(section.key, entryIndex)}
-                    aria-label={`Remove ${section.title} entry ${entryIndex + 1}`}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
+              {section.entries.map((entry, entryIndex) => {
+                if (typeof entry === "string") {
+                  return (
+                    <div className="resume-entry" key={`${section.key}-${entryIndex}`}>
+                      <textarea
+                        rows={4}
+                        value={entry}
+                        onChange={(event) =>
+                          updateEntry(section.key, entryIndex, "value", event.target.value)
+                        }
+                        placeholder="Write a concise professional summary..."
+                        aria-label={`${section.title} entry ${entryIndex + 1}`}
+                      />
+                      <button
+                        className="remove-entry"
+                        type="button"
+                        onClick={() => removeEntry(section.key, entryIndex)}
+                        aria-label={`Remove ${section.title} entry ${entryIndex + 1}`}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="resume-entry" key={`${section.key}-${entryIndex}`}>
+                    <div className="resume-entry-fields">
+                      {Object.entries(entry).map(([fieldKey, value]) => (
+                        <div className="field-group" key={`${section.key}-${entryIndex}-${fieldKey}`}>
+                          <label htmlFor={`${section.key}-${entryIndex}-${fieldKey}`}>
+                            {fieldKey
+                              .replace(/_/g, " ")
+                              .replace(/\b\w/g, (char) => char.toUpperCase())}
+                          </label>
+                          {fieldKey === "description" ? (
+                            <textarea
+                              id={`${section.key}-${entryIndex}-${fieldKey}`}
+                              rows={3}
+                              value={value}
+                              onChange={(event) =>
+                                updateEntry(section.key, entryIndex, fieldKey, event.target.value)
+                              }
+                            />
+                          ) : (
+                            <input
+                              id={`${section.key}-${entryIndex}-${fieldKey}`}
+                              type="text"
+                              value={value}
+                              onChange={(event) =>
+                                updateEntry(section.key, entryIndex, fieldKey, event.target.value)
+                              }
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      className="remove-entry"
+                      type="button"
+                      onClick={() => removeEntry(section.key, entryIndex)}
+                      aria-label={`Remove ${section.title} entry ${entryIndex + 1}`}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </section>
         ))}

@@ -2,7 +2,7 @@ from datetime import date, datetime
 from uuid import UUID
 
 from backend.supabase_client import supabase
-from backend.schemas.resume import ResumeSaveRequest
+from backend.schemas.resume import ResumeSaveRequest, ResumeUpdateRequest
 
 # jsonify values to stop errors
 def _to_json_safe(value):
@@ -33,6 +33,7 @@ def create_resume(data: ResumeSaveRequest, user_id: str):
         ('skills', data.skills),
         ('projects', data.projects),
         ('certifications', data.certifications),
+        ('section_order', data.section_order),
     ]:
         if rows:
             payload = [
@@ -45,7 +46,7 @@ def create_resume(data: ResumeSaveRequest, user_id: str):
 
 # get the resume as a dict from the database
 def get_resume(resume_id: str, user_id: str):
-    resume = supabase.table("resumes").select("*, work_experience(*), education(*), skills(*), projects(*), certifications(*)").eq("id", resume_id).eq("user_id", user_id).execute()
+    resume = supabase.table("resumes").select("*, work_experience(*), education(*), skills(*), projects(*), certifications(*),section_order(*)").eq("id", resume_id).eq("user_id", user_id).execute()
     return resume.data[0] if resume.data else None
 
 #delete resume from database
@@ -56,26 +57,41 @@ def delete_resume(resume_id: str, user_id: str):
     return True
 
 #update resume tables
-def update_resume(resume_id: str, user_id: str,data:ResumeSaveRequest):
+def update_resume(resume_id: str, user_id: str,data:ResumeUpdateRequest):
         resume_payload = _to_json_safe(data.resume.dict(exclude_unset=True))
         supabase.table("resumes").update(resume_payload).eq("id",resume_id).eq("user_id",user_id).execute()
 
-        for section_name,rows in [
+        for table,rows in [
             ('work_experience',data.work_experience),
             ('education', data.education),
             ('skills', data.skills),
             ('projects',data.projects),
             ('certifications', data.certifications),
+            ('section_order',data.section_order),
          ]:
             if rows:
+                            resume = get_resume(user_id,resume_id)
+                            
                             for row in rows:
                                  row = {**_to_json_safe(row.dict())}
-                                 sort_order = row["sort_order"]
-                        
-                                 supabase.table(section_name).update(row).eq("resume_id",resume_id).eq("sort_order",sort_order).execute()
-        return get_resume(resume_id, user_id)
-
-        
-
+                                 id = row.pop("id",None)
+                                 rows_to_delete= set()
+                                 existing_rows = set()
+                                 if id:
+                                    supabase.table(table).update(row).eq("resume_id",resume_id).eq("id",id).execute()
+                                 else:
+                                    supabase.table(table).insert(row).eq("resume_id",resume_id).eq("id",id).execute()
+                                 
+                            supabase.table(table).delete(row).eq("resume_id",resume_id).eq("id",id).execute()
+                                 
+                                  
+                                      
        
-    
+                            
+                       
+            ##for row in data.section_order:
+                  ##row = {**_to_json_safe(row.dict())}
+                  ##id = row.id
+                  
+                  ####return get_resume(resume_id, user_id)
+

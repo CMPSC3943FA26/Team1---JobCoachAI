@@ -1664,6 +1664,14 @@ textarea::placeholder {
   align-items: start;
   gap: 12px;
 }
+.resume-entry-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 14px;
+}
+.resume-entry-fields .field-group + .field-group {
+  margin-top: 0;
+}
 .resume-entry textarea {
   min-height: 104px;
   font-size: 13px;
