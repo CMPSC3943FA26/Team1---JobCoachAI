@@ -3,7 +3,10 @@ import './App.css'
 
 import { Layout } from './components/Layout'
 import { WelcomePage } from './pages/WelcomePage'
-import { TailorPage } from './pages/TailorPage'
+import TailorPage, {
+  type ResumeSource,
+  type TailorSubmission,
+} from './pages/TailorPage'
 import { ResumePage } from './pages/ResumePage'
 
 const screenNames = ['welcome', 'tailor', 'parsed'] as const
@@ -22,49 +25,128 @@ function App() {
   const [currentScreen, setCurrentScreen] =
     useState<ScreenName>(getCurrentScreen)
 
-  /*
-   * Determines whether Page 3 should open as
-   * a completely blank resume.
-   */
   const [createBlankResume, setCreateBlankResume] =
     useState(false)
 
+  /*
+   * Profile icon initials:
+   * G  = Guest
+   * SB = Example logged-in user initials
+   * null = No active profile
+   */
+  const [profileInitials, setProfileInitials] =
+    useState<string | null>(null)
+
   useEffect(() => {
     const onHashChange = () => {
-      setCurrentScreen(getCurrentScreen())
+      const nextScreen = getCurrentScreen()
+
+      setCurrentScreen(nextScreen)
+
+      if (nextScreen === 'tailor') {
+        setCreateBlankResume(false)
+      }
     }
 
     window.addEventListener('hashchange', onHashChange)
 
     return () => {
-      window.removeEventListener(
-        'hashchange',
-        onHashChange
-      )
+      window.removeEventListener('hashchange', onHashChange)
     }
   }, [])
 
   /*
-   * Create Resume button:
-   *
-   * 1. Tell ResumePage to use empty fields.
-   * 2. Navigate to Page 3.
+   * Guest login
    */
-  const handleCreateResume = () => {
-    setCreateBlankResume(true)
+  const handleContinueAsGuest = () => {
+    setProfileInitials('G')
+    window.location.hash = '#tailor'
+  }
+
+  /*
+   * Later, when account login is connected,
+   * call this with the user's first and last name.
+   *
+   * Example:
+   * handleAccountLogin('Suprit', 'Bijukshe')
+   * Profile icon becomes "SB"
+   */
+  
+  const handleAccountLogin = (
+    firstName: string,
+    lastName: string
+  ) => {
+    const initials =
+      `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
+
+    setProfileInitials(initials)
+
+    window.location.hash = '#tailor'
+  }
+
+  /*
+   * Clicking JobCoach AI Home clears
+   * the current guest/account profile.
+   */
+  const handleHomeClick = () => {
+    setProfileInitials(null)
+    setCreateBlankResume(false)
+
+    window.dispatchEvent(
+      new Event('resetWelcomeForm')
+    )
+
+    window.location.hash = '#welcome'
+  }
+
+  /*
+   * Create / Edit Resume
+   */
+  const handleOpenResume = (
+    source: ResumeSource,
+    _file: File | null
+  ) => {
+    setCreateBlankResume(source === 'scratch')
     window.location.hash = '#parsed'
+  }
+
+  /*
+   * Submit Tailor form
+   */
+  const handleTailorSubmit = (
+    submission: TailorSubmission
+  ) => {
+    setCreateBlankResume(
+      submission.source === 'scratch'
+    )
+
+    window.location.hash = '#parsed'
+  }
+
+  /*
+   * Return to Welcome.
+   * This does NOT clear the current profile.
+   */
+  const handleBackToWelcome = () => {
+    window.location.hash = '#welcome'
   }
 
   const renderCurrentPage = () => {
     switch (currentScreen) {
-
       case 'welcome':
-        return <WelcomePage />
+        return (
+          <WelcomePage
+            onContinueAsGuest={handleContinueAsGuest}
+            onLogin={handleAccountLogin}
+          />
+        )
 
       case 'tailor':
         return (
           <TailorPage
-            onCreateResume={handleCreateResume}
+            onOpenResume={handleOpenResume}
+            onSubmit={handleTailorSubmit}
+            onBack={handleBackToWelcome}
           />
         )
 
@@ -75,13 +157,22 @@ function App() {
           />
         )
 
-      default:
-        return <WelcomePage />
+        default:
+          return (
+            <WelcomePage
+              onContinueAsGuest={handleContinueAsGuest}
+              onLogin={handleAccountLogin}
+            />
+          )
     }
   }
 
   return (
-    <Layout currentScreen={currentScreen}>
+    <Layout
+      currentScreen={currentScreen}
+      profileInitials={profileInitials}
+      onHomeClick={handleHomeClick}
+    >
       {renderCurrentPage()}
     </Layout>
   )

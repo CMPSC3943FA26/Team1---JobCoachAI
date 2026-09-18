@@ -13,23 +13,6 @@ import {
 
 type ResumePageProps = { blankResume?: boolean };
 
-const emptyProfile: ResumeProfile = {
-  first_name: "",
-  last_name: "",
-  email: "",
-  phone: "",
-  location: "",
-  professional_summary: "",
-};
-
-const personalFields: Array<{ key: keyof ResumeProfile; label: string; type?: string }> = [
-  { key: "first_name", label: "First name" },
-  { key: "last_name", label: "Last name" },
-  { key: "email", label: "Email", type: "email" },
-  { key: "phone", label: "Phone", type: "tel" },
-  { key: "location", label: "Location" },
-];
-
 type SectionKey =
   | "summary"
   | "education"
@@ -47,11 +30,27 @@ type SectionEntry =
   | Certification;
 
 type ResumeSection = {
-  key: SectionKey | string;
+  key: SectionKey;
   title: string;
   entries: SectionEntry[];
-  custom?: boolean;
 };
+
+const emptyProfile: ResumeProfile = {
+  first_name: "",
+  last_name: "",
+  email: "",
+  phone: "",
+  location: "",
+  professional_summary: "",
+};
+
+const personalFields: Array<{ key: keyof ResumeProfile; label: string; type?: string }> = [
+  { key: "first_name", label: "First name" },
+  { key: "last_name", label: "Last name" },
+  { key: "email", label: "Email", type: "email" },
+  { key: "phone", label: "Phone", type: "tel" },
+  { key: "location", label: "Location" },
+];
 
 const sectionLabels: Record<SectionKey, string> = {
   summary: "Professional summary",
@@ -100,7 +99,9 @@ function createSections(blankResume: boolean): ResumeSection[] {
     {
       key: "education",
       title: sectionLabels.education,
-      entries: blankResume ? [getBlankSectionEntry("education")] : initialResume.education,
+      entries: blankResume
+        ? [getBlankSectionEntry("education")]
+        : initialResume.education,
     },
     {
       key: "work_experience",
@@ -142,6 +143,7 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
           professional_summary: initialResume.professional_summary,
         },
   );
+
   const [sections, setSections] = useState<ResumeSection[]>(() =>
     createSections(blankResume),
   );
@@ -178,9 +180,7 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
 
   const addEntry = (sectionKey: string) => {
     const blankEntry =
-      sectionKey === "summary"
-        ? ""
-        : getBlankSectionEntry(sectionKey as SectionKey);
+      sectionKey === "summary" ? "" : getBlankSectionEntry(sectionKey as SectionKey);
 
     setSections((current) =>
       current.map((section) =>
@@ -195,14 +195,10 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
     setSections((current) =>
       current.map((section) => {
         if (section.key !== sectionKey) return section;
-        const entries = section.entries.filter(
-          (_, index) => index !== entryIndex,
-        );
+        const entries = section.entries.filter((_, index) => index !== entryIndex);
         return {
           ...section,
-          entries: entries.length
-            ? entries
-            : [getBlankSectionEntry(sectionKey as SectionKey)],
+          entries: entries.length ? entries : [getBlankSectionEntry(sectionKey as SectionKey)],
         };
       }),
     );
@@ -252,9 +248,7 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
   };
 
   const removeSection = (sectionKey: string) => {
-    setSections((current) =>
-      current.filter((section) => section.key !== sectionKey),
-    );
+    setSections((current) => current.filter((section) => section.key !== sectionKey));
   };
 
   const handleDelete = () => {
@@ -359,9 +353,7 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
                   id={`resume-${field.key}`}
                   type={field.type ?? "text"}
                   value={profile[field.key]}
-                  onChange={(event) =>
-                    updateProfile(field.key, event.target.value)
-                  }
+                  onChange={(event) => updateProfile(field.key, event.target.value)}
                   placeholder={
                     field.key === "email"
                       ? "you@example.com"
@@ -376,6 +368,7 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
             ))}
           </div>
         </section>
+
         {sections.map((section, sectionIndex) => (
           <section className="resume-card" key={section.key}>
             <div className="resume-card-heading">
@@ -475,11 +468,7 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
           </section>
         ))}
 
-        <button
-          className="add-section-button"
-          type="button"
-          onClick={addSection}
-        >
+        <button className="add-section-button" type="button" onClick={addSection}>
           + Add another section
         </button>
 
@@ -565,9 +554,7 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
                     {section.entries
                       .filter(hasEntryContent)
                       .map((entry, index) => (
-                        <p key={`${section.key}-${index}`}>
-                          {formatEntryPreview(entry)}
-                        </p>
+                        <p key={`${section.key}-${index}`}>{formatEntryPreview(entry)}</p>
                       ))}
                   </div>
                 ))}
