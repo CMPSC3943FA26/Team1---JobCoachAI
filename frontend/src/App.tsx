@@ -23,10 +23,13 @@ function getCurrentScreen(): ScreenName {
 
 function App() {
   const [currentScreen, setCurrentScreen] =
-    useState<ScreenName>(getCurrentScreen)
+    useState<ScreenName>(() =>
+      getCurrentScreen() === 'tailor' ? 'welcome' : getCurrentScreen()
+    )
 
   const [createBlankResume, setCreateBlankResume] =
-    useState(false)
+    useState(true)
+  const [resumeReady, setResumeReady] = useState(false)
 
   /*
    * Profile icon initials:
@@ -37,11 +40,25 @@ function App() {
   const [profileInitials, setProfileInitials] =
     useState<string | null>(null)
 
+  // UI-only account mode; separate from initials so a user named G is not mistaken for a guest.
+  const [accountType, setAccountType] =
+    useState<'guest' | 'user' | null>(null)
+
   useEffect(() => {
     const onHashChange = () => {
       const nextScreen = getCurrentScreen()
 
+      if (nextScreen === 'tailor' && !resumeReady) {
+        window.location.hash = accountType ? '#parsed' : '#welcome'
+        return
+      }
+
       setCurrentScreen(nextScreen)
+    }
+
+    // A page refresh cannot restore the unsaved resume kept in React state.
+    if (getCurrentScreen() === 'tailor' && !resumeReady) {
+      window.location.hash = accountType ? '#parsed' : '#welcome'
     }
 
     window.addEventListener('hashchange', onHashChange)
@@ -52,7 +69,7 @@ function App() {
         onHashChange
       )
     }
-  }, [])
+  }, [resumeReady, accountType])
 
   /*
    * Guest login
@@ -61,8 +78,10 @@ function App() {
    * Welcome -> Build Resume
    */
   const handleContinueAsGuest = () => {
+    setAccountType('guest')
+    setResumeReady(false)
     setProfileInitials('G')
-    setCreateBlankResume(false)
+    setCreateBlankResume(true)
 
     window.location.hash = '#parsed'
   }
@@ -85,7 +104,9 @@ function App() {
       `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
 
     setProfileInitials(initials)
-    setCreateBlankResume(false)
+    setAccountType('user')
+    setResumeReady(false)
+    setCreateBlankResume(true)
 
     window.location.hash = '#parsed'
   }
@@ -95,8 +116,10 @@ function App() {
    * the current guest/account profile.
    */
   const handleHomeClick = () => {
+    setAccountType(null)
+    setResumeReady(false)
     setProfileInitials(null)
-    setCreateBlankResume(false)
+    setCreateBlankResume(true)
 
     window.dispatchEvent(
       new Event('resetWelcomeForm')
@@ -173,6 +196,8 @@ function App() {
         return (
           <ResumePage
             blankResume={createBlankResume}
+            isGuest={accountType !== 'user'}
+            onResumeReadyChange={setResumeReady}
           />
         )
 

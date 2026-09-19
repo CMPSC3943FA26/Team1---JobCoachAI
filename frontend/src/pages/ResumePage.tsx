@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "../components/Button";
 import {
   initialResume,
@@ -16,7 +16,11 @@ import {
   saveResumeToDatabase,
 } from "../services/resumeService";
 
-type ResumePageProps = { blankResume?: boolean };
+type ResumePageProps = {
+  blankResume?: boolean;
+  isGuest?: boolean;
+  onResumeReadyChange?: (ready: boolean) => void;
+};
 
 type SectionKey =
   | "summary"
@@ -139,10 +143,16 @@ function buildResumePayload(
   profile: ResumeProfile,
   sections: ResumeSection[],
 ): Resume {
-  const getEntries = <T,>(key: SectionKey) =>
-    (sections.find((section) => section.key === key)?.entries ?? []).filter(
-      (entry): entry is T => typeof entry !== "string",
-    );
+  const getEntries = <T extends Exclude<SectionEntry, string>>(
+    key: SectionKey,
+  ): T[] => {
+    const entries = sections.find((section) => section.key === key)?.entries ?? [];
+
+    return entries.filter(
+      (entry): entry is Exclude<SectionEntry, string> =>
+        typeof entry !== "string",
+    ) as T[];
+  };
   const summary = sections.find((section) => section.key === "summary")?.entries[0];
 
   return {
@@ -156,7 +166,11 @@ function buildResumePayload(
   };
 }
 
-export function ResumePage({ blankResume = true }: ResumePageProps) {
+export function ResumePage({
+  blankResume = true,
+  isGuest = true,
+  onResumeReadyChange,
+}: ResumePageProps) {
   const [profile, setProfile] = useState<ResumeProfile>(() =>
     blankResume
       ? { ...emptyProfile }
@@ -276,6 +290,18 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
       (value) => typeof value === "string" && value.trim() !== "",
     );
   };
+
+  // Personal information alone does not count as a created resume.
+  // File selection is the current frontend-only upload signal; when parsing is
+  // connected, replace it with a successful-parse flag from the backend.
+  const hasResumeContent = sections.some((section) =>
+    section.entries.some(hasEntryContent),
+  );
+  const resumeReady = Boolean(resumeFile) || hasResumeContent;
+
+  useEffect(() => {
+    onResumeReadyChange?.(resumeReady && !resumeDeleted);
+  }, [onResumeReadyChange, resumeReady, resumeDeleted]);
 
   const formatEntryPreview = (entry: SectionEntry) => {
     if (typeof entry === "string") return entry.trim();
@@ -565,15 +591,18 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
             <p>Review your completed resume before exporting.</p>
           </div>
 
-          <div className="resume-preview-actions">
-            <Button
-              variant="secondary"
-              type="submit"
-              form="resume-form"
-            >
-              Save resume <span aria-hidden="true">✓</span>
-            </Button>
-          </div>
+          {!isGuest && (
+            <div className="resume-preview-actions">
+              <Button
+                variant="secondary"
+                type="button"
+                disabled
+                title="Save resume will be available when account saving is connected."
+              >
+                Save resume <span aria-hidden="true">✓</span>
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="resume-preview-background">
@@ -734,7 +763,15 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
         className="resume-local-notice-section"
         aria-label="Local changes notice"
       >
-        <div className="resume-local-notice">
+        <div
+          className="resume-local-notice"
+          role={status === "Please create or upload a resume to continue." ? "alert" : "status"}
+          style={
+            status === "Please create or upload a resume to continue."
+              ? { color: "#b91c1c", borderColor: "#fca5a5" }
+              : undefined
+          }
+        >
           <span className="resume-info-icon">i</span>
           <span>
             {status || "Changes stay local until connected to your account."}
@@ -768,7 +805,13 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
             variant="secondary"
             type="button"
             onClick={() => {
-              window.location.hash = '#tailor'
+              if (!resumeReady) {
+                setStatus("Please create or upload a resume to continue.");
+                return;
+              }
+
+              setStatus("");
+              window.location.hash = '#tailor';
             }}
           >
             Continue <span aria-hidden="true">→</span>
