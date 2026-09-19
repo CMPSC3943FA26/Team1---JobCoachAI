@@ -310,7 +310,7 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
     return (
       <section className="screen resume-screen" data-screen="parsed">
         <div className="resume-empty-state">
-          <span className="section-kicker">02 / Build Resume</span>
+          <span className="section-kicker">02 / Build your resume</span>
           <div className="empty-state-icon" aria-hidden="true">
             +
           </div>
@@ -341,7 +341,7 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
     <section className="screen resume-editor-page" data-screen="parsed">
       <div className="resume-editor-header">
         <div className="screen-intro">
-          <span className="section-kicker">02 / Build Resume</span>
+          <span className="section-kicker">02 / Build your resume</span>
           <h2>
             Build your <em>strongest</em> story.
           </h2>

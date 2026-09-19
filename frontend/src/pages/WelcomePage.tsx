@@ -77,9 +77,9 @@ export function WelcomePage({
         </h2>
 
         <p>
-          Your next resume tailored to your needs. JobCoachAI turns your
-          experience into a polished, job-ready resume designed to improve your
-          chances of landing an interview.
+          Your next resume, tailored to your needs. JobCoachAI turns your experience
+          into a polished, job-ready resume designed to{' '}
+          improve your chances of landing an interview.
         </p>
       </div>
 

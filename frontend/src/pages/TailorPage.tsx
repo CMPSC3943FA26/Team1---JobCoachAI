@@ -4,10 +4,9 @@ import {
 } from 'react'
 
 /**
- * Tailor / intake page (page 2).
- *   #1  Add/Upload Resume
- *   #2  Paste Job Description
- *   #11 Create Resume from Scratch
+ * Tailor / intake page (Page 3).
+ * Users enter the target company, job title,
+ * and job description before submitting for analysis.
  */
 
 export type ResumeSource =
@@ -38,9 +37,7 @@ export interface TailorPageProps {
 
 export default function TailorPage({
   onSubmit,
-  onBack,
 }: TailorPageProps) {
-
   const [company, setCompany] =
     useState('')
 
@@ -55,26 +52,23 @@ export default function TailorPage({
   const [error, setError] =
     useState('')
 
-  const [tailoredSaveMessage, setTailoredSaveMessage] =
-    useState('')
-
-
+  const [
+    tailoredSaveMessage,
+    setTailoredSaveMessage,
+  ] = useState('')
 
   /*
    * Submit Tailor form.
-   * Validation happens here first.
-   * If successful, App.tsx navigates to Page 3.
+   * Validate the required job information
+   * before sending the existing TailorSubmission.
    */
   function handleSubmit(
     event: FormEvent<HTMLFormElement>
   ) {
     event.preventDefault()
 
-    /*
-     * Job title and job description are required.
-     * Show a browser alert if either field is empty.
-     */
     if (
+      !company.trim() ||
       !jobTitle.trim() ||
       !jobDescription.trim()
     ) {
@@ -84,7 +78,6 @@ export default function TailorPage({
       setError(message)
       return
     }
-
 
     setError('')
 
@@ -99,6 +92,14 @@ export default function TailorPage({
 
       source: 'scratch',
     })
+  }
+
+  /*
+   * Page 3 Back navigation.
+   * ResumePage is currently routed through #parsed.
+   */
+  function handleBackToResume() {
+    window.location.hash = '#parsed'
   }
 
   return (
@@ -137,14 +138,15 @@ export default function TailorPage({
         noValidate
         onSubmit={handleSubmit}
       >
-
         <section className="tailored-save-card">
           <div className="tailored-save-copy">
             <span className="panel-icon">
               JOB-SPECIFIC VERSION
             </span>
 
-            <h3>Save a tailored resume</h3>
+            <h3>
+              Save a tailored resume
+            </h3>
 
             <p>
               Save a copy for this role without changing your main resume.
@@ -157,7 +159,8 @@ export default function TailorPage({
             type="button"
             disabled={!jobTitle.trim()}
             onClick={() => {
-              const title = jobTitle.trim()
+              const title =
+                jobTitle.trim()
 
               if (!title) {
                 setTailoredSaveMessage(
@@ -186,7 +189,8 @@ export default function TailorPage({
 
         <div className="field-group">
           <label htmlFor="company">
-            Company
+            Company{' '}
+            <span>*</span>
           </label>
 
           <input
@@ -199,8 +203,12 @@ export default function TailorPage({
               setCompany(
                 event.target.value
               )
-              setError('')
+
+              if (error) {
+                setError('')
+              }
             }}
+            required
           />
         </div>
 
@@ -229,6 +237,7 @@ export default function TailorPage({
                 setTailoredSaveMessage('')
               }
             }}
+            required
           />
         </div>
 
@@ -259,6 +268,7 @@ export default function TailorPage({
                 setError('')
               }
             }}
+            required
           />
         </div>
 
@@ -275,7 +285,7 @@ export default function TailorPage({
           <button
             className="text-button"
             type="button"
-            onClick={onBack}
+            onClick={handleBackToResume}
           >
             <span aria-hidden="true">
               &larr;
