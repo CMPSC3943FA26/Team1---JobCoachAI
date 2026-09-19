@@ -17,6 +17,8 @@ export function Layout({
   profileInitials,
   onHomeClick,
 }: LayoutProps) {
+
+  // Defines the navigation steps displayed in the sidebar.
   const steps = [
     {
       key: 'welcome',
@@ -86,6 +88,8 @@ export function Layout({
           aria-label="Application steps"
         >
           {steps.map((step) => {
+
+            // Highlights the step that matches the current page.
             const isActive =
               currentScreen === step.key
 
@@ -134,6 +138,7 @@ export function Layout({
         className="content"
         aria-live="polite"
       >
+        /* Show the profile icon after the user leaves the welcome page. */
         {profileInitials &&
           currentScreen !== 'welcome' && (
             <button

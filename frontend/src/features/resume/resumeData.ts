@@ -4,6 +4,7 @@
 
 export type ResumeSectionField = string
 
+// Data types for the different resume sections.
 export type WorkExperience = {
   id?: string
   job_title: string
@@ -56,6 +57,7 @@ export type ResumeProfile = {
   professional_summary: string
 }
 
+// Maps each resume section to its corresponding data type.
 export type ResumeSectionEntries = {
   work_experience: WorkExperience
   education: Education
@@ -65,6 +67,7 @@ export type ResumeSectionEntries = {
   resume: ResumeProfile
 }
 
+// Main resume structure used by the editor and preview.
 export type Resume = {
   id?: string
   first_name: string
@@ -81,7 +84,7 @@ export type Resume = {
   certifications: Certification[]
 }
 
-
+// Sample resume data used to populate the editor during development.
 export const initialResume: Resume = {
   first_name: 'Jordan',
   last_name: 'Lee',
@@ -145,6 +148,7 @@ export const initialResume: Resume = {
   ],
 }
 
+// Empty section templates used when users add new resume entries.
 export const resumeSectionEntries: ResumeSectionEntries = {
   work_experience: {
     job_title: '',

@@ -9,10 +9,12 @@ import TailorPage, {
 } from './pages/TailorPage'
 import { ResumePage } from './pages/ResumePage'
 
+// Available screens in the application
 const screenNames = ['welcome', 'parsed', 'tailor'] as const
 
 type ScreenName = (typeof screenNames)[number]
 
+// Get the current page from the URL hash
 function getCurrentScreen(): ScreenName {
   const hash = window.location.hash.replace('#', '')
 
@@ -22,28 +24,26 @@ function getCurrentScreen(): ScreenName {
 }
 
 function App() {
+  // Track the active page
   const [currentScreen, setCurrentScreen] =
     useState<ScreenName>(() =>
       getCurrentScreen() === 'tailor' ? 'welcome' : getCurrentScreen()
     )
 
+  // Resume state shared between the Resume and Tailor pages
   const [createBlankResume, setCreateBlankResume] =
     useState(true)
   const [resumeReady, setResumeReady] = useState(false)
 
-  /*
-   * Profile icon initials:
-   * G  = Guest
-   * SB = Example logged-in user initials
-   * null = No active profile
-   */
+  // Profile initials displayed in the navigation
   const [profileInitials, setProfileInitials] =
     useState<string | null>(null)
 
-  // UI-only account mode; separate from initials so a user named G is not mistaken for a guest.
+  // Keep guest and registered user sessions separate
   const [accountType, setAccountType] =
     useState<'guest' | 'user' | null>(null)
 
+  // Handle page navigation and prevent access to Tailor without a resume
   useEffect(() => {
     const onHashChange = () => {
       const nextScreen = getCurrentScreen()
@@ -71,12 +71,8 @@ function App() {
     }
   }, [resumeReady, accountType])
 
-  /*
-   * Guest login
-   *
-   * New flow:
-   * Welcome -> Build Resume
-   */
+  
+  // Start a guest session and open the Resume page
   const handleContinueAsGuest = () => {
     setAccountType('guest')
     setResumeReady(false)
@@ -86,16 +82,7 @@ function App() {
     window.location.hash = '#parsed'
   }
 
-  /*
-   * Account login
-   *
-   * New flow:
-   * Welcome -> Build Resume
-   *
-   * Example:
-   * handleAccountLogin('Suprit', 'Bijukshe')
-   * Profile icon becomes "SB"
-   */
+  // Set up the user profile after login
   const handleAccountLogin = (
     firstName: string,
     lastName: string
@@ -111,10 +98,7 @@ function App() {
     window.location.hash = '#parsed'
   }
 
-  /*
-   * Clicking JobCoach AI Home clears
-   * the current guest/account profile.
-   */
+  // Reset the current workspace when returning Home
   const handleHomeClick = () => {
     setAccountType(null)
     setResumeReady(false)
@@ -128,13 +112,7 @@ function App() {
     window.location.hash = '#welcome'
   }
 
-  /*
-   * Called from TailorPage when the user
-   * chooses to create/edit their resume.
-   *
-   * Since Build Resume is now Page 2,
-   * this takes the user back to Page 2.
-   */
+  // Open the Resume page when creating or editing a resume
   const handleOpenResume = (
     source: ResumeSource,
     _file: File | null
@@ -146,17 +124,7 @@ function App() {
     window.location.hash = '#parsed'
   }
 
-  /*
-   * Submit Tailor form.
-   *
-   * Tailor is now Page 3, so submitting
-   * should NOT send the user backward
-   * to the Build Resume page.
-   *
-   * AI analysis/recommendation handling
-   * can be added here when the backend
-   * functionality is connected.
-   */
+  // Handle Tailor form submission
   const handleTailorSubmit = (
     submission: TailorSubmission
   ) => {
@@ -168,14 +136,12 @@ function App() {
     // Future AI analysis logic can be added here.
   }
 
-  /*
-   * Return to Welcome.
-   * This does NOT clear the current profile.
-   */
+  // Navigate back to Welcome without clearing the current profile
   const handleBackToWelcome = () => {
     window.location.hash = '#welcome'
   }
 
+  // Render the selected page based on the current navigation state
   const renderCurrentPage = () => {
     switch (currentScreen) {
       case 'welcome':
@@ -190,7 +156,7 @@ function App() {
 
       /*
        * PAGE 2
-       * Build Resume
+       * Build your resume
        */
       case 'parsed':
         return (
@@ -226,6 +192,7 @@ function App() {
     }
   }
 
+  // Keep the navigation layout consistent across all pages
   return (
     <Layout
       currentScreen={currentScreen}

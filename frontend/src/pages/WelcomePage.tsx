@@ -13,15 +13,18 @@ export function WelcomePage({
   onContinueAsGuest,
   onLogin,
 }: WelcomePageProps) {
+  // Controls the login and registration form.
   const [isRegistering, setIsRegistering] = useState(false)
   const [accountCreated, setAccountCreated] = useState(false)
 
+  // Form input values.
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
 
+  // Clear form data when the user returns to the welcome page.
   useEffect(() => {
     const resetWelcomeForm = () => {
       setIsRegistering(false)
@@ -40,6 +43,7 @@ export function WelcomePage({
     }
   }, [])
 
+  // Display the account creation confirmation.
   const handleRegisterSubmit = (
     event: React.FormEvent<HTMLFormElement>
   ) => {
@@ -49,6 +53,7 @@ export function WelcomePage({
     setIsRegistering(false)
   }
 
+  // Continue to the application using the entered profile name.
   const handleLoginSubmit = (
     event: React.FormEvent<HTMLFormElement>
   ) => {
@@ -93,6 +98,7 @@ export function WelcomePage({
         }
       >
         <div className="auth-fields">
+          /* Show name fields only when creating an account. */
           {isRegistering && (
             <>
               <div className="field-group">

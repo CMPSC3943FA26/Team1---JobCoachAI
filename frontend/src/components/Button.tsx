@@ -6,12 +6,14 @@
 
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
+// Shared button component used across the application.
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'text'
   children: ReactNode
 }
 
 export function Button({ variant = 'primary', children, className = '', ...props }: ButtonProps) {
+  // Select the appropriate button styling based on the variant.
   const variantClass =
     variant === 'primary'
       ? 'button button-primary'

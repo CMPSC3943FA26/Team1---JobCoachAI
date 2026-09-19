@@ -9,6 +9,7 @@ import {
  * and job description before submitting for analysis.
  */
 
+// Resume source and submission data passed to the parent component.
 export type ResumeSource =
   | 'uploaded'
   | 'scratch'
@@ -38,6 +39,8 @@ export interface TailorPageProps {
 export default function TailorPage({
   onSubmit,
 }: TailorPageProps) {
+
+  // Stores the job information entered by the user.
   const [company, setCompany] =
     useState('')
 
@@ -81,6 +84,7 @@ export default function TailorPage({
 
     setError('')
 
+    // Pass the job details to the parent component for processing.
     onSubmit({
       jobTitle:
         jobTitle.trim(),
@@ -94,10 +98,7 @@ export default function TailorPage({
     })
   }
 
-  /*
-   * Page 3 Back navigation.
-   * ResumePage is currently routed through #parsed.
-   */
+  // Return to the resume editor (Page 2).
   function handleBackToResume() {
     window.location.hash = '#parsed'
   }
@@ -152,6 +153,7 @@ export default function TailorPage({
             </p>
           </div>
 
+          /* Placeholder until tailored resume saving is implemented. */
           <button
             className="button button-secondary"
             type="button"

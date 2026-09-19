@@ -1,3 +1,10 @@
+/*
+ * JobCoachAI - Resume Builder
+ *
+ * Handles resume creation, editing, preview,
+ * and export for guest and registered users.
+ */
+
 import { useEffect, useState } from "react";
 import { Button } from "../components/Button";
 import {
@@ -16,12 +23,14 @@ import {
   saveResumeToDatabase,
 } from "../services/resumeService";
 
+// Props passed from App.tsx
 type ResumePageProps = {
   blankResume?: boolean;
   isGuest?: boolean;
   onResumeReadyChange?: (ready: boolean) => void;
 };
 
+// Supported resume sections
 type SectionKey =
   | "summary"
   | "education"
@@ -30,6 +39,7 @@ type SectionKey =
   | "projects"
   | "certifications";
 
+// Entry types used by the resume editor
 type SectionEntry =
   | string
   | WorkExperience
@@ -38,12 +48,14 @@ type SectionEntry =
   | Project
   | Certification;
 
+// Structure for each editable resume section
 type ResumeSection = {
   key: SectionKey;
   title: string;
   entries: SectionEntry[];
 };
 
+// Default values for a new resume
 const emptyProfile: ResumeProfile = {
   first_name: "",
   last_name: "",
@@ -53,6 +65,7 @@ const emptyProfile: ResumeProfile = {
   professional_summary: "",
 };
 
+// Personal information fields displayed in the form
 const personalFields: Array<{ key: keyof ResumeProfile; label: string; type?: string }> = [
   { key: "first_name", label: "First name" },
   { key: "last_name", label: "Last name" },
@@ -61,6 +74,7 @@ const personalFields: Array<{ key: keyof ResumeProfile; label: string; type?: st
   { key: "location", label: "Location" },
 ];
 
+// Display names for resume sections
 const sectionLabels: Record<SectionKey, string> = {
   summary: "Professional summary",
   education: "Education",
@@ -70,6 +84,7 @@ const sectionLabels: Record<SectionKey, string> = {
   certifications: "Certifications",
 };
 
+// Keep resume sections in a consistent order
 const sectionOrder: SectionKey[] = [
   "summary",
   "education",
@@ -79,6 +94,7 @@ const sectionOrder: SectionKey[] = [
   "certifications",
 ];
 
+// Create an empty entry based on the selected section
 const getBlankSectionEntry = (sectionKey: SectionKey): SectionEntry => {
   switch (sectionKey) {
     case "summary":
@@ -98,6 +114,7 @@ const getBlankSectionEntry = (sectionKey: SectionKey): SectionEntry => {
   }
 };
 
+// Load blank fields or existing sample resume data
 function createSections(blankResume: boolean): ResumeSection[] {
   return [
     {
@@ -139,10 +156,12 @@ function createSections(blankResume: boolean): ResumeSection[] {
   ];
 }
 
+// Convert the form data into the format expected by the resume service
 function buildResumePayload(
   profile: ResumeProfile,
   sections: ResumeSection[],
 ): Resume {
+  // Collect entries for each section
   const getEntries = <T extends Exclude<SectionEntry, string>>(
     key: SectionKey,
   ): T[] => {
@@ -171,6 +190,7 @@ export function ResumePage({
   isGuest = true,
   onResumeReadyChange,
 }: ResumePageProps) {
+  // Resume profile and section data
   const [profile, setProfile] = useState<ResumeProfile>(() =>
     blankResume
       ? { ...emptyProfile }
@@ -187,11 +207,14 @@ export function ResumePage({
   const [sections, setSections] = useState<ResumeSection[]>(() =>
     createSections(blankResume),
   );
+  // File upload and status messages
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [status, setStatus] = useState("");
+  // Confirmation dialogs and resume deletion state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showBackWarning, setShowBackWarning] = useState(false);
   const [resumeDeleted, setResumeDeleted] = useState(false);
+  // Track which resume sections are expanded
   const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
     summary: false,
     education: false,
@@ -201,6 +224,7 @@ export function ResumePage({
     certifications: false,
   });
 
+  // Expand or collapse a resume section
   const toggleSection = (sectionKey: SectionKey) => {
     setOpenSections((current) => ({
       ...current,
@@ -208,10 +232,12 @@ export function ResumePage({
     }));
   };
 
+  // Update personal information
   const updateProfile = (field: keyof ResumeProfile, value: string) => {
     setProfile((current) => ({ ...current, [field]: value }));
   };
 
+  // Update an individual resume entry
   const updateEntry = (
     sectionKey: string,
     entryIndex: number,
@@ -234,6 +260,7 @@ export function ResumePage({
     );
   };
 
+  // Add another entry to an existing section
   const addEntry = (sectionKey: string) => {
     const blankEntry =
       sectionKey === "summary" ? "" : getBlankSectionEntry(sectionKey as SectionKey);
@@ -247,6 +274,7 @@ export function ResumePage({
     );
   };
 
+  // Remove an entry without leaving the section empty
   const removeEntry = (sectionKey: string, entryIndex: number) => {
     setSections((current) =>
       current.map((section) => {
@@ -260,6 +288,7 @@ export function ResumePage({
     );
   };
 
+  // Add the next available resume section
   const addSection = () => {
     const nextSection = sectionOrder.find(
       (sectionKey) => !sections.some((section) => section.key === sectionKey),
@@ -279,11 +308,13 @@ export function ResumePage({
     setOpenSections((current) => ({ ...current, [nextSection]: true }));
   };
 
+  // Remove a resume section from the editor
   const removeSection = (sectionKey: SectionKey) => {
     setSections((current) => current.filter((section) => section.key !== sectionKey));
     setOpenSections((current) => ({ ...current, [sectionKey]: false }));
   };
 
+  // Check whether an entry contains user-provided information
   const hasEntryContent = (entry: SectionEntry) => {
     if (typeof entry === "string") return entry.trim() !== "";
     return Object.values(entry).some(
@@ -291,18 +322,20 @@ export function ResumePage({
     );
   };
 
-  // Personal information alone does not count as a created resume.
-  // File selection is the current frontend-only upload signal; when parsing is
-  // connected, replace it with a successful-parse flag from the backend.
+
+  // Check if the user has created or uploaded a resume
+  // TODO: Use the backend parsing result once resume parsing is connected
   const hasResumeContent = sections.some((section) =>
     section.entries.some(hasEntryContent),
   );
   const resumeReady = Boolean(resumeFile) || hasResumeContent;
 
+  // Update App.tsx when the resume becomes available or is deleted
   useEffect(() => {
     onResumeReadyChange?.(resumeReady && !resumeDeleted);
   }, [onResumeReadyChange, resumeReady, resumeDeleted]);
 
+  // Format resume entries for the preview
   const formatEntryPreview = (entry: SectionEntry) => {
     if (typeof entry === "string") return entry.trim();
 
@@ -322,6 +355,7 @@ export function ResumePage({
       .join(" • ");
   };
 
+  // Delete the current resume and update the page status
   const handleDelete = async () => {
     try {
       await deleteResumeFromDatabase();
@@ -333,6 +367,7 @@ export function ResumePage({
     }
   };
 
+  // Show the empty state after the resume is deleted
   if (resumeDeleted) {
     return (
       <section className="screen resume-screen" data-screen="parsed">
@@ -364,6 +399,7 @@ export function ResumePage({
     );
   }
 
+  // Main resume builder interface
   return (
     <section className="screen resume-editor-page" data-screen="parsed">
       <div className="resume-editor-header">
@@ -377,11 +413,14 @@ export function ResumePage({
       </div>
 
 
+      /* Resume editor form */
       <form
         id="resume-form"
         className="resume-editor"
+        // Save the resume using the database service
         onSubmit={async (event) => {
           event.preventDefault();
+          // Save the current resume data
           try {
             await saveResumeToDatabase(buildResumePayload(profile, sections));
             setStatus("Resume saved just now.");
@@ -390,6 +429,7 @@ export function ResumePage({
           }
         }}
       >
+        /* Resume file upload */
         <div className="resume-upload-row">
           <div className="resume-upload-file">
             <span className="panel-icon">RESUME FILE</span>
@@ -419,6 +459,7 @@ export function ResumePage({
           </label>
         </div>
 
+        /* Personal information fields */
         <section className="resume-section">
           <button className="resume-section-header" type="button">
             <span className="resume-section-number">00</span>
@@ -456,7 +497,9 @@ export function ResumePage({
           </div>
         </section>
 
+        /* Render the editable resume sections */
         {sections.map((section, sectionIndex) => {
+          // Check if the current section is expanded
           const isOpen = openSections[section.key];
 
           return (
@@ -495,6 +538,7 @@ export function ResumePage({
                   {section.entries.length === 0 ? (
                     <p className="resume-empty-message">No entries yet.</p>
                   ) : (
+                    // Render fields for each entry
                     section.entries.map((entry, entryIndex) => {
                       if (typeof entry === "string") {
                         return (
@@ -566,6 +610,7 @@ export function ResumePage({
                     })
                   )}
 
+                  /* Add another resume section */
                   <button className="add-button" type="button" onClick={() => addEntry(section.key)}>
                     + Add {section.key === "skills" ? "skill" : "entry"}
                   </button>
@@ -583,6 +628,7 @@ export function ResumePage({
 
       </form>
 
+      /* Live preview of the completed resume */
       <section className="resume-preview-section">
         <div className="resume-preview-heading">
           <div>
@@ -791,6 +837,7 @@ export function ResumePage({
           Back
         </button>
 
+        /* Resume navigation, deletion, and export controls */
         <div className="resume-bottom-action-buttons">
           <Button
             variant="secondary"
@@ -827,6 +874,7 @@ export function ResumePage({
         </div>
       </div>
 
+      /* Confirm before leaving the resume editor */
       {showBackWarning && (
         <div className="dialog-backdrop" role="presentation">
           <div
@@ -867,6 +915,7 @@ export function ResumePage({
         </div>
       )}
 
+      /* Confirm before deleting the resume */
       {showDeleteDialog && (
         <div className="dialog-backdrop" role="presentation">
           <div
