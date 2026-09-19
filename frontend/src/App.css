@@ -1791,6 +1791,23 @@ textarea::placeholder {
   margin-bottom: 20px;
 }
 
+.resume-responsibilities-field {
+  grid-column: 1 / -1;
+}
+
+.resume-field-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 30px;
+  margin-bottom: 9px;
+}
+
+.resume-field-caption > label:first-child {
+  margin-bottom: 0;
+}
+
 .resume-entry-card > .field-group + .field-group {
   margin-top: 20px;
 }
@@ -2470,6 +2487,23 @@ textarea::placeholder {
   border: 1px solid var(--line);
   color: var(--ink);
   background: var(--white);
+}
+
+.present-job-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.present-job-toggle input {
+  width: auto;
+  min-height: auto;
+  margin: 0;
+  accent-color: var(--blue);
 }
 
 .resume-upload-file {

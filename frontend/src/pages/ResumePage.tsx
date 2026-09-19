@@ -763,30 +763,62 @@ export function ResumePage({
                         <div className="resume-entry-card" key={`${section.key}-${entryIndex}`}>
                           <div className="resume-entry-grid">
                             {Object.entries(entry).map(([fieldKey, value]) => (
-                              <div className="field-group" key={`${section.key}-${entryIndex}-${fieldKey}`}>
-                                <label htmlFor={`${section.key}-${entryIndex}-${fieldKey}`}>
-                                  {fieldKey
-                                    .replace(/_/g, " ")
-                                    .replace(/\b\w/g, (char) => char.toUpperCase())}
-                                </label>
-                                {fieldKey === "description" ? (
-                                  <textarea
-                                    id={`${section.key}-${entryIndex}-${fieldKey}`}
-                                    rows={3}
-                                    value={value}
-                                    onChange={(event) =>
-                                      updateEntry(section.key, entryIndex, fieldKey, event.target.value)
-                                    }
-                                  />
-                                ) : (
-                                  <input
-                                    id={`${section.key}-${entryIndex}-${fieldKey}`}
-                                    type={fieldKey.endsWith("_date") ? "date" : "text"}
-                                    value={fieldKey.endsWith("_date") ? toDateInputValue(String(value)) : String(value)}
-                                    onChange={(event) =>
-                                      updateEntry(section.key, entryIndex, fieldKey, event.target.value)
-                                    }
-                                  />
+                              <div
+                                className={`field-group ${section.key === "work_experience" && fieldKey === "description" ? "resume-responsibilities-field" : ""}`}
+                                key={`${section.key}-${entryIndex}-${fieldKey}`}
+                              >
+                                <div className="resume-field-caption">
+                                  {!(section.key === "work_experience" &&
+                                    fieldKey === "end_date" &&
+                                    String(value).toLowerCase() === "present") && (
+                                    <label htmlFor={`${section.key}-${entryIndex}-${fieldKey}`}>
+                                      {section.key === "work_experience" && fieldKey === "description"
+                                        ? "Responsibilities"
+                                        : fieldKey
+                                          .replace(/_/g, " ")
+                                          .replace(/\b\w/g, (char) => char.toUpperCase())}
+                                    </label>
+                                  )}
+                                  {section.key === "work_experience" && fieldKey === "end_date" && (
+                                    <label className="present-job-toggle">
+                                      <input
+                                        type="checkbox"
+                                        checked={String(value).toLowerCase() === "present"}
+                                        onChange={(event) =>
+                                          updateEntry(
+                                            section.key,
+                                            entryIndex,
+                                            fieldKey,
+                                            event.target.checked ? "Present" : "",
+                                          )
+                                        }
+                                      />
+                                      Present job
+                                    </label>
+                                  )}
+                                </div>
+                                {!(section.key === "work_experience" &&
+                                  fieldKey === "end_date" &&
+                                  String(value).toLowerCase() === "present") && (
+                                  fieldKey === "description" ? (
+                                      <textarea
+                                        id={`${section.key}-${entryIndex}-${fieldKey}`}
+                                        rows={3}
+                                        value={value}
+                                        onChange={(event) =>
+                                          updateEntry(section.key, entryIndex, fieldKey, event.target.value)
+                                        }
+                                      />
+                                  ) : (
+                                      <input
+                                        id={`${section.key}-${entryIndex}-${fieldKey}`}
+                                        type={fieldKey.endsWith("_date") ? "date" : "text"}
+                                        value={fieldKey.endsWith("_date") ? toDateInputValue(String(value)) : String(value)}
+                                        onChange={(event) =>
+                                          updateEntry(section.key, entryIndex, fieldKey, event.target.value)
+                                        }
+                                      />
+                                  )
                                 )}
                               </div>
                             ))}
