@@ -24,6 +24,7 @@ function getCurrentScreen(): ScreenName {
 }
 
 function App() {
+  const [resumeSession, setResumeSession] = useState(0)
   // Track the active page
   const [currentScreen, setCurrentScreen] =
     useState<ScreenName>(() =>
@@ -77,7 +78,10 @@ function App() {
     setAccountType('guest')
     setResumeReady(false)
     setProfileInitials('G')
-    setCreateBlankResume(true)
+    setResumeSession(current => current + 1)
+
+    // false loads the sample data from resumeData.ts
+    setCreateBlankResume(false)
 
     window.location.hash = '#parsed'
   }
@@ -161,6 +165,7 @@ function App() {
       case 'parsed':
         return (
           <ResumePage
+            key={resumeSession}
             blankResume={createBlankResume}
             isGuest={accountType !== 'user'}
             onResumeReadyChange={setResumeReady}

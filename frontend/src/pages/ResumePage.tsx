@@ -214,6 +214,7 @@ export function ResumePage({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showBackWarning, setShowBackWarning] = useState(false);
   const [resumeDeleted, setResumeDeleted] = useState(false);
+
   // Track which resume sections are expanded
   const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
     summary: false,
@@ -223,6 +224,27 @@ export function ResumePage({
     projects: false,
     certifications: false,
   });
+
+  // Reload the editor when switching between blank and sample resumes
+  useEffect(() => {
+    if (blankResume) {
+      setProfile({ ...emptyProfile });
+    } else {
+      setProfile({
+        first_name: initialResume.first_name,
+        last_name: initialResume.last_name,
+        email: initialResume.email,
+        phone: initialResume.phone,
+        location: initialResume.location,
+        professional_summary: initialResume.professional_summary,
+      });
+    }
+
+    setSections(createSections(blankResume));
+    setResumeFile(null);
+    setResumeDeleted(false);
+    setStatus("");
+  }, [blankResume]);
 
   // Expand or collapse a resume section
   const toggleSection = (sectionKey: SectionKey) => {
@@ -417,7 +439,6 @@ export function ResumePage({
       <form
         id="resume-form"
         className="resume-editor"
-        // Save the resume using the database service
         onSubmit={async (event) => {
           event.preventDefault();
           // Save the current resume data
