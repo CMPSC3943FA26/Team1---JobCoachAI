@@ -176,6 +176,7 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [status, setStatus] = useState("");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showBackWarning, setShowBackWarning] = useState(false);
   const [resumeDeleted, setResumeDeleted] = useState(false);
   const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
     summary: false,
@@ -310,7 +311,7 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
     return (
       <section className="screen resume-screen" data-screen="parsed">
         <div className="resume-empty-state">
-          <span className="section-kicker">02 / Build your resume</span>
+          <span className="section-kicker">02 / Build Resume</span>
           <div className="empty-state-icon" aria-hidden="true">
             +
           </div>
@@ -341,7 +342,7 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
     <section className="screen resume-editor-page" data-screen="parsed">
       <div className="resume-editor-header">
         <div className="screen-intro">
-          <span className="section-kicker">02 / Build your resume</span>
+          <span className="section-kicker">02 / Build Resume</span>
           <h2>
             Build your <em>strongest</em> story.
           </h2>
@@ -563,6 +564,16 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
             <h3>Resume preview</h3>
             <p>Review your completed resume before exporting.</p>
           </div>
+
+          <div className="resume-preview-actions">
+            <Button
+              variant="secondary"
+              type="submit"
+              form="resume-form"
+            >
+              Save resume <span aria-hidden="true">✓</span>
+            </Button>
+          </div>
         </div>
 
         <div className="resume-preview-background">
@@ -736,7 +747,7 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
           className="text-button"
           type="button"
           onClick={() => {
-            window.location.hash = '#welcome'
+            setShowBackWarning(true)
           }}
         >
           <span aria-hidden="true">&larr;</span>{' '}
@@ -755,10 +766,12 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
 
           <Button
             variant="secondary"
-            type="submit"
-            form="resume-form"
+            type="button"
+            onClick={() => {
+              window.location.hash = '#tailor'
+            }}
           >
-            Save resume <span aria-hidden="true">✓</span>
+            Continue <span aria-hidden="true">→</span>
           </Button>
 
           <Button
@@ -770,6 +783,46 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
           </Button>
         </div>
       </div>
+
+      {showBackWarning && (
+        <div className="dialog-backdrop" role="presentation">
+          <div
+            className="confirm-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="back-warning-title"
+            aria-describedby="back-warning-description"
+          >
+            <span className="panel-icon">LEAVE RESUME</span>
+            <h3 id="back-warning-title">Go back to Welcome?</h3>
+            <p id="back-warning-description">
+              Going back will clear the current resume. Any unsaved work
+              on this page may be lost.
+            </p>
+
+            <div className="dialog-actions">
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() => setShowBackWarning(false)}
+              >
+                Stay on page
+              </Button>
+
+              <Button
+                variant="primary"
+                type="button"
+                onClick={() => {
+                  setShowBackWarning(false)
+                  window.location.hash = '#welcome'
+                }}
+              >
+                Go back
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showDeleteDialog && (
         <div className="dialog-backdrop" role="presentation">
