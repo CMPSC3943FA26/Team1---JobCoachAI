@@ -73,7 +73,7 @@ export function WelcomePage({
         </span>
 
         <h2>
-          Welcome to <em>JobCoach AI</em>
+          Welcome to <em>JobCoachAI</em>
         </h2>
 
         <p>

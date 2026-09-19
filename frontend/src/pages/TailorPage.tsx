@@ -1,6 +1,5 @@
 import {
   useState,
-  type ChangeEvent,
   type FormEvent,
 } from 'react'
 
@@ -38,13 +37,12 @@ export interface TailorPageProps {
 }
 
 export default function TailorPage({
-  onOpenResume,
   onSubmit,
   onBack,
-  hasSavedResume = false,
 }: TailorPageProps) {
-  const [resumeFile, setResumeFile] =
-    useState<File | null>(null)
+
+  const [company, setCompany] =
+    useState('')
 
   const [jobTitle, setJobTitle] =
     useState('')
@@ -57,38 +55,10 @@ export default function TailorPage({
   const [error, setError] =
     useState('')
 
-  const hasResume =
-    resumeFile !== null ||
-    hasSavedResume
+  const [tailoredSaveMessage, setTailoredSaveMessage] =
+    useState('')
 
-  /* Upload resume */
-  function handleFileChange(
-    event: ChangeEvent<HTMLInputElement>
-  ) {
-    const file =
-      event.target.files?.[0] ?? null
 
-    setResumeFile(file)
-    setError('')
-  }
-
-  /*
-   * Create Resume / Edit Resume
-   * Opens Page 3.
-   */
-  function handleOpenResume() {
-    setError('')
-
-    const source: ResumeSource =
-      resumeFile
-        ? 'uploaded'
-        : 'scratch'
-
-    onOpenResume(
-      source,
-      resumeFile
-    )
-  }
 
   /*
    * Submit Tailor form.
@@ -109,26 +79,14 @@ export default function TailorPage({
       !jobDescription.trim()
     ) {
       const message =
-        'Please enter the job title and job description to proceed.'
+        'Please enter the company name, job title and job description to proceed.'
 
       setError(message)
       return
     }
 
-    if (!hasResume) {
-      const message =
-        'Please create or upload a resume to proceed.'
-
-      setError(message)
-      return
-    }
 
     setError('')
-
-    const source: ResumeSource =
-      resumeFile
-        ? 'uploaded'
-        : 'scratch'
 
     onSubmit({
       jobTitle:
@@ -137,9 +95,9 @@ export default function TailorPage({
       jobDescription:
         jobDescription.trim(),
 
-      resumeFile,
+      resumeFile: null,
 
-      source,
+      source: 'scratch',
     })
   }
 
@@ -150,7 +108,7 @@ export default function TailorPage({
     >
       <div className="screen-intro">
         <span className="section-kicker">
-          02 / Tailor
+          03 / Tailor your resume
         </span>
 
         <h2>
@@ -163,9 +121,8 @@ export default function TailorPage({
         </h2>
 
         <p>
-          Upload or create your resume,
-          add the job description, then
-          click{' '}
+          Add the company, job title, and
+          job description, then click{' '}
           <strong>
             Submit
           </strong>
@@ -180,46 +137,72 @@ export default function TailorPage({
         noValidate
         onSubmit={handleSubmit}
       >
-        <div className="tailor-actions">
-          <button
-            className="button button-primary"
-            type="button"
-            onClick={handleOpenResume}
-          >
-            {hasResume
-              ? 'Edit Resume'
-              : 'Create Resume'}
 
-            <span aria-hidden="true">
-              &rarr;
+        <section className="tailored-save-card">
+          <div className="tailored-save-copy">
+            <span className="panel-icon">
+              JOB-SPECIFIC VERSION
             </span>
+
+            <h3>Save a tailored resume</h3>
+
+            <p>
+              Save a copy for this role without changing your main resume.
+              The job title you enter below will be used to label the copy.
+            </p>
+          </div>
+
+          <button
+            className="button button-secondary"
+            type="button"
+            disabled={!jobTitle.trim()}
+            onClick={() => {
+              const title = jobTitle.trim()
+
+              if (!title) {
+                setTailoredSaveMessage(
+                  'Add the job title below before saving a tailored resume.'
+                )
+                return
+              }
+
+              setTailoredSaveMessage(
+                `Tailored resume ready to save for ${title}.`
+              )
+            }}
+          >
+            Save tailored resume
           </button>
 
-          <input
-            id="resume-upload"
-            name="resume"
-            type="file"
-            accept=".pdf,.doc,.docx"
-            onChange={handleFileChange}
-          />
+          {tailoredSaveMessage && (
+            <p
+              className="tailored-save-message"
+              role="status"
+            >
+              {tailoredSaveMessage}
+            </p>
+          )}
+        </section>
 
-          <label
-            className="button button-secondary upload-button"
-            htmlFor="resume-upload"
-          >
-            Upload resume
-
-            <span aria-hidden="true">
-              &uarr;
-            </span>
+        <div className="field-group">
+          <label htmlFor="company">
+            Company
           </label>
-        </div>
 
-        <p className="file-name">
-          {resumeFile
-            ? resumeFile.name
-            : 'No resume selected'}
-        </p>
+          <input
+            id="company"
+            name="company"
+            type="text"
+            placeholder="Enter company name here"
+            value={company}
+            onChange={(event) => {
+              setCompany(
+                event.target.value
+              )
+              setError('')
+            }}
+          />
+        </div>
 
         <div className="field-group">
           <label htmlFor="job-title">
@@ -240,6 +223,10 @@ export default function TailorPage({
 
               if (error) {
                 setError('')
+              }
+
+              if (tailoredSaveMessage) {
+                setTailoredSaveMessage('')
               }
             }}
           />

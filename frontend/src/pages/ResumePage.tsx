@@ -173,7 +173,7 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
   const [sections, setSections] = useState<ResumeSection[]>(() =>
     createSections(blankResume),
   );
-  const [jobTitle, setJobTitle] = useState("");
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [status, setStatus] = useState("");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [resumeDeleted, setResumeDeleted] = useState(false);
@@ -310,7 +310,7 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
     return (
       <section className="screen resume-screen" data-screen="parsed">
         <div className="resume-empty-state">
-          <span className="section-kicker">03 / Your fit</span>
+          <span className="section-kicker">02 / Build Resume</span>
           <div className="empty-state-icon" aria-hidden="true">
             +
           </div>
@@ -341,38 +341,14 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
     <section className="screen resume-editor-page" data-screen="parsed">
       <div className="resume-editor-header">
         <div className="screen-intro">
-          <span className="section-kicker">03 / Your fit</span>
+          <span className="section-kicker">02 / Build Resume</span>
           <h2>
-            Build your <em>best case.</em>
+            Build your <em>strongest</em> story.
           </h2>
-          <p>
-            Keep your experience clear, current, and ready to tailor for the
-            next opportunity.
-          </p>
         </div>
 
-        <div className="resume-editor-header-actions">
-          <Button
-            variant="secondary"
-            type="button"
-            onClick={() => setShowDeleteDialog(true)}
-          >
-            Delete resume
-          </Button>
-          <Button
-            variant="primary"
-            type="button"
-            onClick={() => window.print()}
-          >
-            Export resume <span aria-hidden="true">↗</span>
-          </Button>
-        </div>
       </div>
 
-      <div className="resume-local-notice">
-        <span className="resume-info-icon">i</span>
-        <span>{status || "Changes stay local until connected to your account."}</span>
-      </div>
 
       <form
         id="resume-form"
@@ -387,6 +363,35 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
           }
         }}
       >
+        <div className="resume-upload-row">
+          <div className="resume-upload-file">
+            <span className="panel-icon">RESUME FILE</span>
+            <span className="resume-upload-file-name">
+              {resumeFile ? resumeFile.name : "No resume selected"}
+            </span>
+          </div>
+
+          <input
+            id="resume-page-upload"
+            className="resume-upload-input"
+            name="resume"
+            type="file"
+            accept=".pdf,.doc,.docx"
+            onChange={(event) => {
+              const file = event.target.files?.[0] ?? null;
+              setResumeFile(file);
+              setStatus(file ? `Selected ${file.name}.` : "");
+            }}
+          />
+
+          <label
+            className="button button-primary upload-button"
+            htmlFor="resume-page-upload"
+          >
+            Upload resume <span aria-hidden="true">↑</span>
+          </label>
+        </div>
+
         <section className="resume-section">
           <button className="resume-section-header" type="button">
             <span className="resume-section-number">00</span>
@@ -547,40 +552,7 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
           + Add another section
         </button>
 
-        <section className="job-version-card">
-          <div>
-            <span className="panel-icon">JOB-SPECIFIC VERSION</span>
-            <h3>Save a tailored version</h3>
-            <p>Create a copy for a specific role without changing your main resume.</p>
-          </div>
 
-          <div className="job-version-action">
-            <div className="job-version-label-row">
-              <label htmlFor="job-version-title">Job title or company</label>
-
-              <Button
-                variant="secondary"
-                type="button"
-                onClick={() =>
-                  setStatus(
-                    jobTitle.trim()
-                      ? `Saved version for ${jobTitle.trim()}.`
-                      : "Add a job title before saving a version.",
-                  )
-                }
-              >
-                Save job version
-              </Button>
-            </div>
-
-            <input
-              id="job-version-title"
-              value={jobTitle}
-              onChange={(event) => setJobTitle(event.target.value)}
-              placeholder="e.g. Product Designer at Northstar"
-            />
-          </div>
-        </section>
 
       </form>
 
@@ -747,12 +719,40 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
         </div>
       </section>
 
+      <section
+        className="resume-local-notice-section"
+        aria-label="Local changes notice"
+      >
+        <div className="resume-local-notice">
+          <span className="resume-info-icon">i</span>
+          <span>
+            {status || "Changes stay local until connected to your account."}
+          </span>
+        </div>
+      </section>
+
       <div className="resume-bottom-actions">
-        <span className="resume-save-status">
-          {status || "Last saved locally in this session"}
-        </span>
+        <button
+          className="text-button"
+          type="button"
+          onClick={() => {
+            window.location.hash = '#welcome'
+          }}
+        >
+          <span aria-hidden="true">&larr;</span>{' '}
+          Back
+        </button>
 
         <div className="resume-bottom-action-buttons">
+          <Button
+            variant="secondary"
+            style={{ borderColor: "#dc2626", color: "#dc2626" }}
+            type="button"
+            onClick={() => setShowDeleteDialog(true)}
+          >
+            Delete resume
+          </Button>
+
           <Button
             variant="secondary"
             type="submit"
@@ -795,8 +795,8 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
                 Keep resume
               </Button>
               <Button
-                variant="primary"
-                className="danger-button"
+                variant="secondary"
+                style={{ borderColor: "#dc2626", color: "#dc2626" }}
                 type="button"
                 onClick={handleDelete}
               >

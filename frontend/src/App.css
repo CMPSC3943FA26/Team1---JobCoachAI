@@ -2290,3 +2290,123 @@ textarea::placeholder {
     box-shadow: none;
   }
 }
+
+
+/* TAILOR PAGE — JOB-SPECIFIC SAVE CARD */
+
+.tailor-actions-single {
+  grid-template-columns: 1fr;
+}
+
+.tailored-save-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+
+  margin: 28px 0 30px;
+  padding: 22px 24px;
+
+  border: 1px solid var(--line);
+  background: var(--white);
+}
+
+.tailored-save-copy .panel-icon {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.tailored-save-copy h3 {
+  margin: 0 0 6px;
+
+  font: 600 19px 'Space Grotesk', sans-serif;
+}
+
+.tailored-save-copy p {
+  max-width: 520px;
+  margin: 0;
+
+  color: var(--muted);
+
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.tailored-save-card .button {
+  white-space: nowrap;
+}
+
+.tailored-save-card .button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.tailored-save-message {
+  grid-column: 1 / -1;
+  margin: -8px 0 0;
+
+  color: var(--muted);
+
+  font-size: 11px;
+}
+
+@media (max-width: 650px) {
+  .tailored-save-card {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .tailored-save-card .button {
+    width: 100%;
+  }
+}
+
+
+/* PAGE 2 — RESUME UPLOAD */
+.resume-upload-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  margin: 0 0 14px;
+}
+
+.resume-upload-file {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  margin-right: auto;
+}
+
+.resume-upload-file-name {
+  overflow: hidden;
+  max-width: 360px;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resume-upload-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+@media (max-width: 720px) {
+  .resume-upload-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .resume-upload-file {
+    margin-right: 0;
+  }
+
+  .resume-upload-row .upload-button {
+    width: 100%;
+  }
+}

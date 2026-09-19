@@ -9,7 +9,7 @@ import TailorPage, {
 } from './pages/TailorPage'
 import { ResumePage } from './pages/ResumePage'
 
-const screenNames = ['welcome', 'tailor', 'parsed'] as const
+const screenNames = ['welcome', 'parsed', 'tailor'] as const
 
 type ScreenName = (typeof screenNames)[number]
 
@@ -42,36 +42,41 @@ function App() {
       const nextScreen = getCurrentScreen()
 
       setCurrentScreen(nextScreen)
-
-      if (nextScreen === 'tailor') {
-        setCreateBlankResume(false)
-      }
     }
 
     window.addEventListener('hashchange', onHashChange)
 
     return () => {
-      window.removeEventListener('hashchange', onHashChange)
+      window.removeEventListener(
+        'hashchange',
+        onHashChange
+      )
     }
   }, [])
 
   /*
    * Guest login
+   *
+   * New flow:
+   * Welcome -> Build Resume
    */
   const handleContinueAsGuest = () => {
     setProfileInitials('G')
-    window.location.hash = '#tailor'
+    setCreateBlankResume(false)
+
+    window.location.hash = '#parsed'
   }
 
   /*
-   * Later, when account login is connected,
-   * call this with the user's first and last name.
+   * Account login
+   *
+   * New flow:
+   * Welcome -> Build Resume
    *
    * Example:
    * handleAccountLogin('Suprit', 'Bijukshe')
    * Profile icon becomes "SB"
    */
-  
   const handleAccountLogin = (
     firstName: string,
     lastName: string
@@ -80,8 +85,9 @@ function App() {
       `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
 
     setProfileInitials(initials)
+    setCreateBlankResume(false)
 
-    window.location.hash = '#tailor'
+    window.location.hash = '#parsed'
   }
 
   /*
@@ -100,18 +106,33 @@ function App() {
   }
 
   /*
-   * Create / Edit Resume
+   * Called from TailorPage when the user
+   * chooses to create/edit their resume.
+   *
+   * Since Build Resume is now Page 2,
+   * this takes the user back to Page 2.
    */
   const handleOpenResume = (
     source: ResumeSource,
     _file: File | null
   ) => {
-    setCreateBlankResume(source === 'scratch')
+    setCreateBlankResume(
+      source === 'scratch'
+    )
+
     window.location.hash = '#parsed'
   }
 
   /*
-   * Submit Tailor form
+   * Submit Tailor form.
+   *
+   * Tailor is now Page 3, so submitting
+   * should NOT send the user backward
+   * to the Build Resume page.
+   *
+   * AI analysis/recommendation handling
+   * can be added here when the backend
+   * functionality is connected.
    */
   const handleTailorSubmit = (
     submission: TailorSubmission
@@ -120,7 +141,8 @@ function App() {
       submission.source === 'scratch'
     )
 
-    window.location.hash = '#parsed'
+    // Stay on the Tailor page after submission.
+    // Future AI analysis logic can be added here.
   }
 
   /*
@@ -136,11 +158,28 @@ function App() {
       case 'welcome':
         return (
           <WelcomePage
-            onContinueAsGuest={handleContinueAsGuest}
+            onContinueAsGuest={
+              handleContinueAsGuest
+            }
             onLogin={handleAccountLogin}
           />
         )
 
+      /*
+       * PAGE 2
+       * Build Resume
+       */
+      case 'parsed':
+        return (
+          <ResumePage
+            blankResume={createBlankResume}
+          />
+        )
+
+      /*
+       * PAGE 3
+       * Tailor Resume
+       */
       case 'tailor':
         return (
           <TailorPage
@@ -150,20 +189,15 @@ function App() {
           />
         )
 
-      case 'parsed':
+      default:
         return (
-          <ResumePage
-            blankResume={createBlankResume}
+          <WelcomePage
+            onContinueAsGuest={
+              handleContinueAsGuest
+            }
+            onLogin={handleAccountLogin}
           />
         )
-
-        default:
-          return (
-            <WelcomePage
-              onContinueAsGuest={handleContinueAsGuest}
-              onLogin={handleAccountLogin}
-            />
-          )
     }
   }
 

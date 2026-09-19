@@ -3,7 +3,10 @@ import jobCoachLogo from '../assets/jobcoach-logo.png'
 
 type LayoutProps = {
   children: ReactNode
-  currentScreen: 'welcome' | 'tailor' | 'parsed'
+  currentScreen:
+    | 'welcome'
+    | 'parsed'
+    | 'tailor'
   profileInitials: string | null
   onHomeClick: () => void
 }
@@ -22,16 +25,16 @@ export function Layout({
       subtitle: 'Get started',
     },
     {
-      key: 'tailor',
+      key: 'parsed',
       number: '02',
-      title: 'Tailor',
-      subtitle: 'Add a job',
+      title: 'Build your resume',
+      subtitle: 'See your match',
     },
     {
-      key: 'parsed',
+      key: 'tailor',
       number: '03',
-      title: 'Your fit',
-      subtitle: 'See your match',
+      title: 'Tailor your resume',
+      subtitle: 'Add a job',
     },
   ] as const
 
@@ -71,9 +74,9 @@ export function Layout({
           </p>
 
           <h1>
-            Build your resume with
+            Build With
             <br />
-            <span>confidence</span>
+            <span>Confidence</span>
           </h1>
         </div>
 
@@ -94,7 +97,9 @@ export function Layout({
                   isActive ? 'active' : ''
                 }`}
                 aria-current={
-                  isActive ? 'page' : undefined
+                  isActive
+                    ? 'page'
+                    : undefined
                 }
               >
                 <span className="step-number">
