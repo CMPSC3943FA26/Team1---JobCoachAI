@@ -2157,6 +2157,72 @@ textarea::placeholder {
   gap: 10px;
 }
 
+.resume-export-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.export-dialog-backdrop {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(23 32 51 / 42%);
+}
+
+.export-dialog {
+  width: min(420px, 100%);
+  padding: 28px;
+  border: 1px solid var(--line);
+  background: var(--white);
+  box-shadow: 0 24px 60px rgb(23 32 51 / 24%);
+}
+
+.export-dialog h3 {
+  margin: 10px 0 8px;
+  color: var(--ink);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 26px;
+}
+
+.export-dialog p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.export-dialog-options {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.export-dialog-options .button {
+  width: 100%;
+  justify-content: center;
+}
+
+.export-dialog-cancel {
+  display: block;
+  margin: 18px auto 0;
+  padding: 4px 8px;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.export-dialog-cancel:hover,
+.export-dialog-cancel:focus-visible {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
 /* RESUME PAGE RESPONSIVE */
 
 @media (max-width: 900px) {
@@ -2272,6 +2338,12 @@ textarea::placeholder {
     width: 100%;
     justify-content: center;
   }
+
+  .resume-export-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
 }
 
 /* RESUME PRINT / EXPORT */
@@ -2377,6 +2449,29 @@ textarea::placeholder {
   margin: 0 0 14px;
 }
 
+.resume-filename-field {
+  display: grid;
+  gap: 5px;
+  min-width: 190px;
+  margin-right: auto;
+}
+
+.resume-filename-field label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.resume-filename-field input {
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--white);
+}
+
 .resume-upload-file {
   display: flex;
   min-width: 0;
@@ -2392,6 +2487,13 @@ textarea::placeholder {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.resume-upload-preview-note {
+  max-width: 260px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .resume-upload-input {
@@ -2412,8 +2514,17 @@ textarea::placeholder {
     margin-right: 0;
   }
 
+  .resume-filename-field {
+    width: 100%;
+    margin-right: 0;
+  }
+
   .resume-upload-row .upload-button {
     width: 100%;
+  }
+
+  .resume-upload-preview-note {
+    max-width: none;
   }
 
 }

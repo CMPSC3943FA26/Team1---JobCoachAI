@@ -34,10 +34,12 @@ export interface TailorPageProps {
   onBack?: () => void
 
   hasSavedResume?: boolean
+  isGuest?: boolean
 }
 
 export default function TailorPage({
   onSubmit,
+  isGuest = true,
 }: TailorPageProps) {
 
   // Stores the job information entered by the user.
@@ -157,8 +159,12 @@ export default function TailorPage({
           <button
             className="button button-secondary"
             type="button"
-            disabled={!jobTitle.trim()}
+            disabled={isGuest || !jobTitle.trim()}
             onClick={() => {
+              if (isGuest) {
+                return
+              }
+
               const title =
                 jobTitle.trim()
 
@@ -177,12 +183,14 @@ export default function TailorPage({
             Save tailored resume
           </button>
 
-          {tailoredSaveMessage && (
+          {(isGuest || tailoredSaveMessage) && (
             <p
               className="tailored-save-message"
               role="status"
             >
-              {tailoredSaveMessage}
+              {isGuest
+                ? 'Create an account or sign in to use this feature.'
+                : tailoredSaveMessage}
             </p>
           )}
         </section>

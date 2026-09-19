@@ -7,7 +7,7 @@ import TailorPage, {
   type ResumeSource,
   type TailorSubmission,
 } from './pages/TailorPage'
-import { ResumePage } from './pages/ResumePage'
+import { ResumePage, resumeDraftStorageKey } from './pages/ResumePage'
 
 // Available screens in the application
 const screenNames = ['welcome', 'parsed', 'tailor'] as const
@@ -75,6 +75,7 @@ function App() {
   
   // Start a guest session and open the Resume page
   const handleContinueAsGuest = () => {
+    sessionStorage.removeItem(resumeDraftStorageKey)
     setAccountType('guest')
     setResumeReady(false)
     setProfileInitials('G')
@@ -104,6 +105,16 @@ function App() {
 
   // Reset the current workspace when returning Home
   const handleHomeClick = () => {
+    const hasResumeDraft = Boolean(sessionStorage.getItem(resumeDraftStorageKey))
+    if (
+      hasResumeDraft &&
+      !window.confirm(
+        'You have resume data in progress. Leave this page? Your draft will be kept if you sign in, but this workspace will close.',
+      )
+    ) {
+      return
+    }
+
     setAccountType(null)
     setResumeReady(false)
     setProfileInitials(null)
@@ -182,6 +193,7 @@ function App() {
             onOpenResume={handleOpenResume}
             onSubmit={handleTailorSubmit}
             onBack={handleBackToWelcome}
+            isGuest={accountType !== 'user'}
           />
         )
 
