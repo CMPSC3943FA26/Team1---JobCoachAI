@@ -122,14 +122,12 @@ export default function TailorPage({
         </h2>
 
         <p>
-          Add the company, job title, and
+          Add the company name, job title, and
           job description, then click{' '}
           <strong>
             Submit
           </strong>
-          . JobCoachAI will analyze the
-          match and help you strengthen
-          your resume.
+          . JobCoachAI will recommend changes to strengthen your resume.
         </p>
       </div>
 
