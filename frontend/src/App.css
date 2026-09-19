@@ -2060,6 +2060,53 @@ textarea::placeholder {
     justify-content: center;
   }
 }
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(23, 32, 51, 0.45);
+}
+
+.confirm-dialog {
+  width: min(460px, calc(100% - 40px));
+  padding: 28px;
+  background: var(--white);
+  box-shadow: var(--shadow);
+}
+
+.confirm-dialog h3 {
+  margin: 10px 0 8px;
+  font:
+    600
+    22px
+    'Space Grotesk',
+    sans-serif;
+}
+
+.confirm-dialog p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 25px;
+}
+
+.danger-button {
+  background: #b42318;
+}
+
+.danger-button:hover {
+  background: #8f1d14;
+}
 
 /* RESUME PRINT / EXPORT */
 

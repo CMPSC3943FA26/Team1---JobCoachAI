@@ -5,7 +5,6 @@
 export type ResumeSectionField = string
 
 export type WorkExperience = {
-  id?: string
   job_title: string
   company: string
   location: string
@@ -16,7 +15,6 @@ export type WorkExperience = {
 }
 
 export type Education = {
-  id?: string
   school: string
   degree: string
   field_of_study: string
@@ -26,13 +24,11 @@ export type Education = {
 }
 
 export type Skill = {
-  id?: string
   skill_name: string
   sort_order?: number
 }
 
 export type Project = {
-  id?: string
   name: string
   description: string
   link: string
@@ -40,11 +36,15 @@ export type Project = {
 }
 
 export type Certification = {
-  id?: string
   name: string
   issuer: string
   date_earned: string
   sort_order?: number
+}
+
+export type SectionOrder = {
+  section_name: string
+  section_order: number
 }
 
 export type ResumeProfile = {
@@ -66,7 +66,6 @@ export type ResumeSectionEntries = {
 }
 
 export type Resume = {
-  id?: string
   first_name: string
   last_name: string
   email: string
@@ -80,6 +79,24 @@ export type Resume = {
   projects: Project[]
   certifications: Certification[]
 }
+
+export type ResumeSaveRequest = {
+  resume: {
+  full_name: string
+  email: string
+  phone: string
+  location: string
+  professional_summary: string
+},
+  section_order: SectionOrder[]
+  work_experience: WorkExperience[]
+  education: Education[]
+  skills: Skill[]
+  projects: Project[]
+  certifications: Certification[]
+}
+
+
 
 
 export const initialResume: Resume = {
@@ -183,3 +200,4 @@ export const resumeSectionEntries: ResumeSectionEntries = {
     professional_summary: '',
   },
 }
+

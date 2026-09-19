@@ -22,7 +22,7 @@ def create_resume(data: ResumeSaveRequest, user_id: str):
 
     resume_row = supabase.table('resumes').insert({
         **resume_payload,
-        'user_id': user_id,
+        'user_id': str(user_id),
     }).execute()
 
     resume_id = resume_row.data[0]['id']

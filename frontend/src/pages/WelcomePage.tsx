@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { signInAsGuest } from '../lib/supabase'
+import { signInAsGuest, supabase } from '../lib/supabase'
 
 type WelcomePageProps = {
   onContinueAsGuest: () => void
@@ -236,9 +236,15 @@ export function WelcomePage({
             onClick= {async () => {
               try {
                 setError(false)
-                await signInAsGuest()
+                const response = await signInAsGuest()
+                 console.log("Guest sign-in successful:", response)
+
+                const { data } = await supabase.auth.getSession()
+                console.log("Session after sign-in:", data.session)
+               } catch (err) {
+                  console.error("Guest sign-in error:", err)
+                  setError(true)
               }
-              catch(err) {setError(true); return err}
               setError(false)
               return onContinueAsGuest()
               

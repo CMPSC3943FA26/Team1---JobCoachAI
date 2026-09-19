@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Button } from "../components/Button";
+import { saveResumeToDatabase, deleteResumeFromDatabase,updateResumeToDatabase} from "../services/resumeService";
+
 import {
   initialResume,
   resumeSectionEntries,
@@ -7,14 +9,11 @@ import {
   type Education,
   type Project,
   type ResumeProfile,
-  type Resume,
   type Skill,
   type WorkExperience,
+  type SectionOrder,
+  type ResumeSaveRequest
 } from "../features/resume/resumeData";
-import {
-  deleteResumeFromDatabase,
-  saveResumeToDatabase,
-} from "../services/resumeService";
 
 type ResumePageProps = { blankResume?: boolean };
 
@@ -135,26 +134,7 @@ function createSections(blankResume: boolean): ResumeSection[] {
   ];
 }
 
-function buildResumePayload(
-  profile: ResumeProfile,
-  sections: ResumeSection[],
-): Resume {
-  const getEntries = <T,>(key: SectionKey) =>
-    (sections.find((section) => section.key === key)?.entries ?? []).filter(
-      (entry): entry is T => typeof entry !== "string",
-    );
-  const summary = sections.find((section) => section.key === "summary")?.entries[0];
 
-  return {
-    ...profile,
-    summary: typeof summary === "string" ? summary : profile.professional_summary,
-    work_experience: getEntries<WorkExperience>("work_experience"),
-    education: getEntries<Education>("education"),
-    skills: getEntries<Skill>("skills"),
-    projects: getEntries<Project>("projects"),
-    certifications: getEntries<Certification>("certifications"),
-  };
-}
 
 export function ResumePage({ blankResume = true }: ResumePageProps) {
   const [profile, setProfile] = useState<ResumeProfile>(() =>
@@ -185,6 +165,7 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
     projects: false,
     certifications: false,
   });
+  const [saved,setSaved] = useState(false)
 
   const toggleSection = (sectionKey: SectionKey) => {
     setOpenSections((current) => ({
@@ -295,15 +276,45 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
       .join(" • ");
   };
 
-  const handleDelete = async () => {
+ function buildResumePayload(): ResumeSaveRequest {
+ return {
+  resume: {
+    full_name: `${profile.first_name} ${profile.last_name}`.trim(),
+    email: profile.email,
+    phone: profile.phone,
+    location: profile.location,
+    professional_summary: profile.professional_summary
+    },
+    section_order: sections.map((section,index) => ({
+      section_name: section.key,
+      section_order: index,
+    })),
+    work_experience: (sections.find((section) => section.key === "work_experience")?.entries as WorkExperience[]) ?? [],
+    education: (sections.find((section) => section.key === "education")?.entries as Education[]) ?? [],
+    skills: (sections.find((section)=> section.key === "skills")?.entries as Skill[]) ?? [],
+    projects: (sections.find((section)=> section.key  === "projects")?.entries as Project[]) ?? [],
+    certifications: (sections.find((section)=> section.key === "certifications")?.entries as Certification[]) ?? [], 
+  }
+}
+
+  const handleSave = async () => {
     try {
-      await deleteResumeFromDatabase();
-      setResumeDeleted(true);
-      setShowDeleteDialog(false);
-      setStatus("Resume deleted from this workspace.");
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Unable to delete resume.");
+     const payload = buildResumePayload()
+      await saveResumeToDatabase(payload)
+      setSaved(true)
+      setStatus("saved Resume to Database")
+      console.log("Resume Saved to Database")
     }
+    catch(error) {
+      setStatus("error saving resume")
+      console.log("error saving resume:",error)
+    }
+  }
+
+  const handleDelete = () => {
+    setResumeDeleted(true);
+    setShowDeleteDialog(false);
+    setStatus("Resume deleted from this workspace.");
   };
 
   if (resumeDeleted) {
@@ -376,14 +387,9 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
 
       <form
         className="resume-editor"
-        onSubmit={async (event) => {
+        onSubmit={(event) => {
           event.preventDefault();
-          try {
-            await saveResumeToDatabase(buildResumePayload(profile, sections));
-            setStatus("Resume saved just now.");
-          } catch (error) {
-            setStatus(error instanceof Error ? error.message : "Unable to save resume.");
-          }
+          setStatus("Resume saved just now.");
         }}
       >
         <section className="resume-section">
@@ -580,9 +586,11 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
 
         <div className="resume-form-footer">
           <span>Last saved locally in this session</span>
-          <Button variant="primary" type="submit">
+          <Button  onClick={handleSave}>
             Save resume <span aria-hidden="true">✓</span>
+            
           </Button>
+          
         </div>
       </form>
 

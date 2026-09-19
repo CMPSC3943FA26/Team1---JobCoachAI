@@ -1,13 +1,13 @@
 from flask import Blueprint, request, jsonify
-from backend.schemas.resume import ResumeUpdateRequest
+from backend.schemas.resume import ResumeUpdateRequest, ResumeSaveRequest
 from backend.services.resume import create_resume, get_resume, delete_resume, update_resume
 
 resume_bp = Blueprint("resume",__name__,url_prefix='/resume')
 
 @resume_bp.route('/add_resume/<uuid:user_id>', methods=['POST'])
 def insert(user_id):
-    data = request.get_json()
-    result = create_resume(user_id,data)
+    data = ResumeSaveRequest(**request.get_json()) 
+    result = create_resume(data,user_id)
     if result:
        return jsonify({'message':'resume created successfully'}),201
     else:
