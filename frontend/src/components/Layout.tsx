@@ -138,7 +138,7 @@ export function Layout({
         className="content"
         aria-live="polite"
       >
-        /* Show the profile icon after the user leaves the welcome page. */
+        {/* Show the profile icon after the user leaves the welcome page. */}
         {profileInitials &&
           currentScreen !== 'welcome' && (
             <button

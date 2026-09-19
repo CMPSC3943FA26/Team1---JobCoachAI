@@ -98,7 +98,7 @@ export function WelcomePage({
         }
       >
         <div className="auth-fields">
-          /* Show name fields only when creating an account. */
+          {/* Show name fields only when creating an account. */}
           {isRegistering && (
             <>
               <div className="field-group">

@@ -413,7 +413,7 @@ export function ResumePage({
       </div>
 
 
-      /* Resume editor form */
+      {/* Resume editor form */}
       <form
         id="resume-form"
         className="resume-editor"
@@ -429,7 +429,7 @@ export function ResumePage({
           }
         }}
       >
-        /* Resume file upload */
+        {/* Resume file upload */}
         <div className="resume-upload-row">
           <div className="resume-upload-file">
             <span className="panel-icon">RESUME FILE</span>
@@ -459,7 +459,7 @@ export function ResumePage({
           </label>
         </div>
 
-        /* Personal information fields */
+        {/* Personal information fields */}
         <section className="resume-section">
           <button className="resume-section-header" type="button">
             <span className="resume-section-number">00</span>
@@ -497,7 +497,7 @@ export function ResumePage({
           </div>
         </section>
 
-        /* Render the editable resume sections */
+        {/* Render the editable resume sections */}
         {sections.map((section, sectionIndex) => {
           // Check if the current section is expanded
           const isOpen = openSections[section.key];
@@ -610,7 +610,7 @@ export function ResumePage({
                     })
                   )}
 
-                  /* Add another resume section */
+                  {/* Add another resume section */}
                   <button className="add-button" type="button" onClick={() => addEntry(section.key)}>
                     + Add {section.key === "skills" ? "skill" : "entry"}
                   </button>
@@ -628,7 +628,7 @@ export function ResumePage({
 
       </form>
 
-      /* Live preview of the completed resume */
+      {/* Live preview of the completed resume */}
       <section className="resume-preview-section">
         <div className="resume-preview-heading">
           <div>
@@ -837,7 +837,7 @@ export function ResumePage({
           Back
         </button>
 
-        /* Resume navigation, deletion, and export controls */
+        {/* Resume navigation, deletion, and export controls */}
         <div className="resume-bottom-action-buttons">
           <Button
             variant="secondary"
@@ -874,7 +874,7 @@ export function ResumePage({
         </div>
       </div>
 
-      /* Confirm before leaving the resume editor */
+      {/* Confirm before leaving the resume editor */}
       {showBackWarning && (
         <div className="dialog-backdrop" role="presentation">
           <div
@@ -915,7 +915,7 @@ export function ResumePage({
         </div>
       )}
 
-      /* Confirm before deleting the resume */
+      {/* Confirm before deleting the resume */}
       {showDeleteDialog && (
         <div className="dialog-backdrop" role="presentation">
           <div

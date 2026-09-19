@@ -153,7 +153,7 @@ export default function TailorPage({
             </p>
           </div>
 
-          /* Placeholder until tailored resume saving is implemented. */
+          {/* Placeholder until tailored resume saving is implemented. */}
           <button
             className="button button-secondary"
             type="button"
