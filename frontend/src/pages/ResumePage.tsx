@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "../components/Button";
+import { DocumentEditor } from "../components/DocumentEditor";
 import {
   initialResume,
   resumeSectionEntries,
@@ -389,6 +390,20 @@ export function ResumePage({
     }
   };
 
+  const handleResumeFileChange = (file: File | null) => {
+    if (!file) return;
+
+    const isWordDocument = file.name.toLowerCase().endsWith(".docx");
+    if (!isWordDocument) {
+      setResumeFile(null);
+      setStatus("PDF files are not supported. Please choose a Microsoft Word .docx file.");
+      return;
+    }
+
+    setResumeFile(file);
+    setStatus(`Opening ${file.name} in the Word workspace.`);
+  };
+
   // Show the empty state after the resume is deleted
   if (resumeDeleted) {
     return (
@@ -424,16 +439,26 @@ export function ResumePage({
   // Main resume builder interface
   return (
     <section className="screen resume-editor-page" data-screen="parsed">
-      <div className="resume-editor-header">
-        <div className="screen-intro">
-          <span className="section-kicker">02 / Build your resume</span>
-          <h2>
-            Build your <em>Resume</em>
-          </h2>
-        </div>
+      <div className={resumeFile ? "resume-side-by-side" : undefined}>
+        {resumeFile && (
+          <aside className="resume-document-pane">
+            <DocumentEditor
+              file={resumeFile}
+              onClose={() => setResumeFile(null)}
+              readOnly
+            />
+          </aside>
+        )}
 
-      </div>
-
+        <div className="resume-main-pane">
+          <div className="resume-editor-header">
+            <div className="screen-intro">
+              <span className="section-kicker">02 / Build your resume</span>
+              <h2>
+                Build your <em>Resume</em>
+              </h2>
+            </div>
+          </div>
 
       {/* Resume editor form */}
       <form
@@ -455,7 +480,7 @@ export function ResumePage({
           <div className="resume-upload-file">
             <span className="panel-icon">RESUME FILE</span>
             <span className="resume-upload-file-name">
-              {resumeFile ? resumeFile.name : "No resume selected"}
+              {(resumeFile as File | null)?.name ?? "No resume selected"}
             </span>
           </div>
 
@@ -464,11 +489,10 @@ export function ResumePage({
             className="resume-upload-input"
             name="resume"
             type="file"
-            accept=".pdf,.doc,.docx"
+            accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             onChange={(event) => {
-              const file = event.target.files?.[0] ?? null;
-              setResumeFile(file);
-              setStatus(file ? `Selected ${file.name}.` : "");
+              handleResumeFileChange(event.target.files?.[0] ?? null);
+              event.target.value = "";
             }}
           />
 
@@ -972,6 +996,8 @@ export function ResumePage({
           </div>
         </div>
       )}
+        </div>
+      </div>
     </section>
   );
 }
