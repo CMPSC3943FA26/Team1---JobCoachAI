@@ -51,7 +51,7 @@ export function Layout({
         <a
           className="brand"
           href="#welcome"
-          aria-label="JobCoach AI home"
+          aria-label="JobCoachAI home"
           onClick={(event) => {
             event.preventDefault()
             onHomeClick()
@@ -60,12 +60,12 @@ export function Layout({
           <span className="brand-logo">
             <img
               src={jobCoachLogo}
-              alt="JobCoach AI logo"
+              alt="JobCoachAI logo"
             />
           </span>
 
           <span className="brand-name">
-            JobCoach <strong>AI</strong>
+            JobCoach<strong>AI</strong>
           </span>
         </a>
 
