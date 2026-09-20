@@ -3,7 +3,10 @@ import jobCoachLogo from '../assets/jobcoach-logo.png'
 
 type LayoutProps = {
   children: ReactNode
-  currentScreen: 'welcome' | 'tailor' | 'parsed'
+  currentScreen:
+    | 'welcome'
+    | 'parsed'
+    | 'tailor'
   profileInitials: string | null
   onHomeClick: () => void
 }
@@ -14,6 +17,8 @@ export function Layout({
   profileInitials,
   onHomeClick,
 }: LayoutProps) {
+
+  // Defines the navigation steps displayed in the sidebar.
   const steps = [
     {
       key: 'welcome',
@@ -22,16 +27,16 @@ export function Layout({
       subtitle: 'Get started',
     },
     {
-      key: 'tailor',
+      key: 'parsed',
       number: '02',
-      title: 'Tailor',
-      subtitle: 'Add a job',
+      title: 'Build your resume',
+      subtitle: 'See your match',
     },
     {
-      key: 'parsed',
+      key: 'tailor',
       number: '03',
-      title: 'Your fit',
-      subtitle: 'See your match',
+      title: 'Tailor your resume',
+      subtitle: 'Add a job',
     },
   ] as const
 
@@ -46,7 +51,7 @@ export function Layout({
         <a
           className="brand"
           href="#welcome"
-          aria-label="JobCoach AI home"
+          aria-label="JobCoachAI home"
           onClick={(event) => {
             event.preventDefault()
             onHomeClick()
@@ -55,12 +60,12 @@ export function Layout({
           <span className="brand-logo">
             <img
               src={jobCoachLogo}
-              alt="JobCoach AI logo"
+              alt="JobCoachAI logo"
             />
           </span>
 
           <span className="brand-name">
-            JobCoach <strong>AI</strong>
+            JobCoach<strong>AI</strong>
           </span>
         </a>
 
@@ -71,9 +76,9 @@ export function Layout({
           </p>
 
           <h1>
-            Build your resume with
+            Build With
             <br />
-            <span>confidence</span>
+            <span>Confidence</span>
           </h1>
         </div>
 
@@ -83,6 +88,8 @@ export function Layout({
           aria-label="Application steps"
         >
           {steps.map((step) => {
+
+            // Highlights the step that matches the current page.
             const isActive =
               currentScreen === step.key
 
@@ -94,7 +101,9 @@ export function Layout({
                   isActive ? 'active' : ''
                 }`}
                 aria-current={
-                  isActive ? 'page' : undefined
+                  isActive
+                    ? 'page'
+                    : undefined
                 }
               >
                 <span className="step-number">
@@ -129,6 +138,7 @@ export function Layout({
         className="content"
         aria-live="polite"
       >
+        {/* Show the profile icon after the user leaves the welcome page. */}
         {profileInitials &&
           currentScreen !== 'welcome' && (
             <button
