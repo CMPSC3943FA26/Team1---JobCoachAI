@@ -24,7 +24,7 @@ function getCurrentScreen(): ScreenName {
 }
 
 const leaveWorkspaceMessage =
-  'You have resume data in progress. Leave this page? Your draft will be kept if you sign in, but this workspace will close.'
+  'Going to Welcome clears the current resume and starts a new workspace. Continue?'
 
 function App() {
   const [resumeSession, setResumeSession] = useState(0)
@@ -33,7 +33,6 @@ function App() {
       getCurrentScreen() === 'tailor' ? 'welcome' : getCurrentScreen()
     )
 
-  const [createBlankResume, setCreateBlankResume] = useState(true)
   const [resumeReady, setResumeReady] = useState(false)
   const [profileInitials, setProfileInitials] = useState<string | null>(null)
   const [accountType, setAccountType] =
@@ -48,6 +47,17 @@ function App() {
       if (nextScreen === 'tailor' && !resumeReady) {
         window.location.hash = accountType ? '#parsed' : '#welcome'
         return
+      }
+
+      if (nextScreen === 'welcome') {
+        // Any route to Welcome ends the current draft, including browser Back
+        // and the Welcome link in the sidebar. Page 2 <-> page 3 does not.
+        sessionStorage.removeItem(resumeDraftStorageKey)
+        setResumeReady(false)
+        setProfileInitials(null)
+        setAccountType(null)
+        setResumeSession(current => current + 1)
+        window.dispatchEvent(new Event('resetWelcomeForm'))
       }
 
       setCurrentScreen(nextScreen)
@@ -68,7 +78,6 @@ function App() {
     setResumeReady(false)
     setProfileInitials('G')
     setResumeSession(current => current + 1)
-    setCreateBlankResume(false)
     window.location.hash = '#parsed'
   }
 
@@ -80,17 +89,18 @@ function App() {
     setProfileInitials(initials)
     setAccountType('user')
     setResumeReady(false)
-    setCreateBlankResume(true)
+    setResumeSession(current => current + 1)
     window.location.hash = '#parsed'
   }
 
   // Complete the requested Home navigation after the user confirms.
   const goHome = () => {
     setShowHomeWarning(false)
+    sessionStorage.removeItem(resumeDraftStorageKey)
+    setResumeSession(current => current + 1)
     setAccountType(null)
     setResumeReady(false)
     setProfileInitials(null)
-    setCreateBlankResume(true)
 
     window.dispatchEvent(new Event('resetWelcomeForm'))
     window.location.hash = '#welcome'
@@ -115,16 +125,14 @@ function App() {
 
   // Open the Resume page when creating or editing a resume
   const handleOpenResume = (
-    source: ResumeSource,
+    _source: ResumeSource,
     _file: File | null
   ) => {
-    setCreateBlankResume(source === 'scratch')
     window.location.hash = '#parsed'
   }
 
   // Handle Tailor form submission
-  const handleTailorSubmit = (submission: TailorSubmission) => {
-    setCreateBlankResume(submission.source === 'scratch')
+  const handleTailorSubmit = (_submission: TailorSubmission) => {
     // Stay on the Tailor page after submission.
   }
 
@@ -142,7 +150,6 @@ function App() {
         return (
           <ResumePage
             key={resumeSession}
-            blankResume={createBlankResume}
             isGuest={accountType !== 'user'}
             onResumeReadyChange={setResumeReady}
           />

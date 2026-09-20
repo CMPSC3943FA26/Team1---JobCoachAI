@@ -2878,3 +2878,16 @@ textarea::placeholder {
     page-break-after: avoid;
   }
 }
+
+/* Optional sample-data action on the Resume page */
+.resume-sample-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.resume-sample-row span {
+  font-size: 0.85rem;
+  opacity: 0.75;
+}

@@ -27,7 +27,6 @@ import {
 
 // Props passed from App.tsx
 type ResumePageProps = {
-  blankResume?: boolean;
   isGuest?: boolean;
   onResumeReadyChange?: (ready: boolean) => void;
 };
@@ -214,27 +213,17 @@ function buildResumePayload(
 }
 
 export function ResumePage({
-  blankResume = true,
   isGuest = true,
   onResumeReadyChange,
 }: ResumePageProps) {
   const storedDraft = readResumeDraft();
   // Resume profile and section data
   const [profile, setProfile] = useState<ResumeProfile>(() =>
-    storedDraft?.profile ?? (blankResume
-      ? { ...emptyProfile }
-      : {
-          first_name: initialResume.first_name,
-          last_name: initialResume.last_name,
-          email: initialResume.email,
-          phone: initialResume.phone,
-          location: initialResume.location,
-          professional_summary: initialResume.professional_summary,
-        }),
+    storedDraft?.profile ?? { ...emptyProfile },
   );
 
   const [sections, setSections] = useState<ResumeSection[]>(() =>
-    storedDraft?.sections ?? createSections(blankResume),
+    storedDraft?.sections ?? createSections(true),
   );
   // File upload and status messages
   const [resumeFile, setResumeFile] = useState<File | null>(null);
@@ -256,35 +245,58 @@ export function ResumePage({
     certifications: false,
   });
 
-  // Reload the editor when switching between blank and sample resumes
-  useEffect(() => {
-    const draft = readResumeDraft();
-    if (draft) {
-      setProfile(draft.profile);
-      setSections(draft.sections);
-      setResumeFilename(draft.filename);
-      return;
-    }
-
-    if (blankResume) {
-      setProfile({ ...emptyProfile });
-    } else {
-      setProfile({
-        first_name: initialResume.first_name,
-        last_name: initialResume.last_name,
-        email: initialResume.email,
-        phone: initialResume.phone,
-        location: initialResume.location,
-        professional_summary: initialResume.professional_summary,
-      });
-    }
-
-    setSections(createSections(blankResume));
-    setResumeFile(null);
-    setResumeFilename("resume");
+  // Sample data is opt-in: never populate Jordan Lee automatically on page entry.
+  const handleLoadSample = () => {
+    setProfile({
+      first_name: initialResume.first_name,
+      last_name: initialResume.last_name,
+      email: initialResume.email,
+      phone: initialResume.phone,
+      location: initialResume.location,
+      professional_summary: initialResume.professional_summary,
+    });
+    setSections(createSections(false).map((section) => ({
+      ...section,
+      entries: section.entries.map((entry) =>
+        typeof entry === "string" ? entry : { ...entry },
+      ),
+    })));
+    setResumeFilename("Jordan-Lee-Resume");
     setResumeDeleted(false);
-    setStatus("");
-  }, [blankResume]);
+    setStatus("Jordan Lee sample resume loaded. You can now edit the details.");
+  };
+
+  // Clear the visible editor and the stored draft; do not delete any saved database resume.
+  const handleClearResume = () => {
+    // Remove the persisted sample/draft before navigating away from this page.
+    sessionStorage.removeItem(resumeDraftStorageKey);
+
+    // All displayed fields and preview use these controlled React values.
+    setProfile({ ...emptyProfile });
+    setSections(createSections(true));
+    setResumeFilename("");
+    setResumeFile(null);
+    setResumeDeleted(false);
+    setExportMenuOpen(false);
+    setShowDeleteDialog(false);
+
+    // Keep optional resume sections collapsed after clearing.
+    // Personal information is always visible in the editor.
+    setOpenSections({
+      summary: false,
+      education: false,
+      work_experience: false,
+      skills: false,
+      projects: false,
+      certifications: false,
+    });
+
+    // Also reset the native file input, which is not controlled by React.
+    const fileInput = document.getElementById("resume-page-upload") as HTMLInputElement | null;
+    if (fileInput) fileInput.value = "";
+
+    setStatus("Resume editor cleared. You can start a new resume or load sample data.");
+  };
 
   useEffect(() => {
     const hasDraftContent =
@@ -296,6 +308,9 @@ export function ResumePage({
         resumeDraftStorageKey,
         JSON.stringify({ profile, sections, filename: resumeFilename }),
       );
+    } else {
+      // Do not revive a draft once every field has been cleared.
+      sessionStorage.removeItem(resumeDraftStorageKey);
     }
   }, [profile, sections, resumeFilename]);
 
@@ -612,6 +627,21 @@ export function ResumePage({
           }
         }}
       >
+        {/* Sample resume is loaded only when explicitly requested. */}
+        <div className="resume-sample-row">
+          <Button type="button" variant="secondary" onClick={handleLoadSample}>
+            Load Sample Data
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleClearResume}
+          >
+            Clear Data
+          </Button>
+          <span>Optional sample data for testing the resume editor.</span>
+        </div>
+
         {/* Resume file upload */}
         <div className="resume-upload-row">
           <div className="resume-filename-field">
