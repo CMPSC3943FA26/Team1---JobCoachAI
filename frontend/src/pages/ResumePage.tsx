@@ -289,11 +289,33 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
       section_name: section.key,
       section_order: index,
     })),
-    work_experience: (sections.find((section) => section.key === "work_experience")?.entries as WorkExperience[]) ?? [],
-    education: (sections.find((section) => section.key === "education")?.entries as Education[]) ?? [],
-    skills: (sections.find((section)=> section.key === "skills")?.entries as Skill[]) ?? [],
-    projects: (sections.find((section)=> section.key  === "projects")?.entries as Project[]) ?? [],
-    certifications: (sections.find((section)=> section.key === "certifications")?.entries as Certification[]) ?? [], 
+    work_experience: (
+      (sections.find((section) => section.key === "work_experience")?.entries as WorkExperience[]) ?? []
+    ).map((entry,index)=> ({
+      ...entry,
+      sort_order: index
+    })),
+    
+    education: ((sections.find((section) => section.key === "education")?.entries as Education[]) ?? []
+     ).map((entry,index)=> ({
+      ...entry,
+      sort_order: index
+    })),
+    skills:( (sections.find((section)=> section.key === "skills")?.entries as Skill[]) ?? []
+     ).map((entry,index)=> ({
+      ...entry,
+      sort_order: index,
+    })),
+    projects:( (sections.find((section)=> section.key  === "projects")?.entries as Project[]) ?? []
+     ).map((entry,index)=> ({
+      ...entry,
+      sort_order: index
+    })),
+    certifications:( (sections.find((section)=> section.key === "certifications")?.entries as Certification[]) ?? []
+     ).map((entry,index)=> ({
+      ...entry,
+      sort_order: index
+    }))
   }
 }
 
@@ -515,7 +537,15 @@ export function ResumePage({ blankResume = true }: ResumePageProps) {
                                 ) : (
                                   <input
                                     id={`${section.key}-${entryIndex}-${fieldKey}`}
-                                    type="text"
+                                    type={
+                                      fieldKey === "start_date" ||
+                                      fieldKey === "end_date" ||
+                                      fieldKey === "date_earned"
+                                         ? "date"
+                                      : fieldKey === "link"
+                                      ? "url"
+                                      : "text"
+                                      }
                                     value={value}
                                     onChange={(event) =>
                                       updateEntry(section.key, entryIndex, fieldKey, event.target.value)
