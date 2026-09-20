@@ -6,6 +6,7 @@ export type ResumeSectionField = string
 
 // Data types for the different resume sections.
 export type WorkExperience = {
+  id?: string
   job_title: string
   company: string
   location: string
@@ -16,6 +17,7 @@ export type WorkExperience = {
 }
 
 export type Education = {
+  id?: string
   school: string
   degree: string
   field_of_study: string
@@ -25,11 +27,13 @@ export type Education = {
 }
 
 export type Skill = {
+  id?: string
   skill_name: string
   sort_order?: number
 }
 
 export type Project = {
+  id?: string
   name: string
   description: string
   link: string
@@ -37,6 +41,7 @@ export type Project = {
 }
 
 export type Certification = {
+  id?: string
   name: string
   issuer: string
   date_earned: string
@@ -44,6 +49,7 @@ export type Certification = {
 }
 
 export type SectionOrder = {
+  id?: string
   section_name: string
   section_order: number
 }
@@ -118,7 +124,7 @@ export const initialResume: Resume = {
       company: 'Northstar Labs',
       location: 'San Francisco, CA',
       start_date: '2022',
-      end_date: 'Present',
+      end_date: '2023',
       description:
         'Led a redesign of the onboarding experience that improved activation by 28% and created a reusable design system with product and engineering.',
     },
