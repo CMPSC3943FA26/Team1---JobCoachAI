@@ -238,7 +238,7 @@ export function ResumePage({
   );
   // File upload and status messages
   const [resumeFile, setResumeFile] = useState<File | null>(null);
-  const [resumeFilename, setResumeFilename] = useState(storedDraft?.filename ?? "resume");
+  const [resumeFilename, setResumeFilename] = useState(storedDraft?.filename ?? "");
   const [status, setStatus] = useState("");
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   // Confirmation dialogs and resume deletion state
@@ -621,7 +621,7 @@ export function ResumePage({
               type="text"
               value={resumeFilename}
               onChange={(event) => setResumeFilename(event.target.value)}
-              placeholder="resume"
+              placeholder="Filename for export"
             />
           </div>
           <div className="resume-upload-file">
@@ -1099,7 +1099,7 @@ export function ResumePage({
               aria-expanded={exportMenuOpen}
               onClick={() => setExportMenuOpen((open) => !open)}
             >
-              export resume
+              Export Resume
             </Button>
           </div>
         </div>
