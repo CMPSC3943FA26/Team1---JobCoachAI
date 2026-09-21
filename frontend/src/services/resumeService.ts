@@ -25,7 +25,7 @@ export async function saveResumeToDatabase(data: object) {
   const request = `${api_url}/add_resume/${userId}`
   const headers = {'Authorization': `Bearer ${jwt}`,'Content-Type': 'application/json'}
   const response = await fetch(request, {headers: headers, method: 'POST', body: JSON.stringify(data) })
-
+  console.log(response)
   return response.json()
 }
 

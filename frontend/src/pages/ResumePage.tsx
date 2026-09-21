@@ -448,28 +448,28 @@ export function ResumePage({
     })),
     work_experience: (
       (sections.find((section) => section.key === "work_experience")?.entries as WorkExperience[]) ?? []
-    ).map((entry,index)=> ({
+    ).filter(hasEntryContent).map((entry,index)=> ({
       ...entry,
       sort_order: index
     })),
     
     education: ((sections.find((section) => section.key === "education")?.entries as Education[]) ?? []
-     ).map((entry,index)=> ({
+     ).filter(hasEntryContent).map((entry,index)=> ({
       ...entry,
       sort_order: index
     })),
     skills:( (sections.find((section)=> section.key === "skills")?.entries as Skill[]) ?? []
-     ).map((entry,index)=> ({
+     ).filter(hasEntryContent).map((entry,index)=> ({
       ...entry,
       sort_order: index,
     })),
     projects:( (sections.find((section)=> section.key  === "projects")?.entries as Project[]) ?? []
-     ).map((entry,index)=> ({
+     ).filter(hasEntryContent).map((entry,index)=> ({
       ...entry,
       sort_order: index
     })),
     certifications:( (sections.find((section)=> section.key === "certifications")?.entries as Certification[]) ?? []
-     ).map((entry,index)=> ({
+     ).filter(hasEntryContent).map((entry,index)=> ({
       ...entry,
       sort_order: index
     }))
@@ -900,7 +900,7 @@ const hasExportableData = Boolean(
 
         <div className="resume-form-footer">
           <span>Last saved locally in this session</span>
-          <Button  onClick={handleSave}>
+          <Button type="submit">
             Save resume <span aria-hidden="true">✓</span>
             
           </Button>
