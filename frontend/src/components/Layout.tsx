@@ -1,11 +1,24 @@
 import type { ReactNode } from 'react'
+import jobCoachLogo from '../assets/jobcoach-logo.png'
 
 type LayoutProps = {
   children: ReactNode
-  currentScreen: 'welcome' | 'tailor' | 'parsed'
+  currentScreen:
+    | 'welcome'
+    | 'parsed'
+    | 'tailor'
+  profileInitials: string | null
+  onHomeClick: () => void
 }
 
-export function Layout({ children, currentScreen }: LayoutProps) {
+export function Layout({
+  children,
+  currentScreen,
+  profileInitials,
+  onHomeClick,
+}: LayoutProps) {
+
+  // Defines the navigation steps displayed in the sidebar.
   const steps = [
     {
       key: 'welcome',
@@ -14,94 +27,90 @@ export function Layout({ children, currentScreen }: LayoutProps) {
       subtitle: 'Get started',
     },
     {
-      key: 'tailor',
+      key: 'parsed',
       number: '02',
-      title: 'Tailor',
-      subtitle: 'Add a job',
+      title: 'Build your resume',
+      subtitle: 'See your match',
     },
     {
-      key: 'parsed',
+      key: 'tailor',
       number: '03',
-      title: 'Your fit',
-      subtitle: 'See your match',
+      title: 'Tailor your resume',
+      subtitle: 'Add a job',
     },
   ] as const
 
   return (
     <main className="app-shell">
-
       {/* LEFT SIDEBAR */}
       <aside
         className="sidebar"
         aria-label="Workflow navigation"
       >
-
         {/* BRAND */}
         <a
           className="brand"
           href="#welcome"
-          aria-label="JobCoach AI home"
+          aria-label="JobCoachAI home"
+          onClick={(event) => {
+            event.preventDefault()
+            onHomeClick()
+          }}
         >
-          <span className="brand-mark">
-            JC
+          <span className="brand-logo">
+            <img
+              src={jobCoachLogo}
+              alt="JobCoachAI logo"
+            />
           </span>
 
           <span className="brand-name">
-            JobCoach <strong>AI</strong>
+            JobCoach<strong>AI</strong>
           </span>
         </a>
 
-
         {/* SIDEBAR INTRO */}
         <div className="sidebar-intro">
-
           <p className="eyebrow">
-            Your application copilot
+            Your personal AI Job Coach
           </p>
 
           <h1>
-            Move from
+            Build With
             <br />
-
-            <span>
-              maybe
-            </span>{' '}
-
-            to ready.
+            <span>Confidence</span>
           </h1>
-
-          <p className="sidebar-copy">
-            Make every application feel like
-            <br />
-            it was made for you.
-          </p>
-
         </div>
-
 
         {/* NAVIGATION */}
         <nav
           className="stepper"
           aria-label="Application steps"
         >
-
           {steps.map((step) => {
-            const isActive = currentScreen === step.key
+
+            // Highlights the step that matches the current page.
+            const isActive =
+              currentScreen === step.key
 
             return (
               <a
                 key={step.key}
                 href={`#${step.key}`}
-                className={`step ${isActive ? 'active' : ''}`}
-                aria-current={isActive ? 'page' : undefined}
+                className={`step ${
+                  isActive ? 'active' : ''
+                }`}
+                aria-current={
+                  isActive
+                    ? 'page'
+                    : undefined
+                }
               >
-
                 <span className="step-number">
                   {step.number}
                 </span>
 
                 <span className="step-text">
-
                   <strong>
                     {step.title}
                   </strong>
@@ -109,59 +118,41 @@ export function Layout({ children, currentScreen }: LayoutProps) {
                   <small>
                     {step.subtitle}
                   </small>
-
                 </span>
-
               </a>
             )
           })}
-
         </nav>
-
 
         {/* SIDEBAR FOOTER */}
         <p className="sidebar-footer">
-
           Built for the next chapter
-
           <span aria-hidden="true">
             →
           </span>
-
         </p>
-
       </aside>
-
 
       {/* RIGHT SIDE CONTENT */}
       <section
         className="content"
         aria-live="polite"
       >
-
-        <div className="topbar">
-
-          <span className="topbar-label">
-            Job application workspace
-          </span>
-
-          <span className="secure-note">
-
-            <span
-              className="status-dot"
-              aria-hidden="true"
-            />
-
-            Your data stays yours
-
-          </span>
-
-        </div>
+        {/* Show the profile icon after the user leaves the welcome page. */}
+        {profileInitials &&
+          currentScreen !== 'welcome' && (
+            <button
+              className="profile-avatar"
+              type="button"
+              aria-label="Profile"
+              title="Profile"
+            >
+              {profileInitials}
+            </button>
+          )}
 
         {children}
-
       </section>
-
     </main>
   )
 }
