@@ -1,914 +1,1289 @@
-import { useRef, useState } from 'react'
-import { Button } from '../components/Button'
+/*
+ * JobCoachAI - Resume Builder
+ *
+ * Handles resume creation, editing, preview,
+ * and export for guest and registered users.
+ */
 
+import { useEffect, useState } from "react";
+import { Document, HeadingLevel, Packer, Paragraph, TextRun } from "docx";
+import { Button } from "../components/Button";
+import {
+  saveResumeToDatabase,
+} from "../services/resumeService";
+import { DocumentEditor } from "../components/DocumentEditor";
+import {
+  initialResume,
+  resumeSectionEntries,
+  type Certification,
+  type Education,
+  type Project,
+  type ResumeProfile,
+  type Skill,
+  type WorkExperience,
+  type ResumeSaveRequest
+} from "../features/resume/resumeData";
+
+// Props passed from App.tsx
 type ResumePageProps = {
-  blankResume?: boolean
-}
+  isGuest?: boolean;
+  onResumeReadyChange?: (ready: boolean) => void;
+};
 
-const defaultEditorHtml = `
-  <h1>Your Name</h1>
-  <p class="editor-contact">you@example.com · City, State · portfolio.example.com</p>
+// Supported resume sections
+type SectionKey =
+  | "summary"
+  | "education"
+  | "work_experience"
+  | "skills"
+  | "projects"
+  | "certifications";
 
-  <h2>Professional Summary</h2>
-  <p>Product-minded designer who turns complex problems into clear, intuitive experiences.</p>
+// Entry types used by the resume editor
+type SectionEntry =
+  | string
+  | WorkExperience
+  | Education
+  | Skill
+  | Project
+  | Certification;
 
-  <h2>Experience</h2>
-  <p><strong>Product Designer</strong><br />Company Name · 2022 - Present</p>
+// Structure for each editable resume section
+type ResumeSection = {
+  key: SectionKey;
+  title: string;
+  entries: SectionEntry[];
+};
 
-  <h2>Skills</h2>
-  <p>Figma · UX research · Prototyping · Design systems</p>
-`
+export const resumeDraftStorageKey = "jobcoachai.resumeDraft";
 
-const blankEditorHtml = `
-  <h1>Your Name</h1>
-  <p class="editor-contact">Add your contact information</p>
+type ResumeDraft = {
+  profile: ResumeProfile;
+  sections: ResumeSection[];
+  filename: string;
+};
 
-  <h2>Professional Summary</h2>
-  <p>Add your professional summary.</p>
-
-  <h2>Experience</h2>
-  <p>Add your experience.</p>
-
-  <h2>Skills</h2>
-  <p>Add your skills.</p>
-`
-
-function escapeHtml(value: string) {
-  return value.replace(
-    /[&<>"']/g,
-    (character) =>
-      ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#039;',
-      }[character] ?? character)
-  )
-}
-
-function buildResumePreview(
-  form: HTMLFormElement | null
-) {
-  if (!form) {
-    return blankEditorHtml
+const readResumeDraft = (): ResumeDraft | null => {
+  try {
+    const storedDraft = sessionStorage.getItem(resumeDraftStorageKey);
+    return storedDraft ? (JSON.parse(storedDraft) as ResumeDraft) : null;
+  } catch {
+    return null;
   }
+};
 
-  const firstName =
-    (
-      form.querySelector(
-        '#first-name'
-      ) as HTMLInputElement | null
-    )?.value ?? ''
+// Default values for a new resume
+const emptyProfile: ResumeProfile = {
+  first_name: "",
+  last_name: "",
+  email: "",
+  phone: "",
+  location: "",
+  professional_summary: "",
+};
 
-  const lastName =
-    (
-      form.querySelector(
-        '#last-name'
-      ) as HTMLInputElement | null
-    )?.value ?? ''
+const toDateInputValue = (value: string) => {
+  if (/^\d{4}$/.test(value)) return `${value}-01-01`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  return "";
+};
 
-  const phone =
-    (
-      form.querySelector(
-        '#phone'
-      ) as HTMLInputElement | null
-    )?.value ?? ''
+const getSafeFilename = (value: string) =>
+  (value.trim() || "resume").replace(/[<>:"/\\|?*]+/g, "-");
 
-  const email =
-    (
-      form.querySelector(
-        '#email'
-      ) as HTMLInputElement | null
-    )?.value ?? ''
+// Personal information fields displayed in the form
+const personalFields: Array<{ key: keyof ResumeProfile; label: string; type?: string }> = [
+  { key: "first_name", label: "First name" },
+  { key: "last_name", label: "Last name" },
+  { key: "email", label: "Email", type: "email" },
+  { key: "phone", label: "Phone", type: "tel" },
+  { key: "location", label: "Location" },
+];
 
-  const summaryFields = Array.from(
-    form.querySelectorAll(
-      '[name="summary[]"]'
-    )
-  ) as HTMLTextAreaElement[]
+// Display names for resume sections
+const sectionLabels: Record<SectionKey, string> = {
+  summary: "Professional summary",
+  education: "Education",
+  work_experience: "Experience",
+  skills: "Skills",
+  projects: "Projects",
+  certifications: "Certifications",
+};
 
-  const experienceFields = Array.from(
-    form.querySelectorAll(
-      '[name="experience[]"]'
-    )
-  ) as HTMLTextAreaElement[]
+// Keep resume sections in a consistent order
+const sectionOrder: SectionKey[] = [
+  "summary",
+  "education",
+  "work_experience",
+  "skills",
+  "projects",
+  "certifications",
+];
 
-  const skillsFields = Array.from(
-    form.querySelectorAll(
-      '[name="skills[]"]'
-    )
-  ) as HTMLInputElement[]
+// Create an empty entry based on the selected section
+const getBlankSectionEntry = (sectionKey: SectionKey): SectionEntry => {
+  switch (sectionKey) {
+    case "summary":
+      return "";
+    case "education":
+      return { ...resumeSectionEntries.education };
+    case "work_experience":
+      return { ...resumeSectionEntries.work_experience };
+    case "skills":
+      return { ...resumeSectionEntries.skills };
+    case "projects":
+      return { ...resumeSectionEntries.projects };
+    case "certifications":
+      return { ...resumeSectionEntries.certifications };
+    default:
+      return "";
+  }
+};
 
-  const summary = summaryFields
-    .map((field) => field.value.trim())
-    .filter(Boolean)
-
-  const experience = experienceFields
-    .map((field) => field.value.trim())
-    .filter(Boolean)
-
-  const skills = skillsFields
-    .map((field) => field.value.trim())
-    .filter(Boolean)
-
-  const fullName =
-    `${firstName} ${lastName}`.trim() ||
-    'Your Name'
-
-  const contact = [email, phone]
-    .filter(Boolean)
-    .join(' · ')
-
-  const summaryHtml = summary.length
-    ? summary
-        .map(
-          (item) =>
-            `<p>${escapeHtml(item)}</p>`
-        )
-        .join('')
-    : '<p>Add your professional summary.</p>'
-
-  const experienceHtml = experience.length
-    ? experience
-        .map(
-          (item) =>
-            `<p>${escapeHtml(item).replace(
-              /\n/g,
-              '<br>'
-            )}</p>`
-        )
-        .join('')
-    : '<p>Add your experience.</p>'
-
-  const skillText = skills.length
-    ? skills.join(' · ')
-    : 'Add your skills.'
-
-  return `
-    <h1>${escapeHtml(fullName)}</h1>
-
-    <p class="editor-contact">
-      ${escapeHtml(
-        contact ||
-          'Add your contact information'
-      )}
-    </p>
-
-    <h2>Professional Summary</h2>
-    ${summaryHtml}
-
-    <h2>Experience</h2>
-    ${experienceHtml}
-
-    <h2>Skills</h2>
-    <p>${escapeHtml(skillText)}</p>
-  `
+// Load blank fields or existing sample resume data
+function createSections(blankResume: boolean): ResumeSection[] {
+  return [
+    {
+      key: "summary",
+      title: sectionLabels.summary,
+      entries: blankResume ? [""] : [initialResume.summary],
+    },
+    {
+      key: "education",
+      title: sectionLabels.education,
+      entries: blankResume
+        ? [getBlankSectionEntry("education")]
+        : initialResume.education,
+    },
+    {
+      key: "work_experience",
+      title: sectionLabels.work_experience,
+      entries: blankResume
+        ? [getBlankSectionEntry("work_experience")]
+        : initialResume.work_experience,
+    },
+    {
+      key: "skills",
+      title: sectionLabels.skills,
+      entries: blankResume ? [getBlankSectionEntry("skills")] : initialResume.skills,
+    },
+    {
+      key: "projects",
+      title: sectionLabels.projects,
+      entries: blankResume ? [getBlankSectionEntry("projects")] : initialResume.projects,
+    },
+    {
+      key: "certifications",
+      title: sectionLabels.certifications,
+      entries: blankResume
+        ? [getBlankSectionEntry("certifications")]
+        : initialResume.certifications,
+    },
+  ];
 }
+
+
 
 export function ResumePage({
-  blankResume = false,
+  isGuest = true,
+  onResumeReadyChange,
 }: ResumePageProps) {
+  const storedDraft = readResumeDraft();
+  // Resume profile and section data
+  const [profile, setProfile] = useState<ResumeProfile>(() =>
+    storedDraft?.profile ?? { ...emptyProfile },
+  );
 
-  const formRef =
-    useRef<HTMLFormElement | null>(null)
+  const [sections, setSections] = useState<ResumeSection[]>(() =>
+    storedDraft?.sections ?? createSections(true),
+  );
+  // File upload and status messages
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [resumeFilename, setResumeFilename] = useState(storedDraft?.filename ?? "");
+  const [status, setStatus] = useState("");
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  // Confirmation dialogs and resume deletion state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showBackWarning, setShowBackWarning] = useState(false);
+  const [resumeDeleted, setResumeDeleted] = useState(false);
 
-  const editorRef =
-    useRef<HTMLDivElement | null>(null)
+  // Track which resume sections are expanded
+  const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
+    summary: false,
+    education: false,
+    work_experience: false,
+    skills: false,
+    projects: false,
+    certifications: false,
+  });
+  
 
-  const [editorVisible, setEditorVisible] =
-    useState(false)
+  // Sample data is opt-in: never populate Jordan Lee automatically on page entry.
+  const handleLoadSample = () => {
+    setProfile({
+      first_name: initialResume.first_name,
+      last_name: initialResume.last_name,
+      email: initialResume.email,
+      phone: initialResume.phone,
+      location: initialResume.location,
+      professional_summary: initialResume.professional_summary,
+    });
+    setSections(createSections(false).map((section) => ({
+      ...section,
+      entries: section.entries.map((entry) =>
+        typeof entry === "string" ? entry : { ...entry },
+      ),
+    })));
+    setResumeFilename("Jordan-Lee-Resume");
+    setResumeDeleted(false);
+    setStatus("Jordan Lee sample resume loaded. You can now edit the details.");
+  };
 
-  const [editorHtml, setEditorHtml] =
-    useState(
-      blankResume
-        ? blankEditorHtml
-        : defaultEditorHtml
-    )
+  // Clear the visible editor and the stored draft; do not delete any saved database resume.
+  const handleClearResume = () => {
+    // Remove the persisted sample/draft before navigating away from this page.
+    sessionStorage.removeItem(resumeDraftStorageKey);
 
-  const [isEditing, setIsEditing] =
-    useState(false)
+    // All displayed fields and preview use these controlled React values.
+    setProfile({ ...emptyProfile });
+    setSections(createSections(true));
+    setResumeFilename("");
+    setResumeFile(null);
+    setResumeDeleted(false);
+    setExportMenuOpen(false);
+    setShowDeleteDialog(false);
 
-  const [showWarning, setShowWarning] =
-    useState(false)
+    // Keep optional resume sections collapsed after clearing.
+    // Personal information is always visible in the editor.
+    setOpenSections({
+      summary: false,
+      education: false,
+      work_experience: false,
+      skills: false,
+      projects: false,
+      certifications: false,
+    });
 
-  const updatePageWarning = () => {
-    const formText =
-      formRef.current?.textContent ?? ''
+    // Also reset the native file input, which is not controlled by React.
+    const fileInput = document.getElementById("resume-page-upload") as HTMLInputElement | null;
+    if (fileInput) fileInput.value = "";
 
-    const editorText =
-      editorRef.current?.textContent ?? ''
+    setStatus("Resume editor cleared. You can start a new resume or load sample data.");
+  };
 
-    const contentLength =
-      `${formText}${editorText}`.replace(
-        /\s/g,
-        ''
-      ).length
+  useEffect(() => {
+    const hasDraftContent =
+      Object.values(profile).some((value) => value.trim() !== "") ||
+      sections.some((section) => section.entries.some(hasEntryContent));
 
-    setShowWarning(contentLength >= 1200)
-  }
+    if (hasDraftContent) {
+      sessionStorage.setItem(
+        resumeDraftStorageKey,
+        JSON.stringify({ profile, sections, filename: resumeFilename }),
+      );
+    } else {
+      // Do not revive a draft once every field has been cleared.
+      sessionStorage.removeItem(resumeDraftStorageKey);
+    }
+  }, [profile, sections, resumeFilename]);
 
-  const openResumeEditor = (
-    importFields: boolean
+  useEffect(() => {
+    const hasDraftContent =
+      Object.values(profile).some((value) => value.trim() !== "") ||
+      sections.some((section) => section.entries.some(hasEntryContent));
+
+    const warnBeforeClose = (event: BeforeUnloadEvent) => {
+      if (!hasDraftContent) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", warnBeforeClose);
+    return () => window.removeEventListener("beforeunload", warnBeforeClose);
+  }, [profile, sections]);
+
+  // Expand or collapse a resume section
+  const toggleSection = (sectionKey: SectionKey) => {
+    setOpenSections((current) => ({
+      ...current,
+      [sectionKey]: !current[sectionKey],
+    }));
+  };
+
+  // Update personal information
+  const updateProfile = (field: keyof ResumeProfile, value: string) => {
+    setProfile((current) => ({ ...current, [field]: value }));
+  };
+
+  // Update an individual resume entry
+  const updateEntry = (
+    sectionKey: string,
+    entryIndex: number,
+    fieldKey: string,
+    value: string,
   ) => {
+    setSections((current) =>
+      current.map((section) => {
+        if (section.key !== sectionKey) return section;
 
-    if (
-      importFields &&
-      formRef.current
-    ) {
-      setEditorHtml(
-        buildResumePreview(
-          formRef.current
-        )
-      )
+        return {
+          ...section,
+          entries: section.entries.map((entry, index) => {
+            if (index !== entryIndex) return entry;
+            if (typeof entry === "string") return value;
+            return { ...entry, [fieldKey]: value } as typeof entry;
+          }),
+        };
+      }),
+    );
+  };
+
+  // Add another entry to an existing section
+  const addEntry = (sectionKey: string) => {
+    const blankEntry =
+      sectionKey === "summary" ? "" : getBlankSectionEntry(sectionKey as SectionKey);
+
+    setSections((current) =>
+      current.map((section) =>
+        section.key === sectionKey
+          ? { ...section, entries: [...section.entries, blankEntry] }
+          : section,
+      ),
+    );
+  };
+
+  // Remove an entry without leaving the section empty
+  const removeEntry = (sectionKey: string, entryIndex: number) => {
+    setSections((current) =>
+      current.map((section) => {
+        if (section.key !== sectionKey) return section;
+        const entries = section.entries.filter((_, index) => index !== entryIndex);
+        return {
+          ...section,
+          entries: entries.length ? entries : [getBlankSectionEntry(sectionKey as SectionKey)],
+        };
+      }),
+    );
+  };
+
+  // Add the next available resume section
+  const addSection = () => {
+    const nextSection = sectionOrder.find(
+      (sectionKey) => !sections.some((section) => section.key === sectionKey),
+    );
+
+    if (!nextSection) return;
+
+    setSections((current) =>
+      [...current, {
+        key: nextSection,
+        title: sectionLabels[nextSection],
+        entries: [getBlankSectionEntry(nextSection)],
+      }].sort(
+        (left, right) => sectionOrder.indexOf(left.key) - sectionOrder.indexOf(right.key),
+      ),
+    );
+    setOpenSections((current) => ({ ...current, [nextSection]: true }));
+  };
+
+  // Remove a resume section from the editor
+  const removeSection = (sectionKey: SectionKey) => {
+    setSections((current) => current.filter((section) => section.key !== sectionKey));
+    setOpenSections((current) => ({ ...current, [sectionKey]: false }));
+  };
+
+  // Check whether an entry contains user-provided information
+  const hasEntryContent = (entry: SectionEntry) => {
+    if (typeof entry === "string") return entry.trim() !== "";
+    return Object.values(entry).some(
+      (value) => typeof value === "string" && value.trim() !== "",
+    );
+  };
+
+
+  // Check if the user has created or uploaded a resume
+  // TODO: Use the backend parsing result once resume parsing is connected
+  const hasResumeContent = sections.some((section) =>
+    section.entries.some(hasEntryContent),
+  );
+  const resumeReady = Boolean(resumeFile) || hasResumeContent;
+
+  // Update App.tsx when the resume becomes available or is deleted
+  useEffect(() => {
+    onResumeReadyChange?.(resumeReady && !resumeDeleted);
+  }, [onResumeReadyChange, resumeReady, resumeDeleted]);
+
+  // Format resume entries for the preview
+  const formatEntryPreview = (entry: SectionEntry) => {
+    if (typeof entry === "string") return entry.trim();
+
+    return Object.entries(entry)
+      .filter(([, value]) => typeof value === "string" && value.trim() !== "")
+      .map(([fieldKey, value]) => {
+        const fieldLabel = fieldKey
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (char) => char.toUpperCase());
+
+        if (fieldKey === "description" || fieldKey === "skill_name") {
+          return value;
+        }
+
+        return `${fieldLabel}: ${value}`;
+      })
+      .join(" • ");
+  };
+
+ function buildResumePayload(): ResumeSaveRequest {
+ return {
+  resume: {
+    full_name: `${profile.first_name} ${profile.last_name}`.trim(),
+    email: profile.email,
+    phone: profile.phone,
+    location: profile.location,
+    professional_summary: profile.professional_summary
+    },
+    section_order: sections.map((section,index) => ({
+      section_name: section.key,
+      section_order: index,
+    })),
+    work_experience: (
+      (sections.find((section) => section.key === "work_experience")?.entries as WorkExperience[]) ?? []
+    ).filter(hasEntryContent).map((entry,index)=> ({
+      ...entry,
+      sort_order: index
+    })),
+    
+    education: ((sections.find((section) => section.key === "education")?.entries as Education[]) ?? []
+     ).filter(hasEntryContent).map((entry,index)=> ({
+      ...entry,
+      sort_order: index
+    })),
+    skills:( (sections.find((section)=> section.key === "skills")?.entries as Skill[]) ?? []
+     ).filter(hasEntryContent).map((entry,index)=> ({
+      ...entry,
+      sort_order: index,
+    })),
+    projects:( (sections.find((section)=> section.key  === "projects")?.entries as Project[]) ?? []
+     ).filter(hasEntryContent).map((entry,index)=> ({
+      ...entry,
+      sort_order: index
+    })),
+    certifications:( (sections.find((section)=> section.key === "certifications")?.entries as Certification[]) ?? []
+     ).filter(hasEntryContent).map((entry,index)=> ({
+      ...entry,
+      sort_order: index
+    }))
+  }
+}
+
+  const handleSave = async () => {
+    try {
+     const payload = buildResumePayload()
+      await saveResumeToDatabase(payload)
+      setStatus("saved Resume to Database")
+      console.log("Resume Saved to Database")
+    }
+    catch(error) {
+      setStatus("error saving resume")
+      console.log("error saving resume:",error)
+    }
+  }
+const hasExportableData = Boolean(
+    Object.values(profile).some((value) => value.trim() !== "") || hasResumeContent,
+  );
+
+  const exportResumeAsDocx = async () => {
+    if (!hasExportableData) {
+      setStatus("Add resume information before exporting a DOCX or PDF.");
+      return;
     }
 
-    setEditorVisible(true)
-    setIsEditing(true)
+    const contactDetails = [profile.email, profile.phone, profile.location]
+      .filter(Boolean)
+      .join(" • ");
+    const children: Paragraph[] = [
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: [profile.first_name, profile.last_name].filter(Boolean).join(" ") || "Resume",
+            bold: true,
+            size: 32,
+          }),
+        ],
+        heading: HeadingLevel.TITLE,
+      }),
+    ];
 
-    setTimeout(
-      updatePageWarning,
-      0
-    )
-  }
+    if (contactDetails) {
+      children.push(new Paragraph(contactDetails));
+    }
 
-  const handleExportDocx = () => {
-    const documentHtml =
-      `<html><body>${editorHtml}</body></html>`
+    sections
+      .filter((section) => section.entries.some(hasEntryContent))
+      .forEach((section) => {
+        children.push(
+          new Paragraph({ text: section.title, heading: HeadingLevel.HEADING_1 }),
+        );
+        section.entries.filter(hasEntryContent).forEach((entry) => {
+          children.push(new Paragraph(formatEntryPreview(entry)));
+        });
+      });
 
-    const file = new Blob(
-      [documentHtml],
-      {
-        type:
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      }
-    )
+    const document = new Document({ sections: [{ children }] });
+    const blob = await Packer.toBlob(document);
+    const link = window.document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${getSafeFilename(resumeFilename)}.docx`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    setStatus("Resume downloaded as a DOCX file.");
+  };
 
-    const link =
-      document.createElement('a')
+  const exportResumeAsPdf = () => {
+    if (!hasExportableData) {
+      setStatus("Add resume information before exporting a DOCX or PDF.");
+      return;
+    }
 
-    link.href =
-      URL.createObjectURL(file)
-
-    link.download =
-      'jobcoach-resume.docx'
-
-    link.click()
-
-    URL.revokeObjectURL(
-      link.href
-    )
-  }
-
-  const handleExportPdf = () => {
-    updatePageWarning()
-    window.print()
-  }
-
-  return (
-    <section
-      className="screen"
-      data-screen="parsed"
-    >
-
-      {/* PAGE HEADER */}
-      <div className="parsed-header">
-
-        <div className="screen-intro">
-
-          <span className="section-kicker">
-            03 / Your fit
-          </span>
-
-          <h2>
-            Your resume,
-            <br />
-            <em>in focus.</em>
-          </h2>
-
-          <p>
-            {blankResume
-              ? 'Start building your resume by entering your information below.'
-              : 'Review the parsed details below. Guests can manually populate these fields before moving on.'}
-          </p>
-
-        </div>
+    setStatus("Choose Save as PDF in the print dialog to download your resume.");
+    const originalTitle = document.title;
+    document.title = getSafeFilename(resumeFilename);
+    window.print();
+    window.setTimeout(() => {
+      document.title = originalTitle;
+    }, 1000);
+  };
 
 
-        {/* Only show match score when resume isn't blank */}
-        {!blankResume && (
-          <div className="match-score">
+  const handleDelete = () => {
+    setResumeDeleted(true);
+    setShowDeleteDialog(false);
+    setStatus("Resume deleted from this workspace.");
+  };
 
-            <span>
-              Role match
-            </span>
+  const handleResumeFileChange = (file: File | null) => {
+    if (!file) return;
 
-            <strong>
-              84<span>%</span>
-            </strong>
+    const isWordDocument = file.name.toLowerCase().endsWith(".docx");
+    if (!isWordDocument) {
+      setResumeFile(null);
+      setStatus("PDF files are not supported. Please choose a Microsoft Word .docx file.");
+      return;
+    }
 
-            <small>
-              Strong foundation
-            </small>
+    setResumeFile(file);
+    setStatus(`Opening ${file.name} in the Word workspace.`);
+  };
 
+  // Show the empty state after the resume is deleted
+  if (resumeDeleted) {
+    return (
+      <section className="screen resume-screen" data-screen="parsed">
+        <div className="resume-empty-state">
+          <span className="section-kicker">02 / Build your resume</span>
+          <div className="empty-state-icon" aria-hidden="true">
+            +
           </div>
+          <h2>
+            Your resume is <em>cleared.</em>
+          </h2>
+          <p>
+            Start a new resume whenever you’re ready to shape your next
+            application.
+          </p>
+          <Button
+            variant="primary"
+            type="button"
+            onClick={() => {
+              setResumeDeleted(false);
+              sessionStorage.removeItem(resumeDraftStorageKey);
+              setSections(createSections(true));
+              setProfile({ ...emptyProfile });
+              setResumeFilename("resume");
+              setStatus("");
+            }}
+          >
+            Create new resume <span aria-hidden="true">→</span>
+          </Button>
+        </div>
+      </section>
+    );
+  }
+
+  // Main resume builder interface
+  return (
+    <section className="screen resume-editor-page" data-screen="parsed">
+      <div className={resumeFile ? "resume-side-by-side" : undefined}>
+        {resumeFile && (
+          <aside className="resume-document-pane">
+            <DocumentEditor
+              file={resumeFile}
+              onClose={() => setResumeFile(null)}
+              readOnly
+            />
+          </aside>
         )}
 
-      </div>
+        <div className="resume-main-pane">
+          <div className="resume-editor-header">
+            <div className="screen-intro">
+              <span className="section-kicker">02 / Build your resume</span>
+              <h2>
+                Build your <em>Resume</em>
+              </h2>
+            </div>
+          </div>
+
+      {/* Resume editor form */}
+      <form
+        id="resume-form"
+        className="resume-editor"
+        onSubmit={(event) => {
+        event.preventDefault();
+        void handleSave();
+        }}
+      >
+        {/* Sample resume is loaded only when explicitly requested. */}
+        <div className="resume-sample-row">
+          <Button type="button" variant="secondary" onClick={handleLoadSample}>
+            Load Sample Data
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleClearResume}
+          >
+            Clear Data
+          </Button>
+          <span>Optional sample data for testing the resume editor.</span>
+        </div>
+
+        {/* Resume file upload */}
+        <div className="resume-upload-row">
+          <div className="resume-filename-field">
+            <label htmlFor="resume-filename">Resume filename</label>
+            <input
+              id="resume-filename"
+              type="text"
+              value={resumeFilename}
+              onChange={(event) => setResumeFilename(event.target.value)}
+              placeholder="Filename for export"
+            />
+          </div>
+          <div className="resume-upload-file">
+            <span className="panel-icon">RESUME FILE</span>
+            <span className="resume-upload-file-name">
+              {(resumeFile as File | null)?.name ?? "No resume selected"}
+            </span>
+          </div>
+
+          <input
+            id="resume-page-upload"
+            className="resume-upload-input"
+            name="resume"
+            type="file"
+            accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            onChange={(event) => {
+              handleResumeFileChange(event.target.files?.[0] ?? null);
+              event.target.value = "";
+            }}
+          />
+
+          <label
+            className="button button-primary upload-button"
+            htmlFor="resume-page-upload"
+          >
+            Upload resume <span aria-hidden="true">↑</span>
+          </label>
+          <span className="resume-upload-preview-note">
+            This feature allows you to preview your resume for easy copy and paste.
+          </span>
+        </div>
+
+        {/* Personal information fields */}
+        <section className="resume-section">
+          <button className="resume-section-header" type="button">
+            <span className="resume-section-number">00</span>
+            <span className="resume-section-heading">
+              <strong>Personal information</strong>
+              <small>Shown at the top of your resume</small>
+            </span>
+            <span className="resume-section-chevron open">⌄</span>
+            <span className="resume-section-action" />
+          </button>
+
+          <div className="resume-section-content">
+            <div className="resume-personal-grid">
+              {personalFields.map((field) => (
+                <div className="field-group" key={field.key}>
+                  <label htmlFor={`resume-${field.key}`}>{field.label}</label>
+                  <input
+                    id={`resume-${field.key}`}
+                    type={field.type ?? "text"}
+                    value={profile[field.key]}
+                    onChange={(event) => updateProfile(field.key, event.target.value)}
+                    placeholder={
+                      field.key === "email"
+                        ? "you@example.com"
+                        : field.key === "phone"
+                          ? "(555) 555-5555"
+                          : field.key === "location"
+                            ? "City, State"
+                            : field.label
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Render the editable resume sections */}
+        {sections.map((section, sectionIndex) => {
+          // Check if the current section is expanded
+          const isOpen = openSections[section.key];
+
+          return (
+            <section className="resume-section" key={section.key}>
+              <div className="resume-section-header">
+                <button
+                  className="resume-section-main"
+                  type="button"
+                  onClick={() => toggleSection(section.key)}
+                  aria-expanded={isOpen}
+                >
+                  <span className="resume-section-number">
+                    {String(sectionIndex + 1).padStart(2, "0")}
+                  </span>
+                  <span className="resume-section-heading">
+                    <strong>{section.title}</strong>
+                    <small>Resume details</small>
+                  </span>
+                  <span className={`resume-section-chevron ${isOpen ? "open" : ""}`}>
+                    ⌄
+                  </span>
+                </button>
+                <span className="resume-section-action">
+                  <button
+                    className="remove-button"
+                    type="button"
+                    onClick={() => removeSection(section.key)}
+                  >
+                    Remove section
+                  </button>
+                </span>
+              </div>
+
+              {isOpen && (
+                <div className="resume-section-content">
+                  {section.entries.length === 0 ? (
+                    <p className="resume-empty-message">No entries yet.</p>
+                  ) : (
+                    // Render fields for each entry
+                    section.entries.map((entry, entryIndex) => {
+                      if (typeof entry === "string") {
+                        return (
+                          <div className="resume-entry-card" key={`${section.key}-${entryIndex}`}>
+                            <textarea
+                              rows={4}
+                              value={entry}
+                              onChange={(event) =>
+                                updateEntry(section.key, entryIndex, "value", event.target.value)
+                              }
+                              placeholder="Write a concise professional summary..."
+                              aria-label={`${section.title} entry ${entryIndex + 1}`}
+                            />
+                            <button
+                              className="text-button resume-remove-entry"
+                              type="button"
+                              onClick={() => removeEntry(section.key, entryIndex)}
+                              aria-label={`Remove ${section.title} entry ${entryIndex + 1}`}
+                            >
+                              Remove entry
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="resume-entry-card" key={`${section.key}-${entryIndex}`}>
+                          <div className="resume-entry-grid">
+                            {Object.entries(entry).map(([fieldKey, value]) => (
+                              <div
+                                className={`field-group ${section.key === "work_experience" && fieldKey === "description" ? "resume-responsibilities-field" : ""}`}
+                                key={`${section.key}-${entryIndex}-${fieldKey}`}
+                              >
+                                <div className="resume-field-caption">
+                                  {!(section.key === "work_experience" &&
+                                    fieldKey === "end_date" &&
+                                    String(value).toLowerCase() === "present") && (
+                                    <label htmlFor={`${section.key}-${entryIndex}-${fieldKey}`}>
+                                      {section.key === "work_experience" && fieldKey === "description"
+                                        ? "Responsibilities"
+                                        : fieldKey
+                                          .replace(/_/g, " ")
+                                          .replace(/\b\w/g, (char) => char.toUpperCase())}
+                                    </label>
+                                  )}
+                                  {section.key === "work_experience" && fieldKey === "end_date" && (
+                                    <label className="present-job-toggle">
+                                      <input
+                                        type="checkbox"
+                                        checked={String(value).toLowerCase() === "present"}
+                                        onChange={(event) =>
+                                          updateEntry(
+                                            section.key,
+                                            entryIndex,
+                                            fieldKey,
+                                            event.target.checked ? "Present" : "",
+                                          )
+                                        }
+                                      />
+                                      Present job
+                                    </label>
+                                  )}
+                                </div>
+                                {!(section.key === "work_experience" &&
+                                  fieldKey === "end_date" &&
+                                  String(value).toLowerCase() === "present") && (
+                                  fieldKey === "description" ? (
+                                      <textarea
+                                        id={`${section.key}-${entryIndex}-${fieldKey}`}
+                                        rows={3}
+                                        value={value}
+                                        onChange={(event) =>
+                                          updateEntry(section.key, entryIndex, fieldKey, event.target.value)
+                                        }
+                                      />
+                                  ) : (
+                                      <input
+                                        id={`${section.key}-${entryIndex}-${fieldKey}`}
+                                        type={fieldKey.endsWith("_date") ? "date" : "text"}
+                                        value={fieldKey.endsWith("_date") ? toDateInputValue(String(value)) : String(value)}
+                                        onChange={(event) =>
+                                          updateEntry(section.key, entryIndex, fieldKey, event.target.value)
+                                        }
+                                      />
+                                  )
+                                )}
+                              </div>
+                            ))}
+                          </div>
+
+                          <button
+                            className="text-button resume-remove-entry"
+                            type="button"
+                            onClick={() => removeEntry(section.key, entryIndex)}
+                            aria-label={`Remove ${section.title} entry ${entryIndex + 1}`}
+                          >
+                            Remove entry
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+
+                  {/* Add another resume section */}
+                  <button className="add-button" type="button" onClick={() => addEntry(section.key)}>
+                    + Add {section.key === "skills" ? "skill" : "entry"}
+                  </button>
+                </div>
+              )}
+            </section>
+          );
+        })}
+
+        <button className="add-section-button" type="button" onClick={addSection}>
+          + Add another section
+        </button>
 
 
-      {/* TOOLBAR */}
-      <div className="parsed-toolbar">
+        <div className="resume-form-footer">
+          <span>Last saved locally in this session</span>
+          <Button type="submit">
+            Save resume <span aria-hidden="true">✓</span>
+            
+          </Button>
+          
+        </div>
+      </form>
 
-        <div className="edit-actions">
+      {/* Live preview of the completed resume */}
+      <section className="resume-preview-section">
+        <div className="resume-preview-heading">
+          <div>
+            <span className="panel-icon">PREVIEW</span>
+            <h3>Resume preview</h3>
+            <p>Review your completed resume before exporting.</p>
+          </div>
+
+          {!isGuest && (
+            <div className="resume-preview-actions">
+              <Button
+                variant="secondary"
+                type="button"
+                disabled
+                title="Save resume will be available when account saving is connected."
+              >
+                Save resume <span aria-hidden="true">✓</span>
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <div className="resume-preview-background">
+          <div className="resume-preview-page-frame">
+            {(profile.first_name ||
+              profile.last_name ||
+              profile.email ||
+              profile.phone ||
+              profile.location ||
+              sections.some((section) => section.entries.some(hasEntryContent))) ? (
+              <>
+                <div className="preview-header">
+                  <h1>
+                    {[profile.first_name, profile.last_name]
+                      .filter(Boolean)
+                      .join(" ") || "Your name"}
+                  </h1>
+
+                  {(profile.email || profile.phone || profile.location) && (
+                    <p>
+                      {[profile.email, profile.phone, profile.location]
+                        .filter(Boolean)
+                        .join(" • ")}
+                    </p>
+                  )}
+                </div>
+
+                {sections
+                  .filter((section) => section.entries.some(hasEntryContent))
+                  .map((section) => (
+                    <div className="preview-section" key={section.key}>
+                      <h2>{section.title}</h2>
+
+                      {section.entries
+                        .filter(hasEntryContent)
+                        .map((entry, index) => {
+                          // Clean professional layout for work experience
+                          if (
+                            section.key === "work_experience" &&
+                            typeof entry !== "string"
+                          ) {
+                            const experience = entry as WorkExperience;
+
+                            return (
+                              <div
+                                className="preview-experience"
+                                key={`${section.key}-${index}`}
+                              >
+                                <div className="preview-experience-header">
+                                  <div className="preview-experience-title-group">
+                                    {experience.job_title && (
+                                      <h3>{experience.job_title}</h3>
+                                    )}
+
+                                    {(experience.company || experience.location) && (
+                                      <p className="preview-company">
+                                        {experience.company}
+
+                                        {experience.company && experience.location
+                                          ? " | "
+                                          : ""}
+
+                                        {experience.location}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {(experience.start_date || experience.end_date) && (
+                                    <span className="preview-experience-date">
+                                      {experience.start_date}
+
+                                      {experience.start_date && experience.end_date
+                                        ? " – "
+                                        : ""}
+
+                                      {experience.end_date}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {experience.description && (
+                                  <p className="preview-experience-description">
+                                    {experience.description}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          }
+
+                          // Clean professional layout for education
+                          if (
+                            section.key === "education" &&
+                            typeof entry !== "string"
+                          ) {
+                            const education = entry as Education;
+
+                            return (
+                              <div
+                                className="preview-education"
+                                key={`${section.key}-${index}`}
+                              >
+                                <div className="preview-education-header">
+                                  <div className="preview-education-title-group">
+                                    {education.school && (
+                                      <h3>{education.school}</h3>
+                                    )}
+
+                                    {(education.degree || education.field_of_study) && (
+                                      <p className="preview-education-degree">
+                                        {education.degree}
+
+                                        {education.degree && education.field_of_study
+                                          ? " in "
+                                          : ""}
+
+                                        {education.field_of_study}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {(education.start_date || education.end_date) && (
+                                    <span className="preview-education-date">
+                                      {education.start_date}
+
+                                      {education.start_date && education.end_date
+                                        ? " – "
+                                        : ""}
+
+                                      {education.end_date}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // Other resume sections continue using existing formatting
+                          return (
+                            <p key={`${section.key}-${index}`}>
+                              {formatEntryPreview(entry)}
+                            </p>
+                          );
+                        })}
+                    </div>
+                  ))}
+
+              </>
+            ) : (
+              <p className="resume-empty-message">
+                Your resume preview will appear here as you add information.
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section
+        className="resume-local-notice-section"
+        aria-label="Local changes notice"
+      >
+        <div
+          className="resume-local-notice"
+          role={status === "Please create or upload a resume to continue." ? "alert" : "status"}
+          style={
+            status === "Please create or upload a resume to continue."
+              ? { color: "#b91c1c", borderColor: "#fca5a5" }
+              : undefined
+          }
+        >
+          <span className="resume-info-icon">i</span>
+          <span>
+            {status || "Changes stay local until connected to your account."}
+          </span>
+        </div>
+      </section>
+
+      <div className="resume-bottom-actions">
+        <button
+          className="text-button"
+          type="button"
+          onClick={() => {
+            setShowBackWarning(true)
+          }}
+        >
+          <span aria-hidden="true">&larr;</span>{' '}
+          Back
+        </button>
+
+        {/* Resume navigation, deletion, and export controls */}
+        <div className="resume-bottom-action-buttons">
+          <Button
+            variant="secondary"
+            style={{ borderColor: "#dc2626", color: "#dc2626" }}
+            type="button"
+            onClick={() => setShowDeleteDialog(true)}
+          >
+            Delete resume
+          </Button>
 
           <Button
             variant="secondary"
             type="button"
-            id="edit-uploaded-button"
-            disabled
+            onClick={() => {
+              if (!resumeReady) {
+                setStatus("Please create or upload a resume to continue.");
+                return;
+              }
+
+              setStatus("");
+              window.location.hash = '#tailor';
+            }}
           >
-            Edit uploaded resume
-            <span aria-hidden="true">
-              ↗
-            </span>
+            Continue <span aria-hidden="true">→</span>
           </Button>
 
-          <Button
-            variant="primary"
-            type="button"
-            id="edit-parsed-button"
-            onClick={() =>
-              openResumeEditor(true)
-            }
-          >
-            {isEditing
-              ? 'Save changes'
-              : 'Edit resume'}
-
-            <span aria-hidden="true">
-              ↗
-            </span>
-          </Button>
-
+          <div className="resume-export-actions">
+            <Button
+              variant="primary"
+              type="button"
+              aria-haspopup="dialog"
+              aria-expanded={exportMenuOpen}
+              onClick={() => setExportMenuOpen((open) => !open)}
+            >
+              Export Resume
+            </Button>
+          </div>
         </div>
-
-
-        <div className="export-actions">
-
-          <button
-            className="text-button"
-            type="button"
-            id="export-docx-button"
-            onClick={handleExportDocx}
-          >
-            Export DOCX
-          </button>
-
-          <button
-            className="text-button"
-            type="button"
-            id="export-pdf-button"
-            onClick={handleExportPdf}
-          >
-            Export PDF
-          </button>
-
-        </div>
-
       </div>
 
-
-      <p
-        className="page-warning"
-        id="page-warning"
-        hidden={!showWarning}
-      >
-        Some content may exceed one page.
-        Shorten the resume before exporting.
-      </p>
-
-
-      {/* RESUME FORM */}
-      <form
-        ref={formRef}
-        className="parsed-form"
-        id="parsed-form"
-        onInput={updatePageWarning}
-        onSubmit={(event) => {
-          event.preventDefault()
-          window.location.hash =
-            '#tailor'
-        }}
-      >
-
-        {/* USER INFO */}
-        <section className="resume-section user-info-section">
-
-          <div className="collection-header">
-
-            <div>
-              <span className="card-index">
-                00
-              </span>
-
-              <h3>
-                User information
-              </h3>
-            </div>
-
-            <span className="field-hint">
-              Shown at the top of your resume
-            </span>
-
-          </div>
-
-
-          <div className="user-info-grid">
-
-            <div className="field-group">
-
-              <label htmlFor="first-name">
-                First name
-              </label>
-
-              <input
-                id="first-name"
-                name="first-name"
-                type="text"
-                defaultValue={
-                  blankResume
-                    ? ''
-                    : 'Jordan'
-                }
-                placeholder="First name"
-              />
-
-            </div>
-
-
-            <div className="field-group">
-
-              <label htmlFor="last-name">
-                Last name
-              </label>
-
-              <input
-                id="last-name"
-                name="last-name"
-                type="text"
-                defaultValue={
-                  blankResume
-                    ? ''
-                    : 'Lee'
-                }
-                placeholder="Last name"
-              />
-
-            </div>
-
-
-            <div className="field-group">
-
-              <label htmlFor="phone">
-                Phone
-              </label>
-
-              <input
-                id="phone"
-                name="phone"
-                type="tel"
-                defaultValue={
-                  blankResume
-                    ? ''
-                    : '(415) 555-0148'
-                }
-                placeholder="(555) 555-5555"
-              />
-
-            </div>
-
-
-            <div className="field-group">
-
-              <label htmlFor="email">
-                Email
-              </label>
-
-              <input
-                id="email"
-                name="email"
-                type="email"
-                defaultValue={
-                  blankResume
-                    ? ''
-                    : 'jordan.lee@example.com'
-                }
-                placeholder="you@example.com"
-              />
-
-            </div>
-
-          </div>
-
-        </section>
-
-
-        {/* PROFESSIONAL SUMMARY */}
-        <section
-          className="resume-section"
-          data-collection="summary"
-        >
-
-          <div className="collection-header">
-
-            <div>
-
-              <span className="card-index">
-                01
-              </span>
-
-              <h3>
-                Professional summary
-              </h3>
-
-            </div>
-
-            <button
-              className="add-button"
-              type="button"
-              data-add="summary"
-            >
-              + Add summary
-            </button>
-
-          </div>
-
-
+      {exportMenuOpen && (
+        <div className="export-dialog-backdrop" role="presentation">
           <div
-            className="collection-list"
-            id="summary-fields"
+            className="export-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="export-dialog-title"
+            aria-describedby="export-dialog-description"
           >
-
-            <div className="editable-row">
-
-              <textarea
-                name="summary[]"
-                rows={4}
-                placeholder="Write a short professional summary..."
-                defaultValue={
-                  blankResume
-                    ? ''
-                    : 'Product-minded designer who turns complex problems into clear, intuitive experiences. You bring a thoughtful balance of user empathy, sharp visual craft, and cross-functional momentum.'
-                }
-              />
-
-              <button
-                className="remove-button"
+            <span className="panel-icon">SAVE AS</span>
+            <h3 id="export-dialog-title">Choose a file type</h3>
+            <p id="export-dialog-description">
+              PDF is selected by default. Choose another format before saving your resume.
+            </p>
+            <div className="export-dialog-options">
+              <Button
+                variant="primary"
                 type="button"
-                data-remove
-                aria-label="Remove professional summary"
+                onClick={() => {
+                  setExportMenuOpen(false);
+                  exportResumeAsPdf();
+                }}
               >
-                Remove
-              </button>
-
+                Save as PDF <span aria-hidden="true">↗</span>
+              </Button>
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() => {
+                  setExportMenuOpen(false);
+                  void exportResumeAsDocx();
+                }}
+              >
+                Save as DOCX <span aria-hidden="true">↓</span>
+              </Button>
             </div>
-
-          </div>
-
-        </section>
-
-
-        {/* EXPERIENCE */}
-        <section
-          className="resume-section"
-          data-collection="experience"
-        >
-
-          <div className="collection-header">
-
-            <div>
-
-              <span className="card-index">
-                02
-              </span>
-
-              <h3>
-                Experience
-              </h3>
-
-            </div>
-
             <button
-              className="add-button"
+              className="export-dialog-cancel"
               type="button"
-              data-add="experience"
+              onClick={() => setExportMenuOpen(false)}
             >
-              + Add experience
+              Cancel
             </button>
-
           </div>
-
-
-          <div
-            className="collection-list"
-            id="experience-fields"
-          >
-
-            <div className="editable-row">
-
-              <textarea
-                name="experience[]"
-                rows={4}
-                placeholder="Role, company, dates, and key accomplishments..."
-                defaultValue={
-                  blankResume
-                    ? ''
-                    : `Senior Product Designer | Northstar Labs | 2022 - Present
-Led a redesign of the onboarding experience that improved activation by 28% and created a reusable design system with product and engineering.`
-                }
-              />
-
-              <button
-                className="remove-button"
-                type="button"
-                data-remove
-                aria-label="Remove experience"
-              >
-                Remove
-              </button>
-
-            </div>
-
-            {!blankResume && (
-              <div className="editable-row">
-
-                <textarea
-                  name="experience[]"
-                  rows={4}
-                  placeholder="Role, company, dates, and key accomplishments..."
-                  defaultValue={`UX Designer | Brightline Studio | 2019 - 2022
-Planned user research, built interactive prototypes, and partnered with clients to launch accessible web products.`}
-                />
-
-                <button
-                  className="remove-button"
-                  type="button"
-                  data-remove
-                  aria-label="Remove experience"
-                >
-                  Remove
-                </button>
-
-              </div>
-            )}
-
-          </div>
-
-        </section>
-
-
-        {/* SKILLS */}
-        <section
-          className="resume-section"
-          data-collection="skills"
-        >
-
-          <div className="collection-header">
-
-            <div>
-
-              <span className="card-index">
-                03
-              </span>
-
-              <h3>
-                Skills
-              </h3>
-
-            </div>
-
-            <button
-              className="add-button"
-              type="button"
-              data-add="skills"
-            >
-              + Add skill
-            </button>
-
-          </div>
-
-
-          <div
-            className="collection-list"
-            id="skills-fields"
-          >
-
-            <div className="editable-row">
-
-              <input
-                name="skills[]"
-                type="text"
-                defaultValue={
-                  blankResume
-                    ? ''
-                    : 'Product strategy'
-                }
-                placeholder="e.g. Figma, UX research, prototyping"
-              />
-
-              <button
-                className="remove-button"
-                type="button"
-                data-remove
-                aria-label="Remove skill"
-              >
-                Remove
-              </button>
-
-            </div>
-
-
-            {!blankResume && (
-              <>
-                <div className="editable-row">
-
-                  <input
-                    name="skills[]"
-                    type="text"
-                    defaultValue="UX research"
-                    placeholder="e.g. Figma, UX research, prototyping"
-                  />
-
-                  <button
-                    className="remove-button"
-                    type="button"
-                    data-remove
-                    aria-label="Remove skill"
-                  >
-                    Remove
-                  </button>
-
-                </div>
-
-
-                <div className="editable-row">
-
-                  <input
-                    name="skills[]"
-                    type="text"
-                    defaultValue="Figma and prototyping"
-                    placeholder="e.g. Figma, UX research, prototyping"
-                  />
-
-                  <button
-                    className="remove-button"
-                    type="button"
-                    data-remove
-                    aria-label="Remove skill"
-                  >
-                    Remove
-                  </button>
-
-                </div>
-
-
-                <div className="editable-row">
-
-                  <input
-                    name="skills[]"
-                    type="text"
-                    defaultValue="Design systems"
-                    placeholder="e.g. Figma, UX research, prototyping"
-                  />
-
-                  <button
-                    className="remove-button"
-                    type="button"
-                    data-remove
-                    aria-label="Remove skill"
-                  >
-                    Remove
-                  </button>
-
-                </div>
-
-
-                <div className="editable-row">
-
-                  <input
-                    name="skills[]"
-                    type="text"
-                    defaultValue="Cross-functional leadership"
-                    placeholder="e.g. Figma, UX research, prototyping"
-                  />
-
-                  <button
-                    className="remove-button"
-                    type="button"
-                    data-remove
-                    aria-label="Remove skill"
-                  >
-                    Remove
-                  </button>
-
-                </div>
-              </>
-            )}
-
-          </div>
-
-
-          <p className="field-hint manual-hint">
-            Add each skill as its own field.
-          </p>
-
-        </section>
-
-      </form>
-
-
-      {/* FULL RESUME EDITOR */}
-      {editorVisible && (
-        <section
-          className="document-editor"
-          id="document-editor"
-        >
-
-          <div className="editor-header">
-
-            <div>
-
-              <span className="card-index">
-                04
-              </span>
-
-              <h3>
-                Full resume editor
-              </h3>
-
-            </div>
-
-            <span className="field-hint">
-              Guest document workspace
-            </span>
-
-          </div>
-
-
-          <div
-            ref={editorRef}
-            className={`editor-paper ${
-              isEditing
-                ? 'editing'
-                : ''
-            }`}
-            id="resume-editor"
-            contentEditable={isEditing}
-            role="textbox"
-            aria-label="Full resume editor"
-            suppressContentEditableWarning
-            dangerouslySetInnerHTML={{
-              __html: editorHtml,
-            }}
-            onInput={() =>
-              updatePageWarning()
-            }
-          />
-
-        </section>
+        </div>
       )}
 
+      {/* Confirm before leaving the resume editor */}
+      {showBackWarning && (
+        <div className="dialog-backdrop" role="presentation">
+          <div
+            className="confirm-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="back-warning-title"
+            aria-describedby="back-warning-description"
+          >
+            <span className="panel-icon">LEAVE RESUME</span>
+            <h3 id="back-warning-title">Go back to Welcome?</h3>
+            <p id="back-warning-description">
+              Going back will clear the current resume. Any unsaved work
+              on this page may be lost.
+            </p>
 
-      {/* PAGE FOOTER */}
-      <div className="parsed-footer">
+            <div className="dialog-actions">
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() => setShowBackWarning(false)}
+              >
+                Stay on page
+              </Button>
 
-        <a
-          className="text-button"
-          href="#tailor"
-        >
-          <span aria-hidden="true">
-            ←
-          </span>
+              <Button
+                variant="primary"
+                type="button"
+                onClick={() => {
+                  setShowBackWarning(false)
+                  window.location.hash = '#welcome'
+                }}
+              >
+                Go back
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
-          Change role
-        </a>
-
-
-        <Button
-          variant="primary"
-          type="submit"
-          form="parsed-form"
-        >
-          Save resume details
-
-          <span aria-hidden="true">
-            →
-          </span>
-        </Button>
-
+      {/* Confirm before deleting the resume */}
+      {showDeleteDialog && (
+        <div className="dialog-backdrop" role="presentation">
+          <div
+            className="confirm-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-title"
+            aria-describedby="delete-description"
+          >
+            <span className="panel-icon">DELETE RESUME</span>
+            <h3 id="delete-title">Remove this resume?</h3>
+            <p id="delete-description">
+              This will clear the resume from the current workspace. This action
+              cannot be undone.
+            </p>
+            <div className="dialog-actions">
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() => setShowDeleteDialog(false)}
+              >
+                Keep resume
+              </Button>
+              <Button
+                variant="secondary"
+                style={{ borderColor: "#dc2626", color: "#dc2626" }}
+                type="button"
+                onClick={handleDelete}
+              >
+                Delete resume
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+        </div>
       </div>
-
     </section>
-  )
+  );
 }
