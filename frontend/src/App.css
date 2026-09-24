@@ -2362,6 +2362,53 @@ textarea::placeholder {
   }
 
 }
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(23, 32, 51, 0.45);
+}
+
+.confirm-dialog {
+  width: min(460px, calc(100% - 40px));
+  padding: 28px;
+  background: var(--white);
+  box-shadow: var(--shadow);
+}
+
+.confirm-dialog h3 {
+  margin: 10px 0 8px;
+  font:
+    600
+    22px
+    'Space Grotesk',
+    sans-serif;
+}
+
+.confirm-dialog p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 25px;
+}
+
+.danger-button {
+  background: #b42318;
+}
+
+.danger-button:hover {
+  background: #8f1d14;
+}
 
 /* RESUME PRINT / EXPORT */
 
@@ -2890,4 +2937,91 @@ textarea::placeholder {
 .resume-sample-row span {
   font-size: 0.85rem;
   opacity: 0.75;
+}
+
+/* Six-dot drag handle for resume section reordering. Personal information stays fixed. */
+.resume-section-action {
+  align-items: center;
+  gap: 8px;
+}
+
+.resume-reorder-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--muted);
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+}
+
+.resume-reorder-handle:active { cursor: grabbing; }
+.resume-reorder-handle:hover, .resume-reorder-handle:focus-visible {
+  color: var(--blue);
+  background: var(--blue-soft);
+}
+.resume-reorder-handle:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.resume-reorder-dots { display: grid; grid-template-columns: repeat(2, 4px); gap: 3px; }
+.resume-reorder-dots i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+.resume-section-drop-target { outline: 2px dashed var(--blue); outline-offset: -3px; }
+.resume-section-dragging { opacity: 0.45; }
+
+/* Only show the add-section selector when an optional resume section is missing. */
+.add-section-dropdown {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+}
+
+.add-section-dropdown label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.add-section-select {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  color: var(--blue);
+  font: inherit;
+  cursor: pointer;
+}
+
+.add-section-select:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+/* Keep Save resume alongside Upload resume in the builder toolbar. */
+.resume-upload-row .resume-top-save-button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.guest-export-success {
+  margin-top: 14px !important;
+  color: #166534 !important;
+  font-weight: 600;
+}
+
+.guest-export-dialog-actions {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  .resume-upload-row .resume-top-save-button {
+    width: 100%;
+  }
 }

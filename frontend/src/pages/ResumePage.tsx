@@ -5,9 +5,12 @@
  * and export for guest and registered users.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type DragEvent, type KeyboardEvent } from "react";
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from "docx";
 import { Button } from "../components/Button";
+import {
+  saveResumeToDatabase,
+} from "../services/resumeService";
 import { DocumentEditor } from "../components/DocumentEditor";
 import {
   initialResume,
@@ -16,14 +19,10 @@ import {
   type Education,
   type Project,
   type ResumeProfile,
-  type Resume,
   type Skill,
   type WorkExperience,
+  type ResumeSaveRequest
 } from "../features/resume/resumeData";
-import {
-  deleteResumeFromDatabase,
-  saveResumeToDatabase,
-} from "../services/resumeService";
 
 // Props passed from App.tsx
 type ResumePageProps = {
@@ -183,34 +182,7 @@ function createSections(blankResume: boolean): ResumeSection[] {
   ];
 }
 
-// Convert the form data into the format expected by the resume service
-function buildResumePayload(
-  profile: ResumeProfile,
-  sections: ResumeSection[],
-): Resume {
-  // Collect entries for each section
-  const getEntries = <T extends Exclude<SectionEntry, string>>(
-    key: SectionKey,
-  ): T[] => {
-    const entries = sections.find((section) => section.key === key)?.entries ?? [];
 
-    return entries.filter(
-      (entry): entry is Exclude<SectionEntry, string> =>
-        typeof entry !== "string",
-    ) as T[];
-  };
-  const summary = sections.find((section) => section.key === "summary")?.entries[0];
-
-  return {
-    ...profile,
-    summary: typeof summary === "string" ? summary : profile.professional_summary,
-    work_experience: getEntries<WorkExperience>("work_experience"),
-    education: getEntries<Education>("education"),
-    skills: getEntries<Skill>("skills"),
-    projects: getEntries<Project>("projects"),
-    certifications: getEntries<Certification>("certifications"),
-  };
-}
 
 export function ResumePage({
   isGuest = true,
@@ -230,10 +202,17 @@ export function ResumePage({
   const [resumeFilename, setResumeFilename] = useState(storedDraft?.filename ?? "");
   const [status, setStatus] = useState("");
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [showGuestExportWarning, setShowGuestExportWarning] = useState(false);
+  const [exportedGuestSnapshot, setExportedGuestSnapshot] = useState<string | null>(null);
+  const [guestExporting, setGuestExporting] = useState(false);
+  const [pendingPdfSnapshot, setPendingPdfSnapshot] = useState<string | null>(null);
+  const [pendingDocxSnapshot, setPendingDocxSnapshot] = useState<string | null>(null);
   // Confirmation dialogs and resume deletion state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showBackWarning, setShowBackWarning] = useState(false);
   const [resumeDeleted, setResumeDeleted] = useState(false);
+  const [draggedSection, setDraggedSection] = useState<SectionKey | null>(null);
+  const [dropTarget, setDropTarget] = useState<SectionKey | null>(null);
 
   // Track which resume sections are expanded
   const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
@@ -244,6 +223,7 @@ export function ResumePage({
     projects: false,
     certifications: false,
   });
+  
 
   // Sample data is opt-in: never populate Jordan Lee automatically on page entry.
   const handleLoadSample = () => {
@@ -262,6 +242,9 @@ export function ResumePage({
       ),
     })));
     setResumeFilename("Jordan-Lee-Resume");
+    setExportedGuestSnapshot(null);
+    setPendingPdfSnapshot(null);
+    setPendingDocxSnapshot(null);
     setResumeDeleted(false);
     setStatus("Jordan Lee sample resume loaded. You can now edit the details.");
   };
@@ -278,6 +261,10 @@ export function ResumePage({
     setResumeFile(null);
     setResumeDeleted(false);
     setExportMenuOpen(false);
+    setShowGuestExportWarning(false);
+    setExportedGuestSnapshot(null);
+    setPendingPdfSnapshot(null);
+    setPendingDocxSnapshot(null);
     setShowDeleteDialog(false);
 
     // Keep optional resume sections collapsed after clearing.
@@ -337,6 +324,43 @@ export function ResumePage({
     }));
   };
 
+  // Only editable sections can move; personal information is rendered separately above them.
+  const moveSection = (source: SectionKey, target: SectionKey) => {
+    if (source === target) return;
+    setSections((current) => {
+      const sourceIndex = current.findIndex((section) => section.key === source);
+      const targetIndex = current.findIndex((section) => section.key === target);
+      if (sourceIndex < 0 || targetIndex < 0) return current;
+      const reordered = [...current];
+      const [moved] = reordered.splice(sourceIndex, 1);
+      reordered.splice(targetIndex, 0, moved);
+      return reordered;
+    });
+  };
+
+  const handleSectionDragStart = (event: DragEvent<HTMLButtonElement>, key: SectionKey) => {
+    setDraggedSection(key);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", key);
+  };
+
+  const handleSectionDrop = (event: DragEvent<HTMLElement>, target: SectionKey) => {
+    event.preventDefault();
+    const source = draggedSection;
+    if (source && sectionOrder.includes(source)) moveSection(source, target);
+    setDraggedSection(null);
+    setDropTarget(null);
+  };
+
+  // Arrow keys let keyboard users reorder sections using the same six-dot handle.
+  const handleReorderKeyDown = (event: KeyboardEvent<HTMLButtonElement>, key: SectionKey) => {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    event.preventDefault();
+    const index = sections.findIndex((section) => section.key === key);
+    const neighbor = sections[index + (event.key === "ArrowUp" ? -1 : 1)];
+    if (neighbor) moveSection(key, neighbor.key);
+  };
+
   // Update personal information
   const updateProfile = (field: keyof ResumeProfile, value: string) => {
     setProfile((current) => ({ ...current, [field]: value }));
@@ -393,24 +417,24 @@ export function ResumePage({
     );
   };
 
-  // Add the next available resume section
-  const addSection = () => {
-    const nextSection = sectionOrder.find(
-      (sectionKey) => !sections.some((section) => section.key === sectionKey),
-    );
+  // Only sections removed from the editor can be added back.
+  const availableSections = sectionOrder.filter(
+    (sectionKey) => !sections.some((section) => section.key === sectionKey),
+  );
 
-    if (!nextSection) return;
+  // Add the section explicitly selected from the missing-sections dropdown.
+  const addSection = (sectionKey: SectionKey) => {
+    if (!sectionOrder.includes(sectionKey)) return;
 
-    setSections((current) =>
-      [...current, {
-        key: nextSection,
-        title: sectionLabels[nextSection],
-        entries: [getBlankSectionEntry(nextSection)],
-      }].sort(
-        (left, right) => sectionOrder.indexOf(left.key) - sectionOrder.indexOf(right.key),
-      ),
-    );
-    setOpenSections((current) => ({ ...current, [nextSection]: true }));
+    setSections((current) => {
+      if (current.some((section) => section.key === sectionKey)) return current;
+      return [...current, {
+        key: sectionKey,
+        title: sectionLabels[sectionKey],
+        entries: [getBlankSectionEntry(sectionKey)],
+      }];
+    });
+    setOpenSections((current) => ({ ...current, [sectionKey]: true }));
   };
 
   // Remove a resume section from the editor
@@ -434,6 +458,13 @@ export function ResumePage({
     section.entries.some(hasEntryContent),
   );
   const resumeReady = Boolean(resumeFile) || hasResumeContent;
+  // Only an export of the current editor content clears the guest checkpoint.
+  const currentResumeSnapshot = JSON.stringify({ profile, sections, resumeFilename });
+  const guestExportIsCurrent = exportedGuestSnapshot === currentResumeSnapshot;
+  const personalInfoComplete = personalFields.every(({ key }) => profile[key].trim() !== "");
+  const summaryComplete = Boolean(
+    sections.find((section) => section.key === "summary")?.entries.some(hasEntryContent),
+  );
 
   // Update App.tsx when the resume becomes available or is deleted
   useEffect(() => {
@@ -460,7 +491,62 @@ export function ResumePage({
       .join(" • ");
   };
 
-  const hasExportableData = Boolean(
+ function buildResumePayload(): ResumeSaveRequest {
+ return {
+  resume: {
+    full_name: `${profile.first_name} ${profile.last_name}`.trim(),
+    email: profile.email,
+    phone: profile.phone,
+    location: profile.location,
+    professional_summary: profile.professional_summary
+    },
+    section_order: sections.map((section,index) => ({
+      section_name: section.key,
+      section_order: index,
+    })),
+    work_experience: (
+      (sections.find((section) => section.key === "work_experience")?.entries as WorkExperience[]) ?? []
+    ).filter(hasEntryContent).map((entry,index)=> ({
+      ...entry,
+      sort_order: index
+    })),
+    
+    education: ((sections.find((section) => section.key === "education")?.entries as Education[]) ?? []
+     ).filter(hasEntryContent).map((entry,index)=> ({
+      ...entry,
+      sort_order: index
+    })),
+    skills:( (sections.find((section)=> section.key === "skills")?.entries as Skill[]) ?? []
+     ).filter(hasEntryContent).map((entry,index)=> ({
+      ...entry,
+      sort_order: index,
+    })),
+    projects:( (sections.find((section)=> section.key  === "projects")?.entries as Project[]) ?? []
+     ).filter(hasEntryContent).map((entry,index)=> ({
+      ...entry,
+      sort_order: index
+    })),
+    certifications:( (sections.find((section)=> section.key === "certifications")?.entries as Certification[]) ?? []
+     ).filter(hasEntryContent).map((entry,index)=> ({
+      ...entry,
+      sort_order: index
+    }))
+  }
+}
+
+  const handleSave = async () => {
+    try {
+     const payload = buildResumePayload()
+      await saveResumeToDatabase(payload)
+      setStatus("saved Resume to Database")
+      console.log("Resume Saved to Database")
+    }
+    catch(error) {
+      setStatus("error saving resume")
+      console.log("error saving resume:",error)
+    }
+  }
+const hasExportableData = Boolean(
     Object.values(profile).some((value) => value.trim() !== "") || hasResumeContent,
   );
 
@@ -470,6 +556,7 @@ export function ResumePage({
       return;
     }
 
+    const exportSnapshot = currentResumeSnapshot;
     const contactDetails = [profile.email, profile.phone, profile.location]
       .filter(Boolean)
       .join(" • ");
@@ -504,11 +591,19 @@ export function ResumePage({
     const document = new Document({ sections: [{ children }] });
     const blob = await Packer.toBlob(document);
     const link = window.document.createElement("a");
-    link.href = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
+    link.href = url;
     link.download = `${getSafeFilename(resumeFilename)}.docx`;
     link.click();
-    URL.revokeObjectURL(link.href);
-    setStatus("Resume downloaded as a DOCX file.");
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    // A guest confirms the downloaded copy before continuing from the warning.
+    if (isGuest && showGuestExportWarning) {
+      setPendingDocxSnapshot(exportSnapshot);
+      setPendingPdfSnapshot(null);
+    } else {
+      setExportedGuestSnapshot(exportSnapshot);
+    }
+    setStatus("Resume DOCX download started. Confirm you saved the file before continuing.");
   };
 
   const exportResumeAsPdf = () => {
@@ -518,6 +613,12 @@ export function ResumePage({
     }
 
     setStatus("Choose Save as PDF in the print dialog to download your resume.");
+    if (isGuest && showGuestExportWarning) {
+      // Browsers do not report whether the print dialog actually saved a PDF.
+      // Ask the guest to confirm the file was saved before allowing Continue.
+      setPendingPdfSnapshot(currentResumeSnapshot);
+      setPendingDocxSnapshot(null);
+    }
     const originalTitle = document.title;
     document.title = getSafeFilename(resumeFilename);
     window.print();
@@ -526,17 +627,11 @@ export function ResumePage({
     }, 1000);
   };
 
-  // Delete the current resume and update the page status
-  const handleDelete = async () => {
-    try {
-      await deleteResumeFromDatabase();
-      sessionStorage.removeItem(resumeDraftStorageKey);
-      setResumeDeleted(true);
-      setShowDeleteDialog(false);
-      setStatus("Resume deleted from this workspace.");
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Unable to delete resume.");
-    }
+
+  const handleDelete = () => {
+    setResumeDeleted(true);
+    setShowDeleteDialog(false);
+    setStatus("Resume deleted from this workspace.");
   };
 
   const handleResumeFileChange = (file: File | null) => {
@@ -616,15 +711,9 @@ export function ResumePage({
       <form
         id="resume-form"
         className="resume-editor"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          // Save the current resume data
-          try {
-            await saveResumeToDatabase(buildResumePayload(profile, sections));
-            setStatus("Resume saved just now.");
-          } catch (error) {
-            setStatus(error instanceof Error ? error.message : "Unable to save resume.");
-          }
+        onSubmit={(event) => {
+        event.preventDefault();
+        void handleSave();
         }}
       >
         {/* Sample resume is loaded only when explicitly requested. */}
@@ -677,11 +766,11 @@ export function ResumePage({
             className="button button-primary upload-button"
             htmlFor="resume-page-upload"
           >
-            Upload resume <span aria-hidden="true">↑</span>
+            Upload Resume <span aria-hidden="true">↑</span>
           </label>
-          <span className="resume-upload-preview-note">
-            This feature allows you to preview your resume for easy copy and paste.
-          </span>
+          <Button type="submit" variant="secondary" className="resume-top-save-button">
+            Save Resume <span aria-hidden="true">✓</span>
+          </Button>
         </div>
 
         {/* Personal information fields */}
@@ -689,7 +778,7 @@ export function ResumePage({
           <button className="resume-section-header" type="button">
             <span className="resume-section-number">00</span>
             <span className="resume-section-heading">
-              <strong>Personal information</strong>
+              <strong>Personal information <span aria-label="required" style={{ color: "#dc2626" }}>*</span></strong>
               <small>Shown at the top of your resume</small>
             </span>
             <span className="resume-section-chevron open">⌄</span>
@@ -728,7 +817,18 @@ export function ResumePage({
           const isOpen = openSections[section.key];
 
           return (
-            <section className="resume-section" key={section.key}>
+            <section
+              className={`resume-section${dropTarget === section.key && draggedSection !== section.key ? " resume-section-drop-target" : ""}${draggedSection === section.key ? " resume-section-dragging" : ""}`}
+              key={section.key}
+              onDragOver={(event) => {
+                if (!draggedSection || draggedSection === section.key) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setDropTarget(section.key);
+              }}
+              onDrop={(event) => handleSectionDrop(event, section.key)}
+              onDragEnd={() => { setDraggedSection(null); setDropTarget(null); }}
+            >
               <div className="resume-section-header">
                 <button
                   className="resume-section-main"
@@ -740,7 +840,7 @@ export function ResumePage({
                     {String(sectionIndex + 1).padStart(2, "0")}
                   </span>
                   <span className="resume-section-heading">
-                    <strong>{section.title}</strong>
+                    <strong>{section.title}{section.key === "summary" && <> <span aria-label="required" style={{ color: "#dc2626" }}>*</span></>}</strong>
                     <small>Resume details</small>
                   </span>
                   <span className={`resume-section-chevron ${isOpen ? "open" : ""}`}>
@@ -754,6 +854,20 @@ export function ResumePage({
                     onClick={() => removeSection(section.key)}
                   >
                     Remove section
+                  </button>
+                  <button
+                    className="resume-reorder-handle"
+                    type="button"
+                    draggable
+                    onDragStart={(event) => handleSectionDragStart(event, section.key)}
+                    onDragEnd={() => { setDraggedSection(null); setDropTarget(null); }}
+                    onKeyDown={(event) => handleReorderKeyDown(event, section.key)}
+                    aria-label={`Reorder ${section.title}. Drag or use up and down arrow keys.`}
+                    title="Drag to reorder · Use ↑ or ↓ with keyboard"
+                  >
+                    <span className="resume-reorder-dots" aria-hidden="true">
+                      {Array.from({ length: 6 }, (_, index) => <i key={index} />)}
+                    </span>
                   </button>
                 </span>
               </div>
@@ -877,9 +991,26 @@ export function ResumePage({
           );
         })}
 
-        <button className="add-section-button" type="button" onClick={addSection}>
-          + Add another section
-        </button>
+        {availableSections.length > 0 && (
+          <div className="add-section-dropdown">
+            <label htmlFor="resume-add-section">Add resume section</label>
+            <select
+              id="resume-add-section"
+              className="add-section-select"
+              value=""
+              onChange={(event) => {
+                if (event.target.value) addSection(event.target.value as SectionKey);
+              }}
+            >
+              <option value="" disabled>+ Select a section to add</option>
+              {availableSections.map((sectionKey) => (
+                <option key={sectionKey} value={sectionKey}>
+                  {sectionLabels[sectionKey]}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
 
 
@@ -894,18 +1025,7 @@ export function ResumePage({
             <p>Review your completed resume before exporting.</p>
           </div>
 
-          {!isGuest && (
-            <div className="resume-preview-actions">
-              <Button
-                variant="secondary"
-                type="button"
-                disabled
-                title="Save resume will be available when account saving is connected."
-              >
-                Save resume <span aria-hidden="true">✓</span>
-              </Button>
-            </div>
-          )}
+
         </div>
 
         <div className="resume-preview-background">
@@ -1051,7 +1171,7 @@ export function ResumePage({
                         })}
                     </div>
                   ))}
-                
+
               </>
             ) : (
               <p className="resume-empty-message">
@@ -1068,9 +1188,9 @@ export function ResumePage({
       >
         <div
           className="resume-local-notice"
-          role={status === "Please create or upload a resume to continue." ? "alert" : "status"}
+          role={(status === "Please create or upload a resume to continue." || status.includes("is required")) ? "alert" : "status"}
           style={
-            status === "Please create or upload a resume to continue."
+            (status === "Please create or upload a resume to continue." || status.includes("is required"))
               ? { color: "#b91c1c", borderColor: "#fca5a5" }
               : undefined
           }
@@ -1109,8 +1229,23 @@ export function ResumePage({
             variant="secondary"
             type="button"
             onClick={() => {
+              if (!personalInfoComplete) {
+                setStatus("Personal information is required. Complete all five fields before continuing.");
+                document.getElementById("resume-first_name")?.focus();
+                return;
+              }
+              if (!summaryComplete) {
+                setStatus("Professional summary is required before continuing.");
+                setOpenSections((current) => ({ ...current, summary: true }));
+                return;
+              }
               if (!resumeReady) {
                 setStatus("Please create or upload a resume to continue.");
+                return;
+              }
+
+              if (isGuest && hasResumeContent && !guestExportIsCurrent) {
+                setShowGuestExportWarning(true);
                 return;
               }
 
@@ -1135,6 +1270,123 @@ export function ResumePage({
         </div>
       </div>
 
+      {showGuestExportWarning && (
+        <div className="dialog-backdrop" role="presentation">
+          <div
+            className="confirm-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="guest-export-title"
+            aria-describedby="guest-export-description"
+          >
+            <span className="panel-icon">GUEST RESUME</span>
+            <h3 id="guest-export-title">Warning! Export your resume before continuing</h3>
+            <p id="guest-export-description">
+              You are continuing as a guest. Export a copy of your resume profile
+              before proceeding so you do not lose your work when this session ends.
+            </p>
+            {guestExportIsCurrent && (
+              <p className="guest-export-success" role="status">
+                Your exported resume is ready. Confirm your saved copy before continuing.
+              </p>
+            )}
+            {pendingDocxSnapshot === currentResumeSnapshot && !guestExportIsCurrent && (
+              <p role="status">Your DOCX download was started. Check your downloads and confirm you saved the file below.</p>
+            )}
+            {pendingPdfSnapshot === currentResumeSnapshot && !guestExportIsCurrent && (
+              <p role="status">
+                In the print dialog, select <strong>Save as PDF</strong> and save the file.
+                Confirm below to continue directly. If you canceled printing, choose Export resume as PDF again.
+              </p>
+            )}
+            <div className="dialog-actions guest-export-dialog-actions">
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() => setShowGuestExportWarning(false)}
+              >
+                Stay on resume
+              </Button>
+              {guestExportIsCurrent ? (
+                <Button
+                  variant="primary"
+                  type="button"
+                  onClick={() => {
+                    setShowGuestExportWarning(false);
+                    setStatus("");
+                    window.location.hash = '#tailor';
+                  }}
+                >
+                  I saved the DOCX — Continue <span aria-hidden="true">→</span>
+                </Button>
+              ) : (
+                <>
+                <Button
+                  variant="primary"
+                  type="button"
+                  disabled={guestExporting}
+                  onClick={async () => {
+                    setGuestExporting(true);
+                    try {
+                      await exportResumeAsDocx();
+                    } catch (error) {
+                      setStatus("Could not export resume. Please try again.");
+                      console.error("Resume export failed:", error);
+                    } finally {
+                      setGuestExporting(false);
+                    }
+                  }}
+                >
+                  {guestExporting ? "Preparing DOCX…" : "Export resume as DOCX"}
+                </Button>
+                <Button
+                  variant="primary"
+                  type="button"
+                  disabled={guestExporting}
+                  onClick={exportResumeAsPdf}
+                >
+                  Export resume as PDF
+                </Button>
+                {pendingDocxSnapshot === currentResumeSnapshot && (
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    onClick={() => {
+                      setExportedGuestSnapshot(currentResumeSnapshot);
+                      setPendingDocxSnapshot(null);
+                      setPendingPdfSnapshot(null);
+                      setShowGuestExportWarning(false);
+                      setStatus("");
+                      window.location.hash = '#tailor';
+                    }}
+                  >
+                    I saved the DOCX — Continue <span aria-hidden="true">→</span>
+                  </Button>
+                )}
+                {pendingPdfSnapshot === currentResumeSnapshot && (
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    onClick={() => {
+                      // The browser cannot verify whether Save as PDF completed.
+                      // The guest confirms saving, then continues in the same click.
+                      setExportedGuestSnapshot(currentResumeSnapshot);
+                      setPendingPdfSnapshot(null);
+                      setShowGuestExportWarning(false);
+                      setStatus("");
+                      window.location.hash = '#tailor';
+                    }}
+                  >
+                    I saved the PDF — Continue <span aria-hidden="true">→</span>
+                  </Button>
+                )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {exportMenuOpen && (
         <div className="export-dialog-backdrop" role="presentation">
           <div
@@ -1147,7 +1399,7 @@ export function ResumePage({
             <span className="panel-icon">SAVE AS</span>
             <h3 id="export-dialog-title">Choose a file type</h3>
             <p id="export-dialog-description">
-              PDF is selected by default. Choose another format before saving your resume.
+              Download your resume as PDF or DOCX.
             </p>
             <div className="export-dialog-options">
               <Button
@@ -1161,7 +1413,7 @@ export function ResumePage({
                 Save as PDF <span aria-hidden="true">↗</span>
               </Button>
               <Button
-                variant="secondary"
+                variant="primary"
                 type="button"
                 onClick={() => {
                   setExportMenuOpen(false);
