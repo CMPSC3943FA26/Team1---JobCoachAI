@@ -1,0 +1,294 @@
+/* AtsScorePanel.css
+   Styles for the ATS compatibility score panel.
+   Uses the app's existing theme tokens (see App.css :root). */
+
+.ats-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+
+  max-width: 825px;
+
+  padding: 28px 30px;
+
+  background: var(--white);
+  box-shadow: var(--shadow);
+}
+
+/* HEADER */
+
+.ats-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  padding-bottom: 18px;
+
+  border-bottom: 1px solid #e4ecf8;
+}
+
+.ats-panel-icon {
+  display: flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  color: var(--success);
+  background: #e6f6ee;
+}
+
+.ats-panel-header h3 {
+  margin: 0;
+
+  font:
+    600
+    20px
+    'Space Grotesk',
+    sans-serif;
+  letter-spacing: -0.4px;
+}
+
+.ats-panel-header p {
+  margin: 3px 0 0;
+
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* SCORE ROW */
+
+.ats-score-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 28px;
+}
+
+.ats-score-ring {
+  --score: 0%;
+
+  display: flex;
+  width: 138px;
+  height: 138px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  border-radius: 50%;
+
+  background: conic-gradient(var(--ring-color) var(--score), #edf1f7 0);
+}
+
+.ats-score-ring-inner {
+  display: flex;
+  width: 112px;
+  height: 112px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+
+  background: var(--white);
+  border-radius: 50%;
+}
+
+.ats-score-ring-inner strong {
+  font:
+    700
+    30px
+    'Space Grotesk',
+    sans-serif;
+  letter-spacing: -1px;
+}
+
+.ats-score-ring-inner span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.score-primary {
+  --ring-color: var(--success);
+}
+
+.score-good {
+  --ring-color: #2ab3b8;
+}
+
+.score-fair {
+  --ring-color: #e0a026;
+}
+
+.score-weak {
+  --ring-color: #c1453a;
+}
+
+.ats-score-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.ats-stat {
+  display: flex;
+  min-width: 150px;
+  flex-direction: column;
+  gap: 2px;
+
+  padding: 14px 16px;
+
+  border: 1px solid var(--line);
+}
+
+.ats-stat strong {
+  font:
+    700
+    24px
+    'Space Grotesk',
+    sans-serif;
+}
+
+.ats-stat span {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.ats-stat-met strong {
+  color: var(--success);
+}
+
+.ats-stat-missing strong {
+  color: #c1453a;
+}
+
+/* KEYWORDS */
+
+.ats-keywords {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ats-keyword-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ats-keyword-label {
+  font:
+    700
+    10px
+    'Space Grotesk',
+    sans-serif;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+
+  color: var(--muted);
+}
+
+.ats-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ats-chip {
+  padding: 5px 11px;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  border-radius: 99px;
+}
+
+.ats-chip-matched {
+  color: #0f7a4d;
+  background: #e6f6ee;
+  border: 1px solid #cfece0;
+}
+
+.ats-chip-missing {
+  color: #a8463a;
+  background: #fbf2f1;
+  border: 1px solid #f2d8d5;
+}
+
+.ats-no-keywords {
+  margin: 0;
+
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+/* FEEDBACK */
+
+.ats-feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  padding: 14px 16px;
+
+  background: var(--blue-pale);
+  border: 1px solid var(--line);
+}
+
+.ats-feedback-title {
+  font:
+    700
+    10px
+    'Space Grotesk',
+    sans-serif;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+
+  color: var(--blue-deep);
+}
+
+.ats-feedback ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  margin: 0;
+  padding-left: 18px;
+}
+
+.ats-feedback li {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.ats-feedback li::marker {
+  color: var(--blue);
+}
+
+/* RESPONSIVE */
+
+@media (max-width: 520px) {
+  .ats-panel {
+    padding: 20px 18px;
+  }
+
+  .ats-score-row {
+    justify-content: center;
+  }
+
+  .ats-score-stats {
+    width: 100%;
+  }
+
+  .ats-stat {
+    flex: 1;
+    min-width: 120px;
+  }
+}
