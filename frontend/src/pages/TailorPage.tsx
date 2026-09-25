@@ -1,5 +1,7 @@
 import {
   useState,
+  useRef,
+  useEffect,
   type FormEvent,
 } from 'react'
 
@@ -37,6 +39,24 @@ export default function TailorPage({
   const [jobDescription, setJobDescription] = useState('')
   const [error, setError] = useState('')
   const [tailoredSaveMessage, setTailoredSaveMessage] = useState('')
+  const [showNewCopyConfirmation, setShowNewCopyConfirmation] = useState(false)
+  const cancelConfirmationRef = useRef<HTMLButtonElement>(null)
+  const [submitted, setSubmitted] = useState<{
+    company: string
+    jobTitle: string
+    jobDescription: string
+    version: number
+  } | null>(null)
+
+  useEffect(() => {
+    if (!showNewCopyConfirmation) return
+    cancelConfirmationRef.current?.focus()
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowNewCopyConfirmation(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [showNewCopyConfirmation])
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -46,8 +66,23 @@ export default function TailorPage({
       return
     }
 
+    if (submitted) {
+      setShowNewCopyConfirmation(true)
+      return
+    }
+    createTailoredCopy()
+  }
+
+  function createTailoredCopy() {
     setError('')
-    // Keep the parent App's existing submission/navigation behavior.
+    setShowNewCopyConfirmation(false)
+    setSubmitted((previous) => ({
+      company: company.trim(),
+      jobTitle: jobTitle.trim(),
+      jobDescription: jobDescription.trim(),
+      version: (previous?.version ?? 0) + 1,
+    }))
+    // Keep the existing parent callback without changing the current screen.
     onSubmit({
       jobTitle: jobTitle.trim(),
       jobDescription: jobDescription.trim(),
@@ -67,7 +102,7 @@ export default function TailorPage({
         <h2>Tailor smarter.<br /><em>Apply stronger.</em></h2>
         <p>
           Add the company name, job title, and job description, then click{' '}
-          <strong>Submit</strong>. JobCoachAI will recommend changes to strengthen your resume.
+          <strong>Submit</strong> to see your resume match and expand the summary or suggestion panels.
         </p>
       </div>
 
@@ -94,7 +129,7 @@ export default function TailorPage({
                 setTailoredSaveMessage('Add the job title below before saving a tailored resume.')
                 return
               }
-              setTailoredSaveMessage(`Tailored resume ready to save for ${title}.`)
+              setTailoredSaveMessage(`Tailored resume for ${title} is ready for a future save workflow. Saving is not connected yet.`)
             }}
           >
             Save tailored resume
@@ -173,8 +208,41 @@ export default function TailorPage({
         </div>
       </form>
 
-      {/* Local analysis is separate from Submit and doesn't save the base resume. */}
-      <TailorResumeInsights jobDescription={jobDescription} />
+      {showNewCopyConfirmation && (
+        <div className="tailor-confirm-backdrop">
+          <div className="tailor-confirm-dialog" role="alertdialog" aria-modal="true"
+            aria-labelledby="tailor-confirm-title" aria-describedby="tailor-confirm-description">
+            <span className="panel-icon">START OVER?</span>
+            <h3 id="tailor-confirm-title">Start a new tailored copy?</h3>
+            <p id="tailor-confirm-description">
+              Submitting again will discard edits to the current tailored copy. Your original resume
+              and saved database record will not change.
+            </p>
+            <div className="tailor-confirm-actions">
+              <button ref={cancelConfirmationRef} className="button button-secondary" type="button"
+                onClick={() => setShowNewCopyConfirmation(false)}>Keep Current Copy</button>
+              <button className="button button-primary" type="button" onClick={createTailoredCopy}>
+                Start New Tailored Copy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {submitted && (
+        <div className="tailor-submitted-results" aria-live="polite">
+          <div className="resume-suggestions-toolbar-copy">
+            <span className="panel-icon">YOUR TAILORING RESULTS</span>
+            <h3>{submitted.jobTitle} — {submitted.company}</h3>
+            <p>Review the compatibility score, then open either panel to improve your tailored copy.</p>
+            {(company.trim() !== submitted.company || jobTitle.trim() !== submitted.jobTitle ||
+              jobDescription.trim() !== submitted.jobDescription) && (
+              <p role="status">Job details changed. Submit again to update these results.</p>
+            )}
+          </div>
+          <TailorResumeInsights key={submitted.version} jobDescription={submitted.jobDescription} />
+        </div>
+      )}
     </section>
   )
 }

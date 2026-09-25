@@ -3025,3 +3025,93 @@ textarea::placeholder {
     width: 100%;
   }
 }
+
+/* JobCoachAI Tailor results — append to frontend/src/App.css (do not replace it). */
+.tailor-submitted-results { margin-top: 38px; }
+.tailor-submitted-results > .resume-suggestions-toolbar-copy { margin-bottom: 20px; }
+.tailor-submitted-results > .resume-suggestions-toolbar-copy h3,
+.tailor-results .resume-suggestions-toolbar-copy h3 {
+  margin: 8px 0; font: 600 19px 'Space Grotesk', sans-serif;
+}
+.tailor-results .resume-suggestions-toolbar-copy p,
+.tailor-submitted-results > .resume-suggestions-toolbar-copy p {
+  color: var(--muted); font-size: 12px; line-height: 1.55;
+}
+.tailor-match-section { margin-bottom: 18px; }
+.tailor-dropdown { margin-top: 14px; border: 1px solid var(--line); background: var(--white); }
+.tailor-dropdown-trigger {
+  width: 100%; display: flex; justify-content: space-between; align-items: center;
+  gap: 18px; padding: 21px 24px; background: var(--white); border: 0;
+  color: var(--ink); cursor: pointer; text-align: left;
+}
+.tailor-dropdown-trigger:hover { background: var(--blue-pale); }
+.tailor-dropdown-trigger:focus-visible { outline: 3px solid var(--blue); outline-offset: -3px; }
+.tailor-dropdown-label { display: grid; gap: 7px; min-width: 0; }
+.tailor-dropdown-label strong { font: 600 19px 'Space Grotesk', sans-serif; }
+.tailor-dropdown-label small { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.tailor-dropdown-chevron { color: var(--blue); font-size: 25px; transition: transform .2s ease; }
+.tailor-dropdown-chevron.open { transform: rotate(180deg); }
+.tailor-dropdown-body { padding: 0 24px 24px; border-top: 1px solid var(--divider); }
+.tailor-dropdown-body > p { color: var(--muted); font-size: 12px; }
+.tailor-dropdown-body > .button { margin: 16px 0; }
+.tailor-insight-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0 24px; }
+.tailor-score-notice { color: var(--blue-deep); font-size: 12px; }
+.tailor-confirm-backdrop {
+  position: fixed; inset: 0; z-index: 3000; display: flex; align-items: center;
+  justify-content: center; padding: 20px; background: rgba(23,32,51,.6);
+}
+.tailor-confirm-dialog {
+  width: min(100%, 480px); padding: 30px; background: var(--white);
+  border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.tailor-confirm-dialog h3 { margin: 12px 0; font: 600 22px 'Space Grotesk', sans-serif; }
+.tailor-confirm-dialog p { color: var(--muted); font-size: 13px; line-height: 1.65; }
+.tailor-confirm-actions { display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap; margin-top: 24px; }
+@media (max-width: 600px) {
+  .tailor-dropdown-trigger, .tailor-dropdown-body { padding-left: 18px; padding-right: 18px; }
+  .tailor-confirm-actions .button { width: 100%; }
+}
+
+/* Tailor Your Resume — align the right edges of the job form, ATS score,
+   AI Professional Summary, AI Suggestions, and tailored resume preview.
+   Append to the END of frontend/src/App.css; do not replace existing rules. */
+
+.screen[data-screen="tailor"] .job-form,
+.screen[data-screen="tailor"] .tailor-submitted-results,
+.screen[data-screen="tailor"] .tailor-results,
+.screen[data-screen="tailor"] .tailor-match-section,
+.screen[data-screen="tailor"] .tailor-results .ats-panel,
+.screen[data-screen="tailor"] .tailor-dropdown,
+.screen[data-screen="tailor"] .tailor-results .resume-preview-section {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+
+.screen[data-screen="tailor"] {
+  width: 100%;
+}
+
+.tailor-submitted-results
+  > .resume-suggestions-toolbar-copy
+  > .panel-icon {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+}
+
+.resume-section-chevron,
+.tailor-dropdown-chevron {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1;
+}
