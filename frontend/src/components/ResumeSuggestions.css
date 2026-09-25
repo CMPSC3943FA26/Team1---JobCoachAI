@@ -1,0 +1,546 @@
+/* ResumeSuggestions.css
+   Styles for the ResumeSuggestions panel.
+   Uses the app's existing theme tokens (see App.css :root)
+   and follows the same flat design language. */
+
+   .resume-suggestions {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  
+    max-width: 825px;
+  
+    padding: 28px 30px;
+  
+    background: var(--white);
+    box-shadow: var(--shadow);
+  }
+  
+  .resume-suggestions svg {
+    display: block;
+    flex-shrink: 0;
+  }
+  
+  /* HEADER */
+  
+  .suggestions-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  
+    padding-bottom: 20px;
+  
+    border-bottom: 1px solid #e4ecf8;
+  }
+  
+  .suggestions-header-icon {
+    display: flex;
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  
+    color: var(--blue);
+    background: var(--blue-soft);
+  }
+  
+  .suggestions-title {
+    margin: 0;
+  
+    font:
+      600
+      20px
+      'Space Grotesk',
+      sans-serif;
+    letter-spacing: -0.4px;
+  }
+  
+  .suggestions-subtitle {
+    margin: 3px 0 0;
+  
+    color: var(--muted);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  
+  /* SECTION ACCORDIONS */
+  
+  .suggestion-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  
+  .suggestion-section {
+    border: 1px solid var(--line);
+    background: var(--white);
+  }
+  
+  .suggestion-section-header {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  
+    padding: 13px 16px;
+  
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  
+    transition: background 0.15s ease;
+  }
+  
+  .suggestion-section-header:hover {
+    background: var(--blue-pale);
+  }
+  
+  .suggestion-section-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+  }
+  
+  .suggestion-section-title > svg {
+    color: var(--blue);
+  }
+  
+  .suggestion-section-name {
+    font:
+      700
+      12px
+      'Space Grotesk',
+      sans-serif;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .suggestion-section-count {
+    padding: 2px 9px;
+  
+    color: var(--blue-deep);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.4;
+    white-space: nowrap;
+  
+    background: var(--blue-soft);
+    border-radius: 99px;
+  }
+  
+  .suggestion-chevron {
+    color: var(--blue);
+    transition: transform 0.2s ease;
+  }
+  
+  .suggestion-chevron-open {
+    transform: rotate(180deg);
+  }
+  
+  .suggestion-section-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  
+    padding: 0 16px 16px;
+  
+    border-top: 1px solid var(--divider);
+  }
+  
+  /* SUGGESTION CARD */
+  
+  .suggestion-card {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  
+    padding: 16px;
+    margin-top: 16px;
+  
+    background: var(--blue-pale);
+    border: 1px solid var(--line);
+  }
+  
+  /* DIFF VIEW */
+  
+  .suggestion-diff {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .suggestion-diff-block {
+    padding: 12px 14px;
+  }
+  
+  .suggestion-diff-original {
+    background: #fbf2f1;
+    border: 1px solid #f2d8d5;
+  }
+  
+  .suggestion-diff-suggested {
+    background: #f1f9f4;
+    border: 1px solid #d5ecde;
+  }
+  
+  .suggestion-diff-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  
+    font:
+      700
+      10px
+      'Space Grotesk',
+      sans-serif;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+  }
+  
+  .suggestion-diff-original .suggestion-diff-label {
+    color: #a8463a;
+  }
+  
+  .suggestion-diff-suggested .suggestion-diff-label {
+    color: var(--success);
+  }
+  
+  .suggestion-diff-text {
+    margin: 7px 0 0;
+  
+    font-size: 13.5px;
+    line-height: 1.75;
+  }
+  
+  .suggestion-diff-original .suggestion-diff-text {
+    color: var(--muted);
+  }
+  
+  .suggestion-diff-suggested .suggestion-diff-text {
+    color: var(--ink);
+  }
+  
+  /* DIFF TOKENS */
+  
+  .diff-token {
+    color: inherit;
+  }
+  
+  .diff-token-removed {
+    padding: 0 1px;
+  
+    color: #a8463a;
+    background: #f7ddd9;
+  
+    text-decoration: line-through;
+    text-decoration-color: rgba(168, 70, 58, 0.55);
+  }
+  
+  .diff-token-kept {
+    color: var(--ink);
+  }
+  
+  .diff-token-added {
+    padding: 0 2px;
+  
+    color: #0f7a4d;
+    background: #d9f0e3;
+    font-weight: 700;
+  
+    text-decoration: underline;
+    text-decoration-color: rgba(23, 140, 92, 0.55);
+    text-underline-offset: 3px;
+  }
+  
+  /* REASONING BOX */
+  
+  .suggestion-reasoning {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  
+    padding: 11px 14px;
+  
+    color: #15707a;
+    background: #e9f9f9;
+    border-left: 3px solid #2ab3b8;
+  }
+  
+  .suggestion-reasoning-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  
+    font:
+      700
+      10px
+      'Space Grotesk',
+      sans-serif;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+  }
+  
+  .suggestion-reasoning p {
+    margin: 0;
+  
+    color: #14555c;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+  
+  /* ACTION BUTTONS */
+  
+  .suggestion-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  
+  .suggestion-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  
+    padding: 8px 14px;
+  
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+  
+    transition: 0.2s ease;
+  }
+  
+  .suggestion-btn:hover {
+    transform: translateY(-1px);
+  }
+  
+  .suggestion-btn-edit {
+    color: var(--blue);
+    background: var(--white);
+    border: 1px solid var(--line);
+  }
+  
+  .suggestion-btn-edit:hover {
+    border-color: var(--blue);
+  }
+  
+  .suggestion-btn-apply {
+    color: var(--white);
+    background: var(--success);
+    border: 1px solid var(--success);
+  }
+  
+  .suggestion-btn-apply:hover {
+    background: #136f4a;
+    border-color: #136f4a;
+  }
+  
+  /* EDIT MODE */
+  
+  .suggestion-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .suggestion-edit-label {
+    font:
+      700
+      10px
+      'Space Grotesk',
+      sans-serif;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: var(--blue-deep);
+  }
+  
+  .suggestion-edit-textarea {
+    width: 100%;
+    padding: 10px 12px;
+  
+    color: var(--ink);
+    background: var(--white);
+    border: 1px solid var(--line);
+    font: inherit;
+    font-size: 13px;
+    line-height: 1.6;
+    resize: vertical;
+  }
+  
+  .suggestion-edit-textarea:focus {
+    outline: 2px solid var(--blue);
+    outline-offset: 1px;
+  }
+  
+  .suggestion-edit-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .suggestion-btn-save {
+    color: var(--white);
+    background: var(--blue);
+    border: 1px solid var(--blue);
+  }
+  
+  .suggestion-btn-save:hover {
+    background: var(--blue-deep);
+    border-color: var(--blue-deep);
+  }
+  
+  .suggestion-btn-cancel {
+    color: var(--muted);
+    background: var(--white);
+    border: 1px solid var(--line);
+  }
+  
+  .suggestion-btn-cancel:hover {
+    border-color: var(--muted);
+  }
+  
+  /* APPLIED STATE */
+  
+  .suggestion-card-applied {
+    border-left: 3px solid var(--success);
+  }
+  
+  .suggestion-applied {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  
+    margin-top: 14px;
+    padding: 9px 14px;
+  
+    color: #0f7a4d;
+    background: #e6f6ee;
+    border: 1px solid #cfece0;
+    font-size: 12.5px;
+    font-weight: 700;
+  }
+  
+  .suggestion-applied svg {
+    color: var(--success);
+  }
+  
+  .suggestion-edited-hint {
+    width: 100%;
+  
+    color: var(--blue-deep);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+  }
+  
+  .suggestion-apply-error {
+    margin: 0;
+    padding: 10px 12px;
+  
+    color: #a8463a;
+    background: #fbf2f1;
+    border: 1px solid #f2d8d5;
+    font-size: 12.5px;
+    line-height: 1.6;
+  }
+  
+  /* PAGE EMBEDDING (ResumePage) */
+  
+  .resume-suggestions-region {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  
+    margin-top: 34px;
+  }
+  
+  .resume-suggestions-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  
+  .resume-suggestions-toolbar-copy p {
+    margin: 4px 0 0;
+  
+    color: var(--muted);
+    font-size: 12px;
+  }
+  
+  /* EMPTY STATE */
+  
+  .suggestions-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  
+    padding: 46px 20px;
+    text-align: center;
+  
+    border: 1px dashed var(--line);
+  }
+  
+  .suggestions-empty-icon {
+    display: flex;
+    width: 56px;
+    height: 56px;
+    align-items: center;
+    justify-content: center;
+  
+    color: var(--blue);
+    background: var(--blue-soft);
+    border-radius: 50%;
+  }
+  
+  .suggestions-empty h3 {
+    margin: 8px 0 0;
+  
+    font:
+      600
+      16px
+      'Space Grotesk',
+      sans-serif;
+  }
+  
+  .suggestions-empty p {
+    max-width: 400px;
+    margin: 0;
+  
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.65;
+  }
+  
+  /* ACCESSIBILITY */
+  
+  .suggestion-section-header:focus-visible,
+  .suggestion-btn:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
+  
+  /* RESPONSIVE */
+  
+  @media (max-width: 520px) {
+    .resume-suggestions {
+      padding: 20px 18px;
+    }
+  
+    .suggestion-card {
+      padding: 13px;
+    }
+  }

@@ -12,6 +12,11 @@ import {
   saveResumeToDatabase,
 } from "../services/resumeService";
 import { DocumentEditor } from "../components/DocumentEditor";
+import { ResumeSuggestions } from "../components/ResumeSuggestions";
+import type {
+  ResumeRecommendation,
+  SuggestionChange,
+} from "../features/resume/resumeSuggestions";
 import {
   initialResume,
   resumeSectionEntries,
@@ -197,6 +202,7 @@ export function ResumePage({
   const [sections, setSections] = useState<ResumeSection[]>(() =>
     storedDraft?.sections ?? createSections(true),
   );
+  const [recommendations, setRecommendations] = useState<ResumeRecommendation[]>([]);
   // File upload and status messages
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [resumeFilename, setResumeFilename] = useState(storedDraft?.filename ?? "");
@@ -270,6 +276,33 @@ export function ResumePage({
 
     setStatus("Resume editor cleared. You can start a new resume or load sample data.");
   };
+
+  const handleApplySuggestion = (change: SuggestionChange) => {
+    setSections((currentSections) =>
+    currentSections.map((section) => {
+      if (section.key !== change.target.sectionKey) {
+        return section;
+      }
+      const updatedEntries = [...section.entries];
+      const currentEntry = updatedEntries[change.target.entryIndex];
+      if (typeof currentEntry === "string") {
+        updatedEntries[change.target.entryIndex] = change.newText;
+      } else {
+        updatedEntries[change.target.entryIndex] = {
+          ...currentEntry,
+          [change.target.fieldKey]: change.newText,
+        };
+      }
+      
+      return {
+        ...section,
+        entries: updatedEntries,
+      };
+      }),
+      );
+      
+      setStatus("AI suggestion applied to your resume.");
+      };
 
   useEffect(() => {
     const hasDraftContent =
@@ -907,6 +940,25 @@ const hasExportableData = Boolean(
           
         </div>
       </form>
+
+      {/* AI resume recommendations */}
+<section className="resume-suggestions-region">
+  <div className="resume-suggestions-toolbar">
+    <div className="resume-suggestions-toolbar-copy">
+      <span className="panel-icon">AI SUGGESTIONS</span>
+      <p>
+        Review suggested improvements, edit the wording if needed, and apply
+        them directly to your resume.
+      </p>
+    </div>
+  </div>
+
+  <ResumeSuggestions
+    recommendations={recommendations}
+    sections={sections}
+    onApplySuggestion={handleApplySuggestion}
+  />
+</section>
 
       {/* Live preview of the completed resume */}
       <section className="resume-preview-section">
