@@ -17,7 +17,11 @@ import { ResumeSuggestions } from '../components/ResumeSuggestions'
 import { analyzeResumeForJob, generateSummaryOptions } from '../features/resume/resumeInsights'
 import { sampleResumeRecommendations } from '../features/resume/resumeSuggestions'
 import type { ResumeProfile, ResumeSaveRequest } from '../features/resume/resumeData'
-import type { ResumeRecommendation, SuggestionChange } from '../features/resume/resumeSuggestions'
+import {
+  resolveSuggestionTarget,
+  type ResumeRecommendation,
+  type SuggestionChange,
+} from '../features/resume/resumeSuggestions'
 import type { SummaryOption, SummaryTone } from '../types/ai'
 
 // Matches the exact prop type expected by the existing Kiran component.
@@ -84,12 +88,43 @@ function entryText(entry: Sections[number]['entries'][number]): string {
     .join(' · ')
 }
 
+function applyRecommendedChanges(
+  draft: Draft,
+  recommendations: ResumeRecommendation[],
+): Draft {
+  let nextDraft = draft
+
+  for (const recommendation of recommendations) {
+    const target = resolveSuggestionTarget(recommendation, nextDraft.sections)
+    if (!target) continue
+
+    nextDraft = {
+      ...nextDraft,
+      sections: nextDraft.sections.map((section) => section.key !== target.sectionKey
+        ? section
+        : {
+          ...section,
+          entries: section.entries.map((entry, index) => index !== target.entryIndex
+            ? entry
+            : typeof entry === 'string'
+              ? recommendation.suggested_change
+              : { ...entry, [target.fieldKey]: recommendation.suggested_change }),
+        }),
+    }
+  }
+
+  return nextDraft
+}
+
 export interface TailorResumeInsightsProps {
   jobDescription: string
 }
 
 export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsProps) {
-  const [tailored, setTailored] = useState<Draft | null>(readDraft)
+  const [tailored, setTailored] = useState<Draft | null>(() => {
+    const base = readDraft()
+    return base ? applyRecommendedChanges(base, sampleResumeRecommendations) : null
+  })
   const [summaryOptions, setSummaryOptions] = useState<SummaryOption[]>([])
   const [appliedTone, setAppliedTone] = useState<SummaryTone | null>(null)
   const [recommendations, setRecommendations] = useState<ResumeRecommendation[]>([])
@@ -99,6 +134,7 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [suggestionsOpen, setSuggestionsOpen] = useState(false)
   const [showResetConfirmation, setShowResetConfirmation] = useState(false)
+  const [editingRecommendation, setEditingRecommendation] = useState<ResumeRecommendation | null>(null)
 
   // Update the compatibility score automatically on Submit and after every tailored edit.
   const atsResponse = useMemo(() => (
@@ -114,6 +150,7 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
       setMessage('No local resume draft found. Return to Build Your Resume first.')
       return
     }
+    setRecommendations(sampleResumeRecommendations)
     const payload = payloadFromDraft(base)
     setSummaryOptions(generateSummaryOptions({
       profile: base.profile,
@@ -123,12 +160,13 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
   }, [jobDescription])
 
   const refreshBaseResume = () => {
-    setTailored(readDraft())
+    const base = readDraft()
+    setTailored(base ? applyRecommendedChanges(base, sampleResumeRecommendations) : null)
     setSummaryOptions([])
     setAppliedTone(null)
-    setRecommendations([])
+    setRecommendations(sampleResumeRecommendations)
+    setEditingRecommendation(null)
     setMessage('A fresh tailored copy was loaded. Your original resume was not changed.')
-    const base = readDraft()
     if (base) {
       const payload = payloadFromDraft(base)
       setSummaryOptions(generateSummaryOptions({
@@ -266,6 +304,61 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
         <p role="status">No locally saved resume draft found. Build your resume first, then return to Tailor.</p>
       ) : (
         <>
+          <section className="resume-preview-section" aria-label="Tailored resume preview">
+            <div className="resume-preview-heading">
+              <h3>Tailored resume preview</h3>
+              <p>Recommended changes are applied automatically. Your original resume remains unchanged.</p>
+            </div>
+            <div className="resume-preview-background">
+              <div className="resume-preview-page-frame">
+                <div className="preview-header">
+                  <h1>{[tailored.profile.first_name, tailored.profile.last_name].filter(Boolean).join(' ') || 'Your name'}</h1>
+                  <p>{[tailored.profile.email, tailored.profile.phone, tailored.profile.location].filter(Boolean).join(' · ')}</p>
+                </div>
+                {tailored.sections.map((section) => {
+                  const content = section.entries.map(entryText).filter(Boolean)
+                  if (!content.length) return null
+                  return (
+                    <section key={section.key} className="preview-section">
+                      <h2>{section.title ?? section.key.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())}</h2>
+                      {content.map((value, index) => <p key={`${section.key}-${index}`}>{value}</p>)}
+                    </section>
+                  )
+                })}
+              </div>
+            </div>
+          </section>
+
+          {recommendations.length > 0 && (
+            <section className="tailor-change-summary" aria-label="Recommended changes summary">
+              <div className="resume-suggestions-toolbar-copy">
+                <span className="panel-icon">RECOMMENDED CHANGES</span>
+                <h3>Changes applied to this tailored resume</h3>
+                <p>Review each change below. Edit summary opens the existing editing fields for that recommendation.</p>
+              </div>
+              <div className="tailor-change-summary-list">
+                {recommendations.map((recommendation, index) => (
+                  <div className="tailor-change-summary-row" key={`${recommendation.section_name}-${index}`}>
+                    <div>
+                      <strong>{recommendation.section_name}</strong>
+                      <p>{recommendation.reasoning}</p>
+                    </div>
+                    <button
+                      className="button button-secondary"
+                      type="button"
+                      onClick={() => {
+                        setSuggestionsOpen(true)
+                        setEditingRecommendation(recommendation)
+                      }}
+                    >
+                      Edit summary
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           <section aria-label="ATS compatibility analysis" className="tailor-match-section">
             <div className="resume-suggestions-toolbar-copy">
               <span className="panel-icon">RESUME ANALYSIS</span>
@@ -313,7 +406,11 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
                   Load Demo Suggestions
                 </button>
                 <ResumeSuggestions recommendations={recommendations} sections={tailored.sections}
-                  onApplySuggestion={applySuggestion} />
+                  onApplySuggestion={(change) => {
+                    applySuggestion(change)
+                    setEditingRecommendation(null)
+                  }}
+                  editSuggestion={editingRecommendation} />
               </div>
             )}
           </section>
@@ -323,28 +420,6 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
               onClick={() => setShowResetConfirmation(true)}>Reset All Tailored Changes</button>
           </div>
 
-          <section className="resume-preview-section" aria-label="Tailored resume preview">
-            <div className="resume-preview-heading">
-              <h3>Tailored copy preview</h3>
-              <p>Your original resume remains unchanged when you export this tailored copy.</p>
-            </div>
-            <div className="resume-preview-background">
-              <div className="resume-preview-page-frame">
-                <h3>{[tailored.profile.first_name, tailored.profile.last_name].filter(Boolean).join(' ') || 'Your name'}</h3>
-                <p>{[tailored.profile.email, tailored.profile.phone, tailored.profile.location].filter(Boolean).join(' · ')}</p>
-                {tailored.sections.map((section) => {
-                  const content = section.entries.map(entryText).filter(Boolean)
-                  if (!content.length) return null
-                  return (
-                    <section key={section.key} className="preview-section">
-                      <h4>{section.title ?? section.key.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())}</h4>
-                      {content.map((value, index) => <p key={`${section.key}-${index}`}>{value}</p>)}
-                    </section>
-                  )
-                })}
-              </div>
-            </div>
-          </section>
           <div className="resume-bottom-action-buttons">
             <div className="resume-export-actions">
               <button className="button button-primary" type="button"

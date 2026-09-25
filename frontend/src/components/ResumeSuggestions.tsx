@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type {
   ResumeRecommendation,
   ResumeSectionLike,
@@ -11,6 +11,7 @@ interface ResumeSuggestionsProps {
   recommendations: ResumeRecommendation[]
   sections: ResumeSectionLike[]
   onApplySuggestion: (change: SuggestionChange) => void
+  editSuggestion?: ResumeRecommendation | null
 }
 
 type DiffKept = Record<number, boolean>
@@ -86,6 +87,7 @@ export function ResumeSuggestions({
   recommendations,
   sections,
   onApplySuggestion,
+  editSuggestion = null,
 }: ResumeSuggestionsProps) {
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     new Set(),
@@ -94,6 +96,20 @@ export function ResumeSuggestions({
   const [editValue, setEditValue] = useState<string>('')
   const [appliedKeys, setAppliedKeys] = useState<Set<string>>(new Set())
   const [applyError, setApplyError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!editSuggestion) return
+    const groupName = editSuggestion.section_name || 'Other'
+    const groupIndex = recommendations
+      .filter((recommendation) => (recommendation.section_name || 'Other') === groupName)
+      .indexOf(editSuggestion)
+    if (groupIndex < 0) return
+
+    const key = `${groupName}::${groupIndex}`
+    setEditingKey(key)
+    setEditValue(editSuggestion.suggested_change)
+    setApplyError(null)
+  }, [editSuggestion, recommendations])
 
   const groups = useMemo(() => {
     const order: string[] = []

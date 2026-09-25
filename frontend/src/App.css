@@ -2492,6 +2492,45 @@ textarea::placeholder {
   font-size: 11px;
 }
 
+.tailor-change-summary {
+  display: grid;
+  gap: 18px;
+  margin-top: 28px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  background: var(--white);
+}
+
+.tailor-change-summary-list {
+  display: grid;
+  gap: 10px;
+}
+
+.tailor-change-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: var(--blue-pale);
+}
+
+.tailor-change-summary-row strong {
+  font-size: 13px;
+}
+
+.tailor-change-summary-row p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.tailor-change-summary-row .button {
+  flex: 0 0 auto;
+}
+
 @media (max-width: 650px) {
   .tailored-save-card {
     grid-template-columns: 1fr;
@@ -2499,6 +2538,15 @@ textarea::placeholder {
   }
 
   .tailored-save-card .button {
+    width: 100%;
+  }
+
+  .tailor-change-summary-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tailor-change-summary-row .button {
     width: 100%;
   }
 }
