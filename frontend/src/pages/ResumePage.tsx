@@ -202,7 +202,7 @@ export function ResumePage({
   const [sections, setSections] = useState<ResumeSection[]>(() =>
     storedDraft?.sections ?? createSections(true),
   );
-  const [recommendations, setRecommendations] = useState<ResumeRecommendation[]>([]);
+  const [recommendations, _setRecommendations] = useState<ResumeRecommendation[]>([]);
   // File upload and status messages
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [resumeFilename, setResumeFilename] = useState(storedDraft?.filename ?? "");
