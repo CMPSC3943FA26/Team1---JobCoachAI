@@ -393,8 +393,16 @@ export function ResumePage({
   };
   // Remove a resume section from the editor
   const removeSection = (sectionKey: SectionKey) => {
-    setSections((current) => current.filter((section) => section.key !== sectionKey));
-    setOpenSections((current) => ({ ...current, [sectionKey]: false }));
+    if (sectionKey === "summary") return;
+
+    setSections((current) =>
+      current.filter((section) => section.key !== sectionKey)
+    );
+
+    setOpenSections((current) => ({
+      ...current,
+      [sectionKey]: false,
+    }));
   };
   // Check whether an entry contains user-provided information
   const hasEntryContent = (entry: SectionEntry) => {
@@ -770,13 +778,23 @@ const hasExportableData = Boolean(
                   </span>
                 </button>
                 <span className="resume-section-action">
-                  <button
-                    className="remove-button"
-                    type="button"
-                    onClick={() => removeSection(section.key)}
-                  >
-                    Remove section
-                  </button>
+                  {section.key !== "summary" ? (
+                    <button
+                      className="remove-button"
+                      type="button"
+                      onClick={() => removeSection(section.key)}
+                    >
+                      Remove section
+                    </button>
+                  ) : (
+                    <span
+                      className="remove-button"
+                      aria-hidden="true"
+                      style={{ visibility: "hidden" }}
+                    >
+                      Remove section
+                    </span>
+                  )}
                   <button
                     className="resume-reorder-handle"
                     type="button"
