@@ -9,6 +9,7 @@ type LayoutProps = {
     | 'tailor'
   profileInitials: string | null
   onHomeClick: () => void
+  onLoadResumeProfile: (file: File) => Promise<void>
 }
 
 export function Layout({
@@ -16,6 +17,7 @@ export function Layout({
   currentScreen,
   profileInitials,
   onHomeClick,
+  onLoadResumeProfile,
 }: LayoutProps) {
 
   // Defines the navigation steps displayed in the sidebar.
@@ -138,6 +140,26 @@ export function Layout({
         className="content"
         aria-live="polite"
       >
+        {currentScreen !== 'parsed' && <div className="profile-file-actions">
+          <input
+            id="layout-resume-profile-upload"
+            className="resume-upload-input"
+            type="file"
+            accept=".csv,text/csv"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              if (file) void onLoadResumeProfile(file)
+              event.target.value = ""
+            }}
+          />
+          <label
+            className="button button-secondary"
+            htmlFor="layout-resume-profile-upload"
+          >
+            Load Resume Profile <span aria-hidden="true">↑</span>
+          </label>
+        </div>}
+
         {/* Show the profile icon after the user leaves the welcome page. */}
         {profileInitials &&
           currentScreen !== 'welcome' && (

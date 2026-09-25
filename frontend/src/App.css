@@ -285,6 +285,18 @@ a {
   background: var(--blue-pale);
 }
 
+.profile-file-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 24px;
+}
+
+.profile-file-actions .button {
+  min-height: 42px;
+}
+
 
 /* TOP BAR*/
 
@@ -2254,6 +2266,10 @@ textarea::placeholder {
 }
 
 @media (max-width: 650px) {
+
+  .profile-file-actions {
+    justify-content: flex-start;
+  }
 
   .job-version-card {
     grid-template-columns: 1fr;

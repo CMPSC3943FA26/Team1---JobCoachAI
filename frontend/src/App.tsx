@@ -7,7 +7,11 @@ import TailorPage, {
   type ResumeSource,
   type TailorSubmission,
 } from './pages/TailorPage'
-import { ResumePage, resumeDraftStorageKey } from './pages/ResumePage'
+import {
+  loadResumeProfileCsv,
+  ResumePage,
+  resumeDraftStorageKey,
+} from './pages/ResumePage'
 
 // Available screens in the application
 const screenNames = ['welcome', 'parsed', 'tailor'] as const
@@ -73,12 +77,14 @@ function App() {
 
   // Start a guest session and open the Resume page
   const handleContinueAsGuest = () => {
-    sessionStorage.removeItem(resumeDraftStorageKey)
+    const hasLoadedProfile = Boolean(
+      sessionStorage.getItem(resumeDraftStorageKey)
+    )
     setAccountType('guest')
-    setResumeReady(false)
+    setResumeReady(hasLoadedProfile)
     setProfileInitials('G')
     setResumeSession(current => current + 1)
-    window.location.hash = '#parsed'
+    window.location.hash = hasLoadedProfile ? '#tailor' : '#parsed'
   }
 
   // Set up the user profile after login
@@ -131,6 +137,21 @@ function App() {
     window.location.hash = '#parsed'
   }
 
+  const handleLoadResumeProfile = async (file: File) => {
+    try {
+      const draft = await loadResumeProfileCsv(file)
+      sessionStorage.setItem(resumeDraftStorageKey, JSON.stringify(draft))
+      setResumeReady(true)
+      setResumeSession(current => current + 1)
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : 'Unable to load this resume profile.'
+      )
+    }
+  }
+
   // Handle Tailor form submission
   const handleTailorSubmit = (_submission: TailorSubmission) => {
     // Stay on the Tailor page after submission.
@@ -152,6 +173,7 @@ function App() {
             key={resumeSession}
             isGuest={accountType !== 'user'}
             onResumeReadyChange={setResumeReady}
+            onLoadResumeProfile={handleLoadResumeProfile}
           />
         )
 
@@ -180,6 +202,7 @@ function App() {
       currentScreen={currentScreen}
       profileInitials={profileInitials}
       onHomeClick={handleHomeClick}
+      onLoadResumeProfile={handleLoadResumeProfile}
     >
       {renderCurrentPage()}
 
