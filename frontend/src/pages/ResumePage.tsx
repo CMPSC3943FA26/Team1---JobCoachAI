@@ -1115,7 +1115,7 @@ const hasExportableData = Boolean(
             type="button"
             onClick={() => {
               if (!personalInfoComplete) {
-                setStatus("Personal information is required. Complete all five fields before continuing.");
+                setStatus("Personal information and professional summary is required to continue.");
                 document.getElementById("resume-first_name")?.focus();
                 return;
               }
@@ -1198,7 +1198,7 @@ const hasExportableData = Boolean(
                     window.location.hash = '#tailor';
                   }}
                 >
-                  I saved the DOCX — Continue <span aria-hidden="true">→</span>
+                  Saved as DOCX — Continue <span aria-hidden="true">→</span>
                 </Button>
               ) : (
                 <>
@@ -1241,7 +1241,7 @@ const hasExportableData = Boolean(
                       window.location.hash = '#tailor';
                     }}
                   >
-                    I saved the DOCX — Continue <span aria-hidden="true">→</span>
+                    Saved as DOCX — Continue <span aria-hidden="true">→</span>
                   </Button>
                 )}
                 {pendingPdfSnapshot === currentResumeSnapshot && (
@@ -1258,7 +1258,7 @@ const hasExportableData = Boolean(
                       window.location.hash = '#tailor';
                     }}
                   >
-                    I saved the PDF — Continue <span aria-hidden="true">→</span>
+                    Saved as PDF — Continue <span aria-hidden="true">→</span>
                   </Button>
                 )}
                 </>
