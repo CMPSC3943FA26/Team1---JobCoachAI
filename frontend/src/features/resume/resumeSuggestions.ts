@@ -173,3 +173,4 @@ export const sampleResumeRecommendations: ResumeRecommendation[] = [
       'Clarifies the specialization in the education listing to better match UX-focused roles.',
   },
 ]
+
