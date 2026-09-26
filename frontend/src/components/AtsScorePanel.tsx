@@ -42,7 +42,7 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
       return
     }
     const error = onAddSkill(trimmed)
-    setFeedback(error ?? `“${trimmed}” added under Found in your resume. AI professional summaries will use your updated keywords when generated.`)
+    setFeedback(error ?? '')
     if (!error) setSkill('')
   }
 
@@ -82,7 +82,7 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
           {displayedFound.length ? chips(displayedFound, 'matched') :
             <p className="ats-no-keywords">No matching keywords displayed.</p>}
           <form className="ats-skill-add-form" onSubmit={submitSkill}>
-            <label htmlFor="ats-add-missed-skill">Add a keyword</label>
+            <label htmlFor="ats-add-missed-skill">Add a keyword that was not parsed</label>
             <div className="ats-skill-add-row">
               <input id="ats-add-missed-skill" type="text" value={skill} maxLength={100}
                 placeholder="e.g., Linux" onChange={(event) => setSkill(event.target.value)} />
@@ -95,7 +95,6 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
           {missingKeywords.length ? chips(missingKeywords, 'missing') :
             <p className="ats-no-keywords">No missing keywords displayed.</p>}
         </div>
-        <p className="ats-keyword-hint">Manually added keywords appear only in this ATS list and inform regenerated professional summary options. They do not change your resume preview, exported resume, or ATS score. Removing a keyword hides it from this display. Add only keywords that accurately describe your background.</p>
         {feedback && <p className="ats-keyword-feedback" role="status">{feedback}</p>}
       </div>
     </div>

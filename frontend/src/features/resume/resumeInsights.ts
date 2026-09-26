@@ -82,9 +82,16 @@ function flattenResumeToText(resumeData: ResumeSaveRequest): string {
 export function analyzeResumeForJob(
   resumeData: ResumeSaveRequest,
   jobDescription: string,
+  confirmedKeywords: readonly string[] = [],
 ): AIResponse {
   const resumeText = flattenResumeToText(resumeData)
-  const keywords = buildKeywordCandidates(jobDescription)
+  const candidates = buildKeywordCandidates(jobDescription)
+  // Manually confirmed JD keywords must count even if the automatic candidate
+  // extractor excluded them (for example, a short or low-ranked phrase).
+  const jobText = jobDescription.toLocaleLowerCase()
+  const confirmed = confirmedKeywords.map((keyword) => keyword.trim().toLocaleLowerCase())
+    .filter((keyword) => keyword && jobText.includes(keyword))
+  const keywords = [...new Set([...candidates, ...confirmed])]
 
   const matched: string[] = []
   const missing: string[] = []

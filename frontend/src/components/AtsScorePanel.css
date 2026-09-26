@@ -307,3 +307,9 @@
 .ats-keyword-feedback { margin: 0; color: var(--success); font-size: 12px; }
 
 /* Skill suggestions from the ATS keyword editor, shown under AI Suggestions. */
+
+/* Optional ATS keywords inside AI Suggestions. */
+.ats-suggestion-group { display: grid; gap: 12px; margin: 18px 0; }
+.ats-suggestion-group h4 { margin: 0; }
+.ats-suggestion-card { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 14px; border: 1px solid #d7e2ee; border-radius: 8px; }
+.ats-suggestion-card p { margin: 0; }
