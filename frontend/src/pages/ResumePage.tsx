@@ -20,13 +20,12 @@ import {
   type ResumeProfile,
   type Skill,
   type WorkExperience,
-  type ResumeSaveRequest
 } from "../features/resume/resumeData";
-
 // Props passed from App.tsx
 type ResumePageProps = {
   isGuest?: boolean;
   onResumeReadyChange?: (ready: boolean) => void;
+  onLoadResumeProfile?: (file: File) => Promise<void>;
 };
 // Supported resume sections
 type SectionKey =
@@ -55,7 +54,122 @@ type ResumeDraft = {
   profile: ResumeProfile;
   sections: ResumeSection[];
   filename: string;
+  csvSourceFilename?: string;
 };
+// JobCoachAI resume profile CSV: one row for each field of each resume entry.
+const csvEscape = (value: string): string => `"${value.replace(/"/g, '""')}"`;
+const parseResumeCsv = (input: string): string[][] => {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+  for (let i = 0; i < input.length; i += 1) {
+    const ch = input[i];
+    if (ch === '"' && quoted && input[i + 1] === '"') {
+      cell += '"';
+      i += 1;
+    } else if (ch === '"') {
+      quoted = !quoted;
+    } else if (ch === ',' && !quoted) {
+      row.push(cell);
+      cell = "";
+    } else if ((ch === '\n' || ch === '\r') && !quoted) {
+      if (ch === '\r' && input[i + 1] === '\n') i += 1;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += ch;
+    }
+  }
+  if (quoted) throw new Error("The CSV file contains an unfinished quoted field.");
+  if (cell !== "" || row.length > 0) {
+    row.push(cell);
+    rows.push(row);
+  }
+  return rows;
+};
+const resumeCsvHeader = ["kind", "section", "entry", "field", "value"];
+const parseResumeProfileCsv = (csv: string, uploadedFilename: string): ResumeDraft => {
+  const rows = parseResumeCsv(csv.replace(/^\uFEFF/, ""));
+  const header = rows.shift()?.map((cell) => cell.trim());
+  if (!header || header.join(",") !== resumeCsvHeader.join(",")) {
+    throw new Error("This is not a JobCoachAI resume profile CSV.");
+  }
+  const profile: ResumeProfile = { ...emptyProfile };
+  const entryMaps = new Map<SectionKey, Map<number, Record<string, string> | string>>();
+  let filename = uploadedFilename.replace(/\.csv$/i, "");
+  let importedOrder: SectionKey[] | null = null;
+  for (const [kind, sectionName, entryValue, field, value = ""] of rows) {
+    if (kind === "meta" && field === "filename") {
+      filename = value;
+    } else if (kind === "meta" && field === "section_order") {
+      try {
+        const order: unknown = JSON.parse(value);
+        if (Array.isArray(order)) {
+          importedOrder = order.filter((key): key is SectionKey =>
+            typeof key === "string" && sectionOrder.includes(key as SectionKey));
+        }
+      } catch { /* Older CSVs without section order remain supported. */ }
+    } else if (kind === "profile" && field in profile) {
+      profile[field as keyof ResumeProfile] = value;
+    } else if (kind === "entry" && sectionOrder.includes(sectionName as SectionKey)) {
+      const key = sectionName as SectionKey;
+      const entryIndex = Number(entryValue);
+      if (!Number.isInteger(entryIndex) || entryIndex < 0 || !field) continue;
+      const mapped = entryMaps.get(key) ?? new Map<number, Record<string, string> | string>();
+      const current = mapped.get(entryIndex);
+      mapped.set(entryIndex, key === "summary"
+        ? value
+        : { ...(typeof current === "object" ? current : {}), [field]: value });
+      entryMaps.set(key, mapped);
+    }
+  }
+  const orderedKeys = [...new Set([...(importedOrder ?? sectionOrder), ...sectionOrder])];
+  const sections: ResumeSection[] = orderedKeys.filter((key) => entryMaps.has(key)).map((key) => {
+    const entries: SectionEntry[] = [...(entryMaps.get(key)?.entries() ?? [])]
+      .sort(([left], [right]) => left - right)
+      .map(([, entry]) => typeof entry === "string"
+        ? entry
+        : { ...getBlankSectionEntry(key) as object, ...entry } as unknown as SectionEntry);
+    return { key, title: sectionLabels[key], entries: entries.length ? entries : [getBlankSectionEntry(key)] };
+  });
+  // Fill in a blank professional summary when a CSV omits it, because the form requires it.
+  if (!sections.some((section) => section.key === "summary")) {
+    sections.unshift({ key: "summary", title: sectionLabels.summary, entries: [profile.professional_summary || ""] });
+  }
+  return { profile, sections, filename, csvSourceFilename: uploadedFilename };
+};
+const downloadResumeProfileCsv = (draft: ResumeDraft): void => {
+  const rows: string[][] = [resumeCsvHeader];
+  rows.push(["meta", "profile", "0", "filename", draft.filename]);
+  rows.push(["meta", "profile", "0", "section_order", JSON.stringify(draft.sections.map((section) => section.key))]);
+  Object.entries(draft.profile).forEach(([field, value]) => {
+    rows.push(["profile", "profile", "0", field, value]);
+  });
+  draft.sections.forEach((section) => section.entries.forEach((entry, index) => {
+    if (typeof entry === "string") {
+      rows.push(["entry", section.key, String(index), "value", entry]);
+    } else {
+      Object.entries(entry).forEach(([field, value]) => {
+        rows.push(["entry", section.key, String(index), field, String(value ?? "")]);
+      });
+    }
+  }));
+  const blob = new Blob([rows.map((row) => row.map(csvEscape).join(",")).join("\r\n")], {
+    type: "text/csv;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${getSafeFilename(draft.filename)}-profile.csv`;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+// Also supports existing App.tsx integrations without requiring App changes.
+export const loadResumeProfileCsv = async (file: File): Promise<ResumeDraft> =>
+  parseResumeProfileCsv(await file.text(), file.name);
 const readResumeDraft = (): ResumeDraft | null => {
   try {
     const storedDraft = sessionStorage.getItem(resumeDraftStorageKey);
@@ -63,6 +177,12 @@ const readResumeDraft = (): ResumeDraft | null => {
   } catch {
     return null;
   }
+};
+export const saveStoredResumeProfileCsv = (): boolean => {
+  const draft = readResumeDraft();
+  if (!draft) return false;
+  downloadResumeProfileCsv(draft);
+  return true;
 };
 // Default values for a new resume
 const emptyProfile: ResumeProfile = {
@@ -169,6 +289,7 @@ function createSections(blankResume: boolean): ResumeSection[] {
 export function ResumePage({
   isGuest = true,
   onResumeReadyChange,
+  onLoadResumeProfile,
 }: ResumePageProps) {
   const storedDraft = readResumeDraft();
   // Resume profile and section data
@@ -178,9 +299,9 @@ export function ResumePage({
   const [sections, setSections] = useState<ResumeSection[]>(() =>
     storedDraft?.sections ?? createSections(true),
   );
-
   // File upload and status messages
   const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [importedCsvFilename, setImportedCsvFilename] = useState<string | null>(storedDraft?.csvSourceFilename ?? null);
   const [resumeFilename, setResumeFilename] = useState(storedDraft?.filename ?? "");
   const [status, setStatus] = useState("");
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -202,27 +323,6 @@ export function ResumePage({
     projects: false,
     certifications: false,
   });
-  // Sample data is opt-in: never populate Jordan Lee automatically on page entry.
-  const handleLoadSample = () => {
-    setProfile({
-      first_name: initialResume.first_name,
-      last_name: initialResume.last_name,
-      email: initialResume.email,
-      phone: initialResume.phone,
-      location: initialResume.location,
-      professional_summary: initialResume.professional_summary,
-    });
-    setSections(createSections(false).map((section) => ({
-      ...section,
-      entries: section.entries.map((entry) =>
-        typeof entry === "string" ? entry : { ...entry },
-      ),
-    })));
-    setResumeFilename("Jordan-Lee-Resume");
-    setExportedGuestSnapshot(null);
-    setResumeDeleted(false);
-    setStatus("Jordan Lee sample resume loaded. You can now edit the details.");
-  };
   // Clear the visible editor and the stored draft; do not delete any saved database resume.
   const handleClearResume = () => {
     // Remove the persisted sample/draft before navigating away from this page.
@@ -232,6 +332,7 @@ export function ResumePage({
     setSections(createSections(true));
     setResumeFilename("");
     setResumeFile(null);
+    setImportedCsvFilename(null);
     setResumeDeleted(false);
     setExportMenuOpen(false);
     setShowGuestExportWarning(false);
@@ -259,13 +360,13 @@ export function ResumePage({
     if (hasDraftContent) {
       sessionStorage.setItem(
         resumeDraftStorageKey,
-        JSON.stringify({ profile, sections, filename: resumeFilename }),
+        JSON.stringify({ profile, sections, filename: resumeFilename, csvSourceFilename: importedCsvFilename ?? undefined }),
       );
     } else {
       // Do not revive a draft once every field has been cleared.
       sessionStorage.removeItem(resumeDraftStorageKey);
     }
-  }, [profile, sections, resumeFilename]);
+  }, [profile, sections, resumeFilename, importedCsvFilename]);
   useEffect(() => {
     const hasDraftContent =
       Object.values(profile).some((value) => value.trim() !== "") ||
@@ -388,11 +489,9 @@ export function ResumePage({
   // Remove a resume section from the editor
   const removeSection = (sectionKey: SectionKey) => {
     if (sectionKey === "summary") return;
-
     setSections((current) =>
       current.filter((section) => section.key !== sectionKey)
     );
-
     setOpenSections((current) => ({
       ...current,
       [sectionKey]: false,
@@ -438,7 +537,7 @@ export function ResumePage({
       })
       .join(" • ");
   };
- function buildResumePayload(): ResumeSaveRequest {
+ function buildResumePayload() {
  return {
   resume: {
     full_name: `${profile.first_name} ${profile.last_name}`.trim(),
@@ -494,6 +593,31 @@ export function ResumePage({
 const hasExportableData = Boolean(
     Object.values(profile).some((value) => value.trim() !== "") || hasResumeContent,
   );
+  const importResumeCsv = async (file: File) => {
+    try {
+      const draft = parseResumeProfileCsv(await file.text(), file.name);
+      setProfile(draft.profile);
+      setSections(draft.sections);
+      setResumeFilename(draft.filename);
+      setResumeFile(null);
+      setImportedCsvFilename(file.name);
+      setResumeDeleted(false);
+      setExportedGuestSnapshot(null);
+      setOpenSections((current) => ({ ...current, summary: true }));
+      setStatus("Resume CSV imported successfully.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not load the resume CSV.");
+    }
+  };
+  const exportResumeAsCsv = () => {
+    if (!hasExportableData) {
+      setStatus("Add resume information before exporting a CSV.");
+      return;
+    }
+    downloadResumeProfileCsv({ profile, sections, filename: resumeFilename });
+    setExportedGuestSnapshot(currentResumeSnapshot);
+    setStatus("Resume CSV download started.");
+  };
   const exportResumeAsDocx = async () => {
     if (!hasExportableData) {
       setStatus("Add resume information before exporting a DOCX or PDF.");
@@ -569,6 +693,7 @@ const hasExportableData = Boolean(
       return;
     }
     setResumeFile(file);
+    setImportedCsvFilename(null);
     setStatus(`Opening ${file.name} in the Word workspace.`);
   };
   // Show the empty state after the resume is deleted
@@ -619,7 +744,7 @@ const hasExportableData = Boolean(
           </aside>
         )}
         <div className="resume-main-pane">
-          <div className="resume-editor-header">
+          <div className="resume-editor-header" style={{ marginBottom: "12px" }}>
             <div className="screen-intro">
               <span className="section-kicker">02 / Build your resume</span>
               <h2>
@@ -636,23 +761,9 @@ const hasExportableData = Boolean(
         void handleSave();
         }}
       >
-        {/* Sample resume is loaded only when explicitly requested. */}
-        <div className="resume-sample-row">
-          <Button type="button" variant="secondary" onClick={handleLoadSample}>
-            Load Sample Data
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={handleClearResume}
-          >
-            Clear Data
-          </Button>
-          <span>Optional sample data for testing the resume editor.</span>
-        </div>
         {/* Resume file upload */}
-        <div className="resume-upload-row">
-          <div className="resume-filename-field">
+        <div className="resume-upload-row" style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
+          <div className="resume-filename-field" style={{ flex: "0 1 300px", minWidth: "180px", maxWidth: "100%" }}>
             <label htmlFor="resume-filename">Resume filename</label>
             <input
               id="resume-filename"
@@ -662,34 +773,52 @@ const hasExportableData = Boolean(
               placeholder="Filename for export"
             />
           </div>
-          <div className="resume-upload-file">
-            <span className="panel-icon">RESUME FILE</span>
-            <span className="resume-upload-file-name">
-              {(resumeFile as File | null)?.name ?? "No resume selected"}
-            </span>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px", flex: "0 1 auto" }}>
+            <div className="resume-upload-file" style={{ marginRight: 0 }}>
+              <span className="panel-icon">RESUME FILE</span>
+              <span className="resume-upload-file-name">
+                {resumeFile?.name ?? importedCsvFilename ?? "No resume selected"}
+              </span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px", flexWrap: "wrap" }}>
+              <input
+                id="resume-page-upload"
+                className="resume-upload-input"
+                name="resume"
+                type="file"
+                accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={(event) => {
+                  handleResumeFileChange(event.target.files?.[0] ?? null);
+                  event.target.value = "";
+                }}
+              />
+              <label className="button button-primary upload-button" htmlFor="resume-page-upload">
+                Upload Resume <span aria-hidden="true">↑</span>
+              </label>
+              <input
+                id="resume-csv-import"
+                className="resume-upload-input"
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void (onLoadResumeProfile ? onLoadResumeProfile(file) : importResumeCsv(file));
+                  event.target.value = "";
+                }}
+              />
+              <label className="button button-primary upload-button" htmlFor="resume-csv-import">
+                Import CSV <span aria-hidden="true">↑</span>
+              </label>
+              <Button type="button" variant="secondary" onClick={handleClearResume}>
+                Clear Data
+              </Button>
+              {!isGuest && (
+                <Button type="submit" variant="secondary" className="resume-top-save-button">
+                  Save Resume <span aria-hidden="true">✓</span>
+                </Button>
+              )}
+            </div>
           </div>
-          <input
-            id="resume-page-upload"
-            className="resume-upload-input"
-            name="resume"
-            type="file"
-            accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            onChange={(event) => {
-              handleResumeFileChange(event.target.files?.[0] ?? null);
-              event.target.value = "";
-            }}
-          />
-          <label
-            className="button button-primary upload-button"
-            htmlFor="resume-page-upload"
-          >
-            Upload Resume <span aria-hidden="true">↑</span>
-          </label>
-          {!isGuest && (
-            <Button type="submit" variant="secondary" className="resume-top-save-button">
-              Save Resume <span aria-hidden="true">✓</span>
-            </Button>
-          )}
         </div>
         {/* Personal information fields */}
         <section className="resume-section">
@@ -1224,7 +1353,7 @@ const hasExportableData = Boolean(
             <span className="panel-icon">SAVE AS</span>
             <h3 id="export-dialog-title">Choose a file type</h3>
             <p id="export-dialog-description">
-              Download your resume as PDF or DOCX.
+              Download your resume as PDF, DOCX, or CSV.
             </p>
             <div className="export-dialog-options">
               <Button
@@ -1235,7 +1364,7 @@ const hasExportableData = Boolean(
                   exportResumeAsPdf();
                 }}
               >
-                Save as PDF <span aria-hidden="true">↗</span>
+                Save as PDF <span aria-hidden="true">↓</span>
               </Button>
               <Button
                 variant="primary"
@@ -1246,6 +1375,16 @@ const hasExportableData = Boolean(
                 }}
               >
                 Save as DOCX <span aria-hidden="true">↓</span>
+              </Button>
+              <Button
+                variant="primary"
+                type="button"
+                onClick={() => {
+                  setExportMenuOpen(false);
+                  exportResumeAsCsv();
+                }}
+              >
+                Save as CSV <span aria-hidden="true">↓</span>
               </Button>
             </div>
             <button

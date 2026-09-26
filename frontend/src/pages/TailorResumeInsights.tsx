@@ -376,6 +376,46 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
     return `${base}-tailored`
   }
 
+  // Export the current tailored draft using Page 2's JobCoachAI profile CSV format.
+  const exportTailoredAsCsv = () => {
+    if (!tailored) return
+    const rows: string[][] = [['kind', 'section', 'entry', 'field', 'value']]
+    const filename = tailoredFilename()
+    rows.push(['meta', 'profile', '0', 'filename', filename])
+    rows.push(['meta', 'profile', '0', 'section_order',
+      JSON.stringify(tailored.sections.map((section) => section.key))])
+    const summary = tailored.sections.find((section) => section.key === 'summary')?.entries[0]
+    const exportProfile = {
+      ...tailored.profile,
+      professional_summary: typeof summary === 'string'
+        ? summary : tailored.profile.professional_summary,
+    }
+    Object.entries(exportProfile).forEach(([field, value]) => {
+      rows.push(['profile', 'profile', '0', field, value])
+    })
+    tailored.sections.forEach((section) => {
+      section.entries.forEach((entry, index) => {
+        if (typeof entry === 'string') {
+          rows.push(['entry', section.key, String(index), 'value', entry])
+        } else {
+          Object.entries(entry).forEach(([field, value]) => {
+            rows.push(['entry', section.key, String(index), field, String(value ?? '')])
+          })
+        }
+      })
+    })
+    const csvEscape = (value: string) => `"${value.replace(/"/g, '""')}"`
+    const blob = new Blob([rows.map((row) => row.map(csvEscape).join(',')).join('\r\n')],
+      { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = window.document.createElement('a')
+    link.href = url
+    link.download = `${filename}-profile.csv`
+    link.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    setMessage('Tailored resume CSV download started.')
+  }
+
   const exportTailoredAsDocx = async () => {
     if (!tailored || exportBusy) return
     setExportBusy(true)
@@ -573,7 +613,7 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
             <span className="panel-icon">SAVE AS</span>
             <h3 id="tailored-export-title">Choose a file type</h3>
             <p id="tailored-export-description">
-              Download your tailored resume as PDF or DOCX.
+              Download your tailored resume as PDF, DOCX, or CSV.
             </p>
             <div className="export-dialog-options">
               <button className="button button-primary" type="button"
@@ -582,7 +622,7 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
                   setExportMenuOpen(false)
                   exportTailoredAsPdf()
                 }}>
-                Save as PDF <span aria-hidden="true">↗</span>
+                Save as PDF <span aria-hidden="true">↓</span>
               </button>
               <button className="button button-primary" type="button"
                 disabled={exportBusy}
@@ -591,6 +631,14 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
                   void exportTailoredAsDocx()
                 }}>
                 {exportBusy ? 'Preparing DOCX…' : 'Save as DOCX'} <span aria-hidden="true">↓</span>
+              </button>
+              <button className="button button-primary" type="button"
+                disabled={exportBusy}
+                onClick={() => {
+                  setExportMenuOpen(false)
+                  exportTailoredAsCsv()
+                }}>
+                Save as CSV <span aria-hidden="true">↓</span>
               </button>
             </div>
             <button className="export-dialog-cancel" type="button"
