@@ -3115,3 +3115,57 @@ textarea::placeholder {
   font-weight: 400;
   line-height: 1;
 }
+
+/* Guest checkpoint: navigation on top, export formats together below. */
+.guest-export-dialog-actions { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+.guest-export-navigation, .guest-export-file-actions {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+}
+.guest-export-navigation { justify-content: flex-end; }
+.guest-export-file-actions { justify-content: flex-end; }
+.tailor-ai-added { background: #fef08a; color: #713f12; border-radius: 2px; padding: 0 1px; }
+@media print { .tailor-ai-added { background: transparent !important; color: inherit !important; padding: 0; } }
+
+/* Guest export warning: align both navigation and export rows as a two-column grid. */
+.guest-export-dialog-actions {
+  width: 100%;
+  align-items: stretch;
+}
+.guest-export-navigation,
+.guest-export-file-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+.guest-export-navigation .button,
+.guest-export-file-actions .button {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+}
+@media (max-width: 480px) {
+  .guest-export-navigation,
+  .guest-export-file-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Page 3: ATS skill editing (changes remain local to the tailored copy). */
+.tailor-skill-editor { margin-top: 18px; padding: 20px; border: 1px solid #dbe3ed; border-radius: 12px; background: #fff; }
+.tailor-skill-editor h4 { margin: 0 0 6px; font-size: 1.05rem; }
+.tailor-skill-editor > p { margin: 0 0 14px; color: #475569; line-height: 1.5; }
+.tailor-skill-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.tailor-skill-chip { display: inline-flex; align-items: center; gap: 8px; padding: 5px 7px 5px 12px; border-radius: 20px; border: 1px solid #bcd1e8; background: #eff6ff; color: #1e3a5f; font-size: 0.88rem; max-width: 100%; overflow-wrap: anywhere; }
+.tailor-skill-chip button { border: 0; border-radius: 50%; background: transparent; cursor: pointer; font-size: 1.2rem; line-height: 1; color: #334155; min-width: 26px; min-height: 26px; }
+.tailor-skill-chip button:hover, .tailor-skill-chip button:focus-visible { background: #dbeafe; }
+.tailor-skill-form label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 0.9rem; }
+.tailor-skill-entry { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.tailor-skill-entry input { flex: 1 1 200px; min-width: 0; padding: 10px 12px; border: 1px solid #94a3b8; border-radius: 7px; font: inherit; }
+.tailor-skill-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.tailor-skill-editor .tailor-skill-error { color: #b91c1c; margin-top: 8px; }
+.tailor-skill-editor .tailor-skill-success { color: #166534; margin-top: 12px; }
+.tailor-skill-editor .tailor-skill-empty { margin: 0; color: #64748b; }

@@ -292,3 +292,18 @@
     min-width: 120px;
   }
 }
+
+/* Inline keyword dismissal and add-missed-skill form */
+.ats-chip { display: inline-flex; align-items: center; gap: 7px; }
+.ats-chip-remove { border: 0; background: transparent; color: inherit; cursor: pointer; padding: 0 2px; border-radius: 4px; font: inherit; line-height: 1; }
+.ats-chip-remove:hover, .ats-chip-remove:focus-visible { background: rgba(0,0,0,.09); outline-offset: 2px; }
+.ats-skill-add-form { display: flex; flex-direction: column; gap: 7px; margin-top: 7px; }
+.ats-skill-add-form label { font-size: 12px; font-weight: 600; color: var(--ink); }
+.ats-skill-add-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.ats-skill-add-row input { flex: 1 1 170px; min-width: 0; border: 1px solid var(--line); border-radius: 5px; padding: 9px 11px; font: inherit; font-size: 13px; }
+.ats-skill-add-row button { border: 0; border-radius: 5px; padding: 9px 14px; background: var(--blue); color: white; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; }
+.ats-skill-add-row button:hover { filter: brightness(.92); }
+.ats-keyword-hint { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.ats-keyword-feedback { margin: 0; color: var(--success); font-size: 12px; }
+
+/* Skill suggestions from the ATS keyword editor, shown under AI Suggestions. */

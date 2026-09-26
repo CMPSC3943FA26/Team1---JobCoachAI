@@ -187,8 +187,6 @@ export function ResumePage({
   const [showGuestExportWarning, setShowGuestExportWarning] = useState(false);
   const [exportedGuestSnapshot, setExportedGuestSnapshot] = useState<string | null>(null);
   const [guestExporting, setGuestExporting] = useState(false);
-  const [pendingPdfSnapshot, setPendingPdfSnapshot] = useState<string | null>(null);
-  const [pendingDocxSnapshot, setPendingDocxSnapshot] = useState<string | null>(null);
   // Confirmation dialogs and resume deletion state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showBackWarning, setShowBackWarning] = useState(false);
@@ -196,8 +194,8 @@ export function ResumePage({
   const [draggedSection, setDraggedSection] = useState<SectionKey | null>(null);
   const [dropTarget, setDropTarget] = useState<SectionKey | null>(null);
   // Track which resume sections are expanded
-  const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
-    summary: false,
+  const [openSections, setOpenSections] = useState<Partial<Record<SectionKey, boolean>>>({
+    summary: true,
     education: false,
     work_experience: false,
     skills: false,
@@ -222,8 +220,6 @@ export function ResumePage({
     })));
     setResumeFilename("Jordan-Lee-Resume");
     setExportedGuestSnapshot(null);
-    setPendingPdfSnapshot(null);
-    setPendingDocxSnapshot(null);
     setResumeDeleted(false);
     setStatus("Jordan Lee sample resume loaded. You can now edit the details.");
   };
@@ -240,13 +236,11 @@ export function ResumePage({
     setExportMenuOpen(false);
     setShowGuestExportWarning(false);
     setExportedGuestSnapshot(null);
-    setPendingPdfSnapshot(null);
-    setPendingDocxSnapshot(null);
     setShowDeleteDialog(false);
-    // Keep optional resume sections collapsed after clearing.
+    // Keep Professional Summary expanded by default and optional sections collapsed.
     // Personal information is always visible in the editor.
     setOpenSections({
-      summary: false,
+      summary: true,
       education: false,
       work_experience: false,
       skills: false,
@@ -542,14 +536,8 @@ const hasExportableData = Boolean(
     link.download = `${getSafeFilename(resumeFilename)}.docx`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    // A guest confirms the downloaded copy before continuing from the warning.
-    if (isGuest && showGuestExportWarning) {
-      setPendingDocxSnapshot(exportSnapshot);
-      setPendingPdfSnapshot(null);
-    } else {
-      setExportedGuestSnapshot(exportSnapshot);
-    }
-    setStatus("Resume DOCX download started. Confirm you saved the file before continuing.");
+    setExportedGuestSnapshot(exportSnapshot);
+    setStatus("Resume DOCX download started.");
   };
   const exportResumeAsPdf = () => {
     if (!hasExportableData) {
@@ -557,12 +545,9 @@ const hasExportableData = Boolean(
       return;
     }
     setStatus("Choose Save as PDF in the print dialog to download your resume.");
-    if (isGuest && showGuestExportWarning) {
-      // Browsers do not report whether the print dialog actually saved a PDF.
-      // Ask the guest to confirm the file was saved before allowing Continue.
-      setPendingPdfSnapshot(currentResumeSnapshot);
-      setPendingDocxSnapshot(null);
-    }
+    // The print dialog cannot tell us whether the PDF was actually saved.
+    // Record that export was initiated; guests can continue without another confirmation.
+    setExportedGuestSnapshot(currentResumeSnapshot);
     const originalTitle = document.title;
     document.title = getSafeFilename(resumeFilename);
     window.print();
@@ -760,12 +745,14 @@ const hasExportableData = Boolean(
               onDragEnd={() => { setDraggedSection(null); setDropTarget(null); }}
             >
               <div className="resume-section-header">
-                <button
-                  className="resume-section-main"
-                  type="button"
-                  onClick={() => toggleSection(section.key)}
-                  aria-expanded={isOpen}
-                >
+                {(() => {
+                  return <button
+                    type="button"
+                    className="resume-section-main"
+                    onClick={() => toggleSection(section.key)}
+                    aria-expanded={Boolean(isOpen)}
+                    aria-controls={`resume-section-content-${section.key}`}
+                  >
                   <span className="resume-section-number">
                     {String(sectionIndex + 1).padStart(2, "0")}
                   </span>
@@ -773,10 +760,9 @@ const hasExportableData = Boolean(
                     <strong>{section.title}{section.key === "summary" && <> <span aria-label="required" style={{ color: "#dc2626" }}>*</span></>}</strong>
                     <small>Resume details</small>
                   </span>
-                  <span className={`resume-section-chevron ${isOpen ? "open" : ""}`}>
-                    ⌄
-                  </span>
-                </button>
+                  <span className={`resume-section-chevron ${isOpen ? "open" : ""}`} aria-hidden="true">⌄</span>
+                  </button>;
+                })()}
                 <span className="resume-section-action">
                   {section.key !== "summary" ? (
                     <button
@@ -795,7 +781,7 @@ const hasExportableData = Boolean(
                       Remove section
                     </span>
                   )}
-                  <button
+                  {section.key !== "summary" && <button
                     className="resume-reorder-handle"
                     type="button"
                     draggable
@@ -808,11 +794,11 @@ const hasExportableData = Boolean(
                     <span className="resume-reorder-dots" aria-hidden="true">
                       {Array.from({ length: 6 }, (_, index) => <i key={index} />)}
                     </span>
-                  </button>
+                  </button>}
                 </span>
               </div>
               {isOpen && (
-                <div className="resume-section-content">
+                <div className="resume-section-content" id={`resume-section-content-${section.key}`}>
                   {section.entries.length === 0 ? (
                     <p className="resume-empty-message">No entries yet.</p>
                   ) : (
@@ -830,14 +816,14 @@ const hasExportableData = Boolean(
                               placeholder="Write a concise professional summary..."
                               aria-label={`${section.title} entry ${entryIndex + 1}`}
                             />
-                            <button
-                              className="text-button resume-remove-entry"
-                              type="button"
-                              onClick={() => removeEntry(section.key, entryIndex)}
-                              aria-label={`Remove ${section.title} entry ${entryIndex + 1}`}
-                            >
-                              Remove entry
-                            </button>
+                            {section.key !== "summary" && (
+                              <button
+                                className="text-button resume-remove-entry"
+                                type="button"
+                                onClick={() => removeEntry(section.key, entryIndex)}
+                                aria-label={`Remove ${section.title} entry ${entryIndex + 1}`}
+                              >Remove entry</button>
+                            )}
                           </div>
                         );
                       }
@@ -1089,6 +1075,7 @@ const hasExportableData = Boolean(
         </div>
       </section>
       <section
+        id="resume-local-notice"
         className="resume-local-notice-section"
         aria-label="Local changes notice"
       >
@@ -1132,18 +1119,26 @@ const hasExportableData = Boolean(
             variant="secondary"
             type="button"
             onClick={() => {
+              const showContinueError = (message: string) => {
+                setStatus(message);
+                // Keep the user near the Continue button and its validation message.
+                requestAnimationFrame(() => {
+                  window.scrollTo({
+                    top: document.documentElement.scrollHeight,
+                    behavior: "smooth",
+                  });
+                });
+              };
               if (!personalInfoComplete) {
-                setStatus("Personal information and professional summary is required to continue.");
-                document.getElementById("resume-first_name")?.focus();
+                showContinueError("Personal information and professional summary is required to continue.");
                 return;
               }
               if (!summaryComplete) {
-                setStatus("Professional summary is required before continuing.");
-                setOpenSections((current) => ({ ...current, summary: true }));
+                showContinueError("Professional summary is required before continuing.");
                 return;
               }
               if (!resumeReady) {
-                setStatus("Please create or upload a resume to continue.");
+                showContinueError("Please create or upload a resume to continue.");
                 return;
               }
               if (isGuest && hasResumeContent && !guestExportIsCurrent) {
@@ -1179,108 +1174,40 @@ const hasExportableData = Boolean(
             aria-describedby="guest-export-description"
           >
             <span className="panel-icon">GUEST RESUME</span>
-            <h3 id="guest-export-title">Warning! Export your resume before continuing</h3>
+            <h3 id="guest-export-title">Save your resume before continuing?</h3>
             <p id="guest-export-description">
-              You are continuing as a guest. Export a copy of your resume profile
-              before proceeding so you do not lose your work when this session ends.
+              You are continuing as a Guest. Please export a copy of your resume profile
+              to keep your work after this session. You can also continue without exporting.
             </p>
-            {guestExportIsCurrent && (
-              <p className="guest-export-success" role="status">
-                Your exported resume is ready. Confirm your saved copy before continuing.
-              </p>
-            )}
-            {pendingDocxSnapshot === currentResumeSnapshot && !guestExportIsCurrent && (
-              <p role="status">Your DOCX download was started. Check your downloads and confirm you saved the file below.</p>
-            )}
-            {pendingPdfSnapshot === currentResumeSnapshot && !guestExportIsCurrent && (
-              <p role="status">
-                In the print dialog, select <strong>Save as PDF</strong> and save the file.
-                Confirm below to continue directly. If you canceled printing, choose Export resume as PDF again.
-              </p>
-            )}
             <div className="dialog-actions guest-export-dialog-actions">
-              <Button
-                variant="secondary"
-                type="button"
-                onClick={() => setShowGuestExportWarning(false)}
-              >
-                Stay on resume
-              </Button>
-              {guestExportIsCurrent ? (
-                <Button
-                  variant="primary"
-                  type="button"
-                  onClick={() => {
-                    setShowGuestExportWarning(false);
-                    setStatus("");
-                    window.location.hash = '#tailor';
-                  }}
-                >
-                  Saved as DOCX — Continue <span aria-hidden="true">→</span>
+              <div className="guest-export-navigation">
+                <Button variant="secondary" type="button"
+                  onClick={() => setShowGuestExportWarning(false)}>
+                  Stay on resume
                 </Button>
-              ) : (
-                <>
-                <Button
-                  variant="primary"
-                  type="button"
-                  disabled={guestExporting}
+                <Button variant="secondary" type="button" onClick={() => {
+                  setShowGuestExportWarning(false);
+                  setStatus("");
+                  window.location.hash = '#tailor';
+                }}>
+                  Continue anyway <span aria-hidden="true">→</span>
+                </Button>
+              </div>
+              <div className="guest-export-file-actions">
+                <Button variant="primary" type="button" disabled={guestExporting}
                   onClick={async () => {
                     setGuestExporting(true);
-                    try {
-                      await exportResumeAsDocx();
-                    } catch (error) {
+                    try { await exportResumeAsDocx(); }
+                    catch (error) {
                       setStatus("Could not export resume. Please try again.");
                       console.error("Resume export failed:", error);
-                    } finally {
-                      setGuestExporting(false);
-                    }
-                  }}
-                >
+                    } finally { setGuestExporting(false); }
+                  }}>
                   {guestExporting ? "Preparing DOCX…" : "Export resume as DOCX"}
                 </Button>
-                <Button
-                  variant="primary"
-                  type="button"
-                  disabled={guestExporting}
-                  onClick={exportResumeAsPdf}
-                >
-                  Export resume as PDF
-                </Button>
-                {pendingDocxSnapshot === currentResumeSnapshot && (
-                  <Button
-                    variant="secondary"
-                    type="button"
-                    onClick={() => {
-                      setExportedGuestSnapshot(currentResumeSnapshot);
-                      setPendingDocxSnapshot(null);
-                      setPendingPdfSnapshot(null);
-                      setShowGuestExportWarning(false);
-                      setStatus("");
-                      window.location.hash = '#tailor';
-                    }}
-                  >
-                    Saved as DOCX — Continue <span aria-hidden="true">→</span>
-                  </Button>
-                )}
-                {pendingPdfSnapshot === currentResumeSnapshot && (
-                  <Button
-                    variant="secondary"
-                    type="button"
-                    onClick={() => {
-                      // The browser cannot verify whether Save as PDF completed.
-                      // The guest confirms saving, then continues in the same click.
-                      setExportedGuestSnapshot(currentResumeSnapshot);
-                      setPendingPdfSnapshot(null);
-                      setShowGuestExportWarning(false);
-                      setStatus("");
-                      window.location.hash = '#tailor';
-                    }}
-                  >
-                    Saved as PDF — Continue <span aria-hidden="true">→</span>
-                  </Button>
-                )}
-                </>
-              )}
+                <Button variant="primary" type="button" disabled={guestExporting}
+                  onClick={exportResumeAsPdf}>Export resume as PDF</Button>
+              </div>
             </div>
           </div>
         </div>

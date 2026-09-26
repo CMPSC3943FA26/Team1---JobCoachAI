@@ -11,6 +11,7 @@ interface ResumeSuggestionsProps {
   recommendations: ResumeRecommendation[]
   sections: ResumeSectionLike[]
   onApplySuggestion: (change: SuggestionChange) => void
+  onRegenerateSection?: (sectionName: string) => void
 }
 
 type DiffKept = Record<number, boolean>
@@ -86,6 +87,7 @@ export function ResumeSuggestions({
   recommendations,
   sections,
   onApplySuggestion,
+  onRegenerateSection,
 }: ResumeSuggestionsProps) {
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     new Set(),
@@ -226,6 +228,14 @@ export function ResumeSuggestions({
 
               {!isCollapsed && (
                 <div className="suggestion-section-body">
+                  {onRegenerateSection && <button type="button"
+                    className="suggestion-btn suggestion-btn-edit"
+                    onClick={() => {
+                      onRegenerateSection(group.name)
+                      setEditingKey(null)
+                      setAppliedKeys(new Set())
+                      setApplyError(null)
+                    }}>Regenerate {group.name} suggestions</button>}
                   {group.items.map((suggestion, index) => {
                     const key = `${group.name}::${index}`
                     const isEditing = editingKey === key

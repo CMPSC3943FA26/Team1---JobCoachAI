@@ -139,6 +139,7 @@ function pickHighlights(seed: SummarySeed): string[] {
 export function generateSummaryOptions(
   seed: SummarySeed,
   jobDescription: string,
+  variation = 0,
 ): SummaryOption[] {
   const skills = [...seed.skills].filter(Boolean).slice(0, 5)
   const highlights = pickHighlights(seed)
@@ -153,19 +154,28 @@ export function generateSummaryOptions(
     ? `Skilled in ${skills.join(', ')}.`
     : ''
 
+  const intro = variation % 3 === 0
+    ? 'Results-driven professional with a proven track record of delivering measurable outcomes.'
+    : variation % 3 === 1
+      ? 'Professional focused on delivering results through experience and practical skills.'
+      : 'Adaptable professional bringing a results-oriented approach to new challenges.'
   const executiveText = [
-    `Results-driven professional with a proven track record of delivering measurable outcomes.`,
+    intro,
     highlightSentence ? `${highlightSentence}.` : 'Combines strategic insight with hands-on execution.',
     skillsSentence ? `${skillsSentence}` : '',
   ].filter(Boolean).join(' ')
 
   const technicalText = [
-    `Detail-oriented professional focused on ${headlineSkill ? `${headlineSkill}, ` : ''}technical excellence and continuous improvement.`,
+    variation % 2 === 0
+      ? `Detail-oriented professional focused on ${headlineSkill ? `${headlineSkill}, ` : ''}technical excellence and continuous improvement.`
+      : `Technical professional bringing ${headlineSkill ? `${headlineSkill} and ` : ''}a commitment to continuous improvement.`,
     skillsSentence || 'Brings strong analytical and problem-solving abilities to every project.',
     highlightSentence ? `${highlightSentence}.` : '',
   ].filter(Boolean).join(' ')
 
-  const conciseText = `Professional with skills in ${skills.join(', ') || 'a wide range of areas'}, known for ${firstnameFallback(highlightSentence)}.`
+  const conciseText = variation % 2 === 0
+    ? `Professional with skills in ${skills.join(', ') || 'a wide range of areas'}, known for ${firstnameFallback(highlightSentence)}.`
+    : `Brings ${skills.join(', ') || 'a broad skill set'} and ${firstnameFallback(highlightSentence)}.`
 
   function firstnameFallback(highlight: string): string {
     if (highlight) return highlight.toLowerCase()

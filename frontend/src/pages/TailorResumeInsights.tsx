@@ -15,7 +15,8 @@ import { AtsScorePanel } from '../components/AtsScorePanel'
 import { SummaryOptions } from '../components/SummaryOptions'
 import { ResumeSuggestions } from '../components/ResumeSuggestions'
 import { analyzeResumeForJob, generateSummaryOptions } from '../features/resume/resumeInsights'
-import { sampleResumeRecommendations } from '../features/resume/resumeSuggestions'
+import { sampleResumeRecommendations, replaceTextInField } from '../features/resume/resumeSuggestions'
+import { addedWordMask } from '../features/resume/addedWords'
 import type { ResumeProfile, ResumeSaveRequest } from '../features/resume/resumeData'
 import type { ResumeRecommendation, SuggestionChange } from '../features/resume/resumeSuggestions'
 import type { SummaryOption, SummaryTone } from '../types/ai'
@@ -27,6 +28,9 @@ type Sections = ComponentProps<typeof ResumeSuggestions>['sections']
 type TailorSection = Sections[number] & { title?: string }
 type Draft = { profile: ResumeProfile; sections: TailorSection[]; filename: string }
 const DRAFT_KEY = 'jobcoachai.resumeDraft'
+
+const skillKey = (name: string) => name.trim().replace(/\s+/g, ' ').toLocaleLowerCase()
+
 
 function readDraft(): Draft | null {
   try {
@@ -90,6 +94,10 @@ export interface TailorResumeInsightsProps {
 
 export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsProps) {
   const [tailored, setTailored] = useState<Draft | null>(readDraft)
+  const [baseDraft, setBaseDraft] = useState<Draft | null>(readDraft)
+  const [changedFields, setChangedFields] = useState<Set<string>>(() => new Set())
+  const [summaryGeneration, setSummaryGeneration] = useState(0)
+  const [suggestionGeneration, setSuggestionGeneration] = useState(0)
   const [summaryOptions, setSummaryOptions] = useState<SummaryOption[]>([])
   const [appliedTone, setAppliedTone] = useState<SummaryTone | null>(null)
   const [recommendations, setRecommendations] = useState<ResumeRecommendation[]>([])
@@ -99,6 +107,13 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [suggestionsOpen, setSuggestionsOpen] = useState(false)
   const [showResetConfirmation, setShowResetConfirmation] = useState(false)
+  const [hiddenAtsKeywords, setHiddenAtsKeywords] = useState<Set<string>>(() => new Set())
+  const [manuallyFoundSkills, setManuallyFoundSkills] = useState<string[]>([])
+  // Keyword dismissals are display-only and reset for a new job description.
+  useEffect(() => {
+    setHiddenAtsKeywords(new Set())
+    setManuallyFoundSkills([])
+  }, [jobDescription])
 
   // Update the compatibility score automatically on Submit and after every tailored edit.
   const atsResponse = useMemo(() => (
@@ -124,6 +139,12 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
 
   const refreshBaseResume = () => {
     setTailored(readDraft())
+    setBaseDraft(readDraft())
+    setChangedFields(new Set())
+    setHiddenAtsKeywords(new Set())
+    setManuallyFoundSkills([])
+    setSuggestionGeneration(0)
+    setSummaryGeneration(0)
     setSummaryOptions([])
     setAppliedTone(null)
     setRecommendations([])
@@ -139,6 +160,56 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
     }
   }
 
+  // Manually confirmed keywords are context for locally generated summaries, NOT resume edits.
+  // The original and tailored resume data remain unchanged when these chips are edited.
+  const addMissedSkill = (name: string): string | null => {
+    if (!tailored) return 'No tailored resume is available.'
+    const normalized = skillKey(name)
+    if (!normalized) return 'Enter a keyword before adding it.'
+    const matchedKeywords = atsResponse?.suggestions.map((item) => item.requirement) ?? []
+    if (manuallyFoundSkills.some((item) => skillKey(item) === normalized) ||
+        (matchedKeywords.some((item) => skillKey(item) === normalized) &&
+          !hiddenAtsKeywords.has(normalized))) {
+      return 'That keyword is already displayed under Found in your resume.'
+    }
+    setManuallyFoundSkills((current) => [...current.filter((item) => skillKey(item) !== normalized), name])
+    setHiddenAtsKeywords((current) => {
+      const updated = new Set(current)
+      updated.delete(normalized)
+      return updated
+    })
+    setMessage(`“${name}” added to Found in your resume. Regenerated summary options will include your confirmed keywords.`)
+    return null
+  }
+
+  const removeAtsKeyword = (keyword: string) => {
+    const key = skillKey(keyword)
+    setManuallyFoundSkills((current) => current.filter((item) => skillKey(item) !== key))
+    setHiddenAtsKeywords((current) => new Set(current).add(key))
+  }
+
+  // Keep professional-summary suggestions in sync with manually added/removed keywords.
+  // Do not apply a generated option to the preview without an explicit user click.
+  useEffect(() => {
+    if (!tailored || !jobDescription.trim()) return
+    const payload = payloadFromDraft(tailored)
+    const skills = [...payload.skills.map((item) => item.skill_name).filter(Boolean)]
+    const known = new Set(skills.map(skillKey))
+    for (const keyword of manuallyFoundSkills) {
+      if (!known.has(skillKey(keyword))) {
+        skills.push(keyword)
+        known.add(skillKey(keyword))
+      }
+    }
+    setSummaryOptions(generateSummaryOptions({
+      profile: tailored.profile,
+      skills,
+      highlights: payload.work_experience.map((item) => item.description).filter(Boolean),
+    }, jobDescription, summaryGeneration))
+  // Updates when ATS keyword additions/removals change, not on every preview edit.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manuallyFoundSkills, jobDescription])
+
   const regenerateSummaries = () => {
     if (!tailored) {
       setMessage('Build a resume first, then return to this page.')
@@ -151,14 +222,37 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
     const payload = payloadFromDraft(tailored)
     setSummaryOptions(generateSummaryOptions({
       profile: tailored.profile,
-      skills: payload.skills.map((skill) => skill.skill_name).filter(Boolean),
+      skills: [...payload.skills.map((skill) => skill.skill_name).filter(Boolean),
+        ...manuallyFoundSkills.filter((keyword) => !payload.skills.some((skill) => skillKey(skill.skill_name) === skillKey(keyword)))],
       highlights: payload.work_experience.map((entry) => entry.description).filter(Boolean),
-    }, jobDescription))
+    }, jobDescription, summaryGeneration + 1))
+    setSummaryGeneration((count) => count + 1)
     setAppliedTone(null)
     setMessage('Professional summary options refreshed for your tailored copy.')
   }
 
+  const editSummaryOption = (option: SummaryOption) => {
+    setSummaryOptions((current) => current.map((item) =>
+      item.tone === option.tone ? option : item))
+    setAppliedTone(null)
+    setMessage('Edited summary saved. Select Use this summary to apply it to the tailored preview.')
+  }
+
+  const markChanged = (sectionKey: string, entryIndex: number, fieldKey: string) => {
+    setChangedFields((current) => new Set(current).add(`${sectionKey}:${entryIndex}:${fieldKey}`))
+  }
+
+  const renderPreviewField = (before: string, after: string, fieldId: string) => {
+    if (!changedFields.has(fieldId) || before === after) return after
+    const words = after.match(/\S+\s*/g) ?? []
+    const mask = addedWordMask(before, after)
+    return words.map((word, index) => mask[index]
+      ? <mark className="tailor-ai-added" key={index}>{word}</mark>
+      : <span key={index}>{word}</span>)
+  }
+
   const applySummary = (option: SummaryOption) => {
+    markChanged('summary', 0, 'value')
     setTailored((current) => {
       if (!current) return current
       const existing = current.sections.find((section) => section.key === 'summary')
@@ -172,6 +266,36 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
     setMessage('Summary applied to the tailored copy only. Resume match updates automatically.')
   }
 
+  const deleteAppliedSummary = (_option: SummaryOption) => {
+    if (!baseDraft) {
+      setMessage('No original parsed resume was found to restore.')
+      return
+    }
+    const originalSummarySection = baseDraft.sections.find((section) => section.key === 'summary')
+    const originalText = typeof originalSummarySection?.entries[0] === 'string'
+      ? originalSummarySection.entries[0]
+      : baseDraft.profile.professional_summary ?? ''
+    setTailored((current) => {
+      if (!current) return current
+      const sections = current.sections.filter((section) => section.key !== 'summary')
+      if (originalSummarySection) {
+        const originalPosition = baseDraft.sections.findIndex((section) => section.key === 'summary')
+        sections.splice(Math.min(originalPosition, sections.length), 0,
+          { ...originalSummarySection, entries: [...originalSummarySection.entries] })
+      } else if (originalText) {
+        sections.unshift({ key: 'summary', title: 'Professional summary', entries: [originalText] })
+      }
+      return { ...current, sections }
+    })
+    setChangedFields((current) => {
+      const next = new Set(current)
+      next.delete('summary:0:value')
+      return next
+    })
+    setAppliedTone(null)
+    setMessage('Original parsed professional summary restored to the tailored preview.')
+  }
+
   const applySuggestion = (change: SuggestionChange) => {
     const section = tailored?.sections.find((item) => item.key === change.target.sectionKey)
     const entry = section?.entries[change.target.entryIndex]
@@ -179,6 +303,7 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
       setMessage('This suggestion targets a field not present in the tailored resume.')
       return
     }
+    markChanged(change.target.sectionKey, change.target.entryIndex, change.target.fieldKey)
     setTailored((current) => current && ({
       ...current,
       sections: current.sections.map((item) => item.key !== change.target.sectionKey
@@ -188,12 +313,47 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
           entries: item.entries.map((oldEntry, index) => index !== change.target.entryIndex
             ? oldEntry
             : typeof oldEntry === 'string'
-              ? change.newText
-              : { ...oldEntry, [change.target.fieldKey]: change.newText }),
+              ? replaceTextInField(oldEntry, change.suggestion.original_text, change.newText)
+              : { ...oldEntry, [change.target.fieldKey]: replaceTextInField(
+                String(oldEntry[change.target.fieldKey as keyof typeof oldEntry] ?? ''),
+                change.suggestion.original_text, change.newText) }),
         }),
     }))
     setAppliedTone(null)
     setMessage('Suggestion applied to the tailored copy only. Resume match updates automatically.')
+  }
+
+  const regenerateSuggestions = (group?: string, source: Draft | null = tailored) => {
+    if (!source) return
+    const generation = suggestionGeneration + 1
+    const generated: ResumeRecommendation[] = []
+    const label = (key: string) => ({ summary: 'Professional Summary',
+      work_experience: 'Work Experience', education: 'Education', skills: 'Skills',
+      projects: 'Projects', certifications: 'Certifications' }[key] ?? key)
+    for (const section of source.sections) {
+      if (group && label(section.key) !== group) continue
+      for (const entry of section.entries) {
+        const fields = typeof entry === 'string' ? [['value', entry]] : Object.entries(entry)
+        for (const [field, raw] of fields) {
+          if (typeof raw !== 'string' || !raw.trim() ||
+              !['value', 'description', 'skill_name', 'field_of_study', 'name'].includes(field)) continue
+          // Local wording variations preserve the user's original claims and metrics.
+          const original = raw.trim()
+          const lead = generation % 3 === 0 ? 'Relevant background: '
+            : generation % 3 === 1 ? 'Experience with ' : 'Strengths include '
+          const suggested = `${lead}${original.charAt(0).toLowerCase()}${original.slice(1)}`
+          generated.push({ section_name: label(section.key), original_text: original,
+            suggested_change: suggested,
+            reasoning: 'Optional locally drafted wording variation. Review for accuracy and fit before applying; no achievements or qualifications were invented.' })
+        }
+      }
+    }
+    setRecommendations((current) => group
+      ? [...current.filter((item) => item.section_name !== group), ...generated]
+      : generated)
+    setSuggestionGeneration(generation)
+    setMessage(generated.length ? 'Local wording suggestions refreshed. Review before applying.'
+      : 'No editable text found in this section for wording suggestions.')
   }
 
   // Export the live tailored state, never the original sessionStorage draft.
@@ -272,7 +432,11 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
               <h3>ATS Compatibility Score</h3>
               <p>Local keyword match preview — not an official ATS assessment.</p>
             </div>
-            {atsResponse && <AtsScorePanel response={atsResponse} />}
+            {atsResponse && <AtsScorePanel response={atsResponse}
+              hiddenKeywords={hiddenAtsKeywords}
+              onRemoveKeyword={removeAtsKeyword}
+              onAddSkill={addMissedSkill}
+              manuallyFoundSkills={manuallyFoundSkills} />}
           </section>
 
           <section className="tailor-dropdown" aria-label="AI Professional Summary">
@@ -289,7 +453,8 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
               <div id="tailor-summary-content" className="tailor-dropdown-body">
                 {summaryOptions.length > 0 ? (
                   <SummaryOptions options={summaryOptions} appliedTone={appliedTone}
-                    onApply={applySummary} onRegenerate={regenerateSummaries} />
+                    onApply={applySummary} onRegenerate={regenerateSummaries}
+                    onEdit={editSummaryOption} onDelete={deleteAppliedSummary} />
                 ) : <p>Submit a job description to generate summary options.</p>}
               </div>
             )}
@@ -307,13 +472,18 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
             </button>
             {suggestionsOpen && (
               <div id="tailor-suggestions-content" className="tailor-dropdown-body">
-                <p className="tailor-demo-note">Current suggestions are demonstration data, not personalized AI results.</p>
+                <p className="tailor-demo-note">Suggestions here are locally drafted wording variations, not results from a connected AI service. Review all wording before applying.</p>
                 <button className="button button-secondary" type="button"
                   onClick={() => setRecommendations(sampleResumeRecommendations)}>
                   Load Demo Suggestions
                 </button>
-                <ResumeSuggestions recommendations={recommendations} sections={tailored.sections}
-                  onApplySuggestion={applySuggestion} />
+                <button className="button button-secondary" type="button"
+                  onClick={() => regenerateSuggestions()}>
+                  Regenerate all suggestions
+                </button>
+                <ResumeSuggestions key={suggestionGeneration}
+                  recommendations={recommendations} sections={tailored.sections}
+                  onApplySuggestion={applySuggestion} onRegenerateSection={regenerateSuggestions} />
               </div>
             )}
           </section>
@@ -326,7 +496,7 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
           <section className="resume-preview-section" aria-label="Tailored resume preview">
             <div className="resume-preview-heading">
               <h3>Tailored copy preview</h3>
-              <p>Your original resume remains unchanged when you export this tailored copy.</p>
+              <p>Your original resume remains unchanged. Highlighted words were added in applied summary or suggestion edits; highlights are preview-only and do not appear in exports.</p>
             </div>
             <div className="resume-preview-background">
               <div className="resume-preview-page-frame">
@@ -338,7 +508,30 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
                   return (
                     <section key={section.key} className="preview-section">
                       <h4>{section.title ?? section.key.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())}</h4>
-                      {content.map((value, index) => <p key={`${section.key}-${index}`}>{value}</p>)}
+                      {section.entries.map((entry, index) => {
+                        if (!entryText(entry)) return null
+                        const before = section.key === 'skills' && typeof entry !== 'string' && 'skill_name' in entry
+                          ? baseDraft?.sections.find((original) => original.key === 'skills')?.entries.find((original) =>
+                            typeof original !== 'string' && 'skill_name' in original &&
+                            skillKey(original.skill_name) === skillKey(entry.skill_name))
+                          : baseDraft?.sections.find((original) => original.key === section.key)?.entries[index]
+                        if (typeof entry === 'string') return (
+                          <p key={`${section.key}-${index}`}>
+                            {renderPreviewField(typeof before === 'string' ? before : '', entry,
+                              `${section.key}:${index}:value`)}
+                          </p>)
+                        return <p key={`${section.key}-${index}`}>
+                          {Object.entries(entry)
+                            .filter(([key, value]) => key !== 'id' && key !== 'sort_order' &&
+                              typeof value === 'string' && value.trim())
+                            .map(([key, value], fieldIndex) => <span key={key}>
+                              {fieldIndex > 0 ? ' · ' : ''}
+                              {renderPreviewField(typeof before === 'object' && before !== null
+                                ? String((before as unknown as Record<string, unknown>)[key] ?? '') : '',
+                                String(value), `${section.key}:${index}:${key}`)}
+                            </span>)}
+                        </p>
+                      })}
                     </section>
                   )
                 })}

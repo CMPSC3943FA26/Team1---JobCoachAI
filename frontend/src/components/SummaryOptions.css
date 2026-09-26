@@ -169,3 +169,21 @@
     padding: 20px 18px;
   }
 }
+/* Match the AI summary's display typography exactly while editing. */
+.summary-option-editor {
+  width: 100%;
+  resize: vertical;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  line-height: 1.65;
+}
+.summary-option-edit-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Keep per-summary Edit and Delete controls underneath Use this summary. */
+.summary-option-edit-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.summary-option-edit-actions > button { flex: 1; }
+.summary-option-delete { color: #a22929; border-color: #e5b8b8; }
+.summary-option-delete:hover { border-color: #a22929; background: #fff4f4; }
