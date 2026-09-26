@@ -329,31 +329,6 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
     setMessage('Suggestion applied to the tailored copy only. Resume match updates automatically.')
   }
 
-  // ATS keywords become opt-in Skills suggestions. Nothing changes in the preview
-  // or export unless the user explicitly chooses to apply one here.
-  const applyAtsKeywordSuggestion = (keyword: string) => {
-    const skillsCount = tailored?.sections.find((section) => section.key === 'skills')?.entries.length ?? 0
-    markChanged('skills', skillsCount, 'skill_name')
-    setTailored((current) => {
-      if (!current) return current
-      const currentSkills = current.sections.find((section) => section.key === 'skills')
-      if (currentSkills?.entries.some((entry) => typeof entry !== 'string' &&
-          'skill_name' in entry && skillKey(entry.skill_name) === skillKey(keyword))) return current
-      const sections: TailorSection[] = currentSkills
-        ? current.sections.map((section) => section.key === 'skills'
-          ? { ...section, entries: [...section.entries, { skill_name: keyword }] } : section)
-        : [...current.sections, { key: 'skills', title: 'Skills', entries: [{ skill_name: keyword }] }]
-      return { ...current, sections }
-    })
-    setMessage('Keyword added to the tailored resume Skills section.')
-  }
-
-  const availableKeywordSuggestions = manuallyFoundSkills.filter((keyword) =>
-    !hiddenAtsKeywords.has(skillKey(keyword)) &&
-    !tailored?.sections.some((section) => section.key === 'skills' &&
-      section.entries.some((entry) => typeof entry !== 'string' && 'skill_name' in entry &&
-        skillKey(entry.skill_name) === skillKey(keyword))))
-
   const regenerateSuggestions = (group?: string, source: Draft | null = tailored) => {
     if (!source) return
     const generation = suggestionGeneration + 1
@@ -379,9 +354,16 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
         }
       }
     }
-    setRecommendations((current) => group
-      ? [...current.filter((item) => item.section_name !== group), ...generated]
-      : generated)
+    setRecommendations((current) => {
+      if (!group) return generated
+      // Keep the regenerated section where it was, preserving the user's
+      // position and the identity of other suggestion sections.
+      const firstIndex = current.findIndex((item) => item.section_name === group)
+      if (firstIndex === -1) return [...current, ...generated]
+      const next = current.filter((item) => item.section_name !== group)
+      next.splice(firstIndex, 0, ...generated)
+      return next
+    })
     setSuggestionGeneration(generation)
     setMessage(generated.length ? 'Local wording suggestions refreshed. Review before applying.'
       : 'No editable text found in this section for wording suggestions.')
@@ -504,29 +486,17 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
             {suggestionsOpen && (
               <div id="tailor-suggestions-content" className="tailor-dropdown-body">
                 <p className="tailor-demo-note">Suggestions here are locally drafted wording variations, not results from a connected AI service. Review all wording before applying.</p>
-                <button className="button button-secondary" type="button"
-                  onClick={() => setRecommendations(sampleResumeRecommendations)}>
-                  Load Demo Suggestions
-                </button>
-                <button className="button button-secondary" type="button"
-                  onClick={() => regenerateSuggestions()}>
-                  Regenerate all suggestions
-                </button>
-                {availableKeywordSuggestions.length > 0 && (
-                  <div className="ats-suggestion-group" aria-label="Confirmed ATS keyword suggestions">
-                    <h4>Keywords to consider adding to your resume</h4>
-                    {availableKeywordSuggestions.map((keyword) => (
-                      <div key={skillKey(keyword)} className="ats-suggestion-card">
-                        <p><strong>{keyword}</strong> — add to your Skills section if accurate.</p>
-                        <button className="button button-secondary" type="button"
-                          onClick={() => applyAtsKeywordSuggestion(keyword)}>
-                          Add to tailored resume
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <ResumeSuggestions key={suggestionGeneration}
+                <div className="tailor-suggestions-toolbar" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', gap: 10, margin: '12px 0 18px' }}>
+                  <button className="button button-secondary" type="button"
+                    onClick={() => setRecommendations(sampleResumeRecommendations)}>
+                    Load Demo Suggestions
+                  </button>
+                  <button className="button button-secondary" type="button"
+                    onClick={() => regenerateSuggestions()}>
+                    Regenerate all suggestions
+                  </button>
+                </div>
+                <ResumeSuggestions
                   recommendations={recommendations} sections={tailored.sections}
                   onApplySuggestion={applySuggestion} onRegenerateSection={regenerateSuggestions} />
               </div>

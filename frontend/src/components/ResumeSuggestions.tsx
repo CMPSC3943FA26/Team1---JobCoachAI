@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type {
   ResumeRecommendation,
   ResumeSectionLike,
@@ -96,6 +96,13 @@ export function ResumeSuggestions({
   const [editValue, setEditValue] = useState<string>('')
   const [appliedKeys, setAppliedKeys] = useState<Set<string>>(new Set())
   const [applyError, setApplyError] = useState<string | null>(null)
+
+  // New recommendations invalidate the prior cards' applied indicators without
+  // remounting the list or collapsing the section the user is viewing.
+  useEffect(() => {
+    setAppliedKeys(new Set())
+    setApplyError(null)
+  }, [recommendations])
 
   const groups = useMemo(() => {
     const order: string[] = []
@@ -228,14 +235,6 @@ export function ResumeSuggestions({
 
               {!isCollapsed && (
                 <div className="suggestion-section-body">
-                  {onRegenerateSection && <button type="button"
-                    className="suggestion-btn suggestion-btn-edit"
-                    onClick={() => {
-                      onRegenerateSection(group.name)
-                      setEditingKey(null)
-                      setAppliedKeys(new Set())
-                      setApplyError(null)
-                    }}>Regenerate {group.name} suggestions</button>}
                   {group.items.map((suggestion, index) => {
                     const key = `${group.name}::${index}`
                     const isEditing = editingKey === key
@@ -381,6 +380,20 @@ export function ResumeSuggestions({
                               >
                                 Edit Suggestion
                               </button>
+
+                              {onRegenerateSection && (
+                                <button
+                                  type="button"
+                                  className="suggestion-btn suggestion-btn-edit"
+                                  onClick={() => {
+                                    onRegenerateSection(group.name)
+                                    setEditingKey(null)
+                                    setApplyError(null)
+                                  }}
+                                >
+                                  Regenerate
+                                </button>
+                              )}
 
                               <button
                                 type="button"
