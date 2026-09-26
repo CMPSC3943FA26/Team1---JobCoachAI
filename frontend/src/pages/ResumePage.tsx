@@ -812,11 +812,6 @@ const hasExportableData = Boolean(
               <Button type="button" variant="secondary" onClick={handleClearResume}>
                 Clear Data
               </Button>
-              {!isGuest && (
-                <Button type="submit" variant="secondary" className="resume-top-save-button">
-                  Save Resume <span aria-hidden="true">✓</span>
-                </Button>
-              )}
             </div>
           </div>
         </div>
