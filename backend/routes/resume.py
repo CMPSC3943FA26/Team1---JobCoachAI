@@ -8,8 +8,10 @@ resume_bp = Blueprint("resume",__name__,url_prefix='/resume')
 def insert(user_id):
     data = request.get_json()
     result = create_resume(user_id,data)
+    resume_id = result.resume.id
     if result:
-       return jsonify({'message':'resume created successfully'}),201
+       resume_id = result.resume.id
+       return jsonify({'message':'resume created successfully','resume_id':str(resume_id)}),201
     else:
        return jsonify({'error':'issue with creating resume'})
 

@@ -8,7 +8,9 @@ import { useEffect, useState, type DragEvent, type KeyboardEvent } from "react";
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from "docx";
 import { Button } from "../components/Button";
 import {
+  deleteResumeFromDatabase,
   saveResumeToDatabase,
+  updateResumeToDatabase,
 } from "../services/resumeService";
 import { DocumentEditor } from "../components/DocumentEditor";
 import {
@@ -314,6 +316,7 @@ export function ResumePage({
   const [resumeDeleted, setResumeDeleted] = useState(false);
   const [draggedSection, setDraggedSection] = useState<SectionKey | null>(null);
   const [dropTarget, setDropTarget] = useState<SectionKey | null>(null);
+  const [resumeId,setResumeID] = useState<string | null>(null);
   // Track which resume sections are expanded
   const [openSections, setOpenSections] = useState<Partial<Record<SectionKey, boolean>>>({
     summary: true,
@@ -580,10 +583,21 @@ export function ResumePage({
 }
   const handleSave = async () => {
     try {
-     const payload = buildResumePayload()
-      await saveResumeToDatabase(payload)
+      const payload = buildResumePayload()
+      if (resumeId == null) {
+      const newResumeId = await saveResumeToDatabase(payload)
+      const resume_id = newResumeId["resume_id"]
+      setResumeID(resume_id)
       setStatus("saved Resume to Database")
       console.log("Resume Saved to Database")
+      }
+      else {
+        await updateResumeToDatabase(resumeId,payload)
+        setStatus("Updated Resume in Database")
+        console.log("Resume updated in Database")
+      }
+
+
     }
     catch(error) {
       setStatus("error saving resume")
@@ -679,10 +693,25 @@ const hasExportableData = Boolean(
       document.title = originalTitle;
     }, 1000);
   };
-  const handleDelete = () => {
+  const handleDelete = async () => {
+    try {
+    if (resumeId == null) {
     setResumeDeleted(true);
     setShowDeleteDialog(false);
     setStatus("Resume deleted from this workspace.");
+    }
+    else  {
+      await deleteResumeFromDatabase(resumeId)
+      setResumeID(null)
+      setResumeDeleted(true);
+      setShowDeleteDialog(false);
+      setStatus("Resume deleted from this workspace.");
+    }
+  }
+  catch(error) {
+    setStatus("Failed to delete resume")
+    console.error("Error deleting resume:",error)
+  }
   };
   const handleResumeFileChange = (file: File | null) => {
     if (!file) return;
