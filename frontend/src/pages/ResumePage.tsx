@@ -328,6 +328,7 @@ export function ResumePage({
   });
   // Clear the visible editor and the stored draft; do not delete any saved database resume.
   const handleClearResume = () => {
+    setResumeID(null)
     // Remove the persisted sample/draft before navigating away from this page.
     sessionStorage.removeItem(resumeDraftStorageKey);
     // All displayed fields and preview use these controlled React values.
@@ -596,12 +597,13 @@ export function ResumePage({
         setStatus("Updated Resume in Database")
         console.log("Resume updated in Database")
       }
-
+      return true
 
     }
     catch(error) {
       setStatus("error saving resume")
       console.log("error saving resume:",error)
+      return false
     }
   }
 const hasExportableData = Boolean(
@@ -1271,7 +1273,7 @@ const hasExportableData = Boolean(
           <Button
             variant="secondary"
             type="button"
-            onClick={() => {
+            onClick={async() => {
               const showContinueError = (message: string) => {
                 setStatus(message);
                 // Keep the user near the Continue button and its validation message.
@@ -1296,6 +1298,10 @@ const hasExportableData = Boolean(
               }
               if (isGuest && hasResumeContent && !guestExportIsCurrent) {
                 setShowGuestExportWarning(true);
+                return;
+              }
+              const saved = await handleSave()
+              if (!saved) {
                 return;
               }
               setStatus("");
@@ -1338,7 +1344,12 @@ const hasExportableData = Boolean(
                   onClick={() => setShowGuestExportWarning(false)}>
                   Stay on resume
                 </Button>
-                <Button variant="secondary" type="button" onClick={() => {
+                <Button variant="secondary" type="button" onClick={async() => {
+                  const saved = await handleSave();
+
+                  if (!saved) {
+                  return;
+                  }
                   setShowGuestExportWarning(false);
                   setStatus("");
                   window.location.hash = '#tailor';
