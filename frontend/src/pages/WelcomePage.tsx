@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react'
-import { signInAsGuest, supabase } from '../lib/supabase'
+import {
+  signIn,
+  signUp,
+  signInAsGuest,
+  supabase,
+} from '../lib/supabase'
 
 type WelcomePageProps = {
   onContinueAsGuest: () => void
@@ -44,26 +49,49 @@ export function WelcomePage({
   }, [])
 
   // Display the account creation confirmation.
-  const handleRegisterSubmit = (
-    event: React.FormEvent<HTMLFormElement>
-  ) => {
-    event.preventDefault()
+  const handleRegisterSubmit = async (
+  event: React.FormEvent<HTMLFormElement>
+) => {
+  event.preventDefault()
+
+  try {
+    setError(false)
+
+    const data = await signUp(email, password)
+
+    console.log('Account created:', data)
 
     setAccountCreated(true)
     setIsRegistering(false)
+    setPassword('')
+  } catch (err) {
+    console.error('Registration error:', err)
+    setError(true)
   }
+}
 
   // Continue to the application using the entered profile name.
-  const handleLoginSubmit = (
-    event: React.FormEvent<HTMLFormElement>
-  ) => {
-    event.preventDefault()
+  const handleLoginSubmit = async (
+  event: React.FormEvent<HTMLFormElement>
+) => {
+  event.preventDefault()
+
+  try {
+    setError(false)
+
+    const data = await signIn(email, password)
+
+    console.log('Login successful:', data)
 
     onLogin(
       firstName || 'User',
       lastName || ''
     )
+  } catch (err) {
+    console.error('Login error:', err)
+    setError(true)
   }
+}
   const [error,setError] = useState(false)
   
 
@@ -179,7 +207,8 @@ export function WelcomePage({
         {accountCreated && (
           <>
             <p className="success-message">
-              Account created successfully! Please log in or continue as guest.
+              Account created! Please check your email and click the verification
+              link before logging in.
             </p>
 
             <div className="success-divider" />
