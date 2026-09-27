@@ -20,11 +20,16 @@ def _to_json_safe(value):
 def create_resume(data: ResumeSaveRequest, user_id: str):
     resume_payload = _to_json_safe(data.resume.dict(exclude_unset=True))
 
-    resume_row = supabase.table('resumes').insert({
+    resume_data = {
         **resume_payload,
-        'user_id': user_id,
-    }).execute()
+        'user_id': str(user_id),
+    }
 
+    print("resume_data:", resume_data)
+    print("user_id value:", resume_data["user_id"])
+    print("user_id type:", type(resume_data["user_id"]))
+
+    resume_row = supabase.table('resumes').insert(resume_data).execute()
     resume_id = resume_row.data[0]['id']
 
     for section_name, rows in [
@@ -34,7 +39,9 @@ def create_resume(data: ResumeSaveRequest, user_id: str):
         ('projects', data.projects),
         ('certifications', data.certifications),
         ('section_order', data.section_order),
+        
     ]:
+          
         if rows:
             payload = [
                 {**_to_json_safe(row.dict()), 'resume_id': resume_id}
@@ -51,6 +58,8 @@ def get_resume(resume_id: str, user_id: str):
 
 #delete resume from database
 def delete_resume(resume_id: str, user_id: str):
+    resume_id = str(resume_id)
+    user_id = str(user_id)
     if not get_resume(resume_id,user_id):
         return None
     supabase.table("resumes").delete().eq("id", resume_id).eq("user_id", user_id).execute()
@@ -60,15 +69,17 @@ def delete_resume(resume_id: str, user_id: str):
 def update_resume(resume_id: str, user_id: str, data: ResumeUpdateRequest):
     if not get_resume(resume_id, user_id):
         return None
+    resume_id = str(resume_id)
+    user_id = str(user_id)
 
-    resume_payload = _to_json_safe(data.resume.dict(exclude_unset=True))
+    resume_payload = _to_json_safe(data.resume.model_dump(exclude_unset=True))
     supabase.table("resumes").update(resume_payload).eq(
         "id", resume_id
     ).eq("user_id", user_id).execute()
 
     provided_fields = getattr(data, "model_fields_set", None)
     if provided_fields is None:
-        provided_fields = data.__fields_set__
+        provided_fields = data.model_fields_set
 
     for table, rows in [
         ("work_experience", data.work_experience),

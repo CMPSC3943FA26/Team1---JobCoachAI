@@ -8,9 +8,8 @@ resume_bp = Blueprint("resume",__name__,url_prefix='/resume')
 def insert(user_id):
     data = ResumeSaveRequest(**request.get_json())
     result = create_resume(data,user_id)
-    resume_id = result.resume.id
     if result:
-       resume_id = result.resume.id
+       resume_id = result["id"]
        return jsonify({'message':'resume created successfully','resume_id':str(resume_id)}),201
     else:
        return jsonify({'error':'issue with creating resume'})
@@ -26,9 +25,9 @@ def put(user_id,resume_id):
    
 @resume_bp.route('/delete_resume/<uuid:user_id>/<uuid:resume_id>',methods=['DELETE'])
 def delete(user_id,resume_id):
-   result = delete_resume(user_id,resume_id)
+   result = delete_resume(resume_id,user_id)
    if result:
-      return jsonify({'resume successfully deleted'}),200
+      return jsonify({'message': 'resume successfully deleted'}), 200
    else:
       return jsonify({'error':'no resume found to delete'}),404
 

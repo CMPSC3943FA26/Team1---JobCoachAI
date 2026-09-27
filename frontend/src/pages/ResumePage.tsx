@@ -316,7 +316,10 @@ export function ResumePage({
   const [resumeDeleted, setResumeDeleted] = useState(false);
   const [draggedSection, setDraggedSection] = useState<SectionKey | null>(null);
   const [dropTarget, setDropTarget] = useState<SectionKey | null>(null);
-  const [resumeId,setResumeID] = useState<string | null>(null);
+  const resumeIdStorageKey = ""
+  const [resumeId,setResumeID] = useState<string | null>(
+  () => sessionStorage.getItem(resumeIdStorageKey)
+);
   // Track which resume sections are expanded
   const [openSections, setOpenSections] = useState<Partial<Record<SectionKey, boolean>>>({
     summary: true,
@@ -586,13 +589,18 @@ export function ResumePage({
     try {
       const payload = buildResumePayload()
       if (resumeId == null) {
+            console.log("DOING INSERT")
       const newResumeId = await saveResumeToDatabase(payload)
       const resume_id = newResumeId["resume_id"]
+      sessionStorage.setItem(resumeIdStorageKey, resume_id);
+      console.log("SAVE RESPONSE:", newResumeId)
+      console.log("NEW RESUME ID:", resume_id)
       setResumeID(resume_id)
       setStatus("saved Resume to Database")
       console.log("Resume Saved to Database")
       }
       else {
+            console.log("DOING UPDATE:", resumeId)
         await updateResumeToDatabase(resumeId,payload)
         setStatus("Updated Resume in Database")
         console.log("Resume updated in Database")
@@ -704,6 +712,7 @@ const hasExportableData = Boolean(
     }
     else  {
       await deleteResumeFromDatabase(resumeId)
+      sessionStorage.removeItem(resumeIdStorageKey)
       setResumeID(null)
       setResumeDeleted(true);
       setShowDeleteDialog(false);
