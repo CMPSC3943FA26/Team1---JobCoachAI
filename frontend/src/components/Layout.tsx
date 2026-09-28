@@ -8,6 +8,7 @@ type LayoutProps = {
     | 'parsed'
     | 'tailor'
   profileInitials: string | null
+  isGuest: boolean
   onHomeClick: () => void
 }
 
@@ -15,6 +16,7 @@ export function Layout({
   children,
   currentScreen,
   profileInitials,
+  isGuest,
   onHomeClick,
 }: LayoutProps) {
 
@@ -144,8 +146,8 @@ export function Layout({
             <button
               className="profile-avatar"
               type="button"
-              aria-label="Profile"
-              title="Profile"
+              aria-label={isGuest ? 'Guest' : 'User'}
+              title={isGuest ? 'Guest' : 'User'}
             >
               {profileInitials}
             </button>

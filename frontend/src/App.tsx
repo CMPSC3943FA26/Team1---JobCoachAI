@@ -83,8 +83,9 @@ function App() {
 
   // Set up the user profile after login
   const handleAccountLogin = (firstName: string, lastName: string) => {
-    const initials =
-      `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
+    const firstInitial = firstName.trim().charAt(0)
+    const lastInitial = lastName.trim().charAt(0)
+    const initials = `${firstInitial}${lastInitial}`.toUpperCase() || 'U'
 
     setProfileInitials(initials)
     setAccountType('user')
@@ -179,6 +180,7 @@ function App() {
     <Layout
       currentScreen={currentScreen}
       profileInitials={profileInitials}
+      isGuest={accountType === 'guest'}
       onHomeClick={handleHomeClick}
     >
       {renderCurrentPage()}
