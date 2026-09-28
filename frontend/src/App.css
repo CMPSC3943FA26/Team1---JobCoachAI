@@ -3169,3 +3169,46 @@ textarea::placeholder {
 .tailor-skill-editor .tailor-skill-error { color: #b91c1c; margin-top: 8px; }
 .tailor-skill-editor .tailor-skill-success { color: #166534; margin-top: 12px; }
 .tailor-skill-editor .tailor-skill-empty { margin: 0; color: #64748b; }
+
+/* LOGIN INTEGRATION: password show / hide control */
+.password-field {
+  position: relative;
+  width: 100%;
+}
+
+.password-field input {
+  width: 100%;
+  padding-right: 46px;
+}
+
+.password-eye {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.password-eye svg {
+  display: block;
+  width: 19px;
+  height: 19px;
+}
+
+.password-eye:hover {
+  color: var(--blue);
+}
+
+.password-eye:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
