@@ -43,6 +43,7 @@ export async function getjwt() {
 }
 
 // Create a new user account
+// Create a new user account
 export async function signUp(email: string, password: string) {
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -50,7 +51,27 @@ export async function signUp(email: string, password: string) {
   })
 
   if (error) {
+    if (
+      error.message.toLowerCase().includes('already registered')
+    ) {
+      throw new Error(
+        'An account with this email already exists. Please log in.'
+      )
+    }
+
     throw error
+  }
+
+  // Supabase can return an obfuscated user for an
+  // email that already belongs to a confirmed account.
+  if (
+    data.user &&
+    Array.isArray(data.user.identities) &&
+    data.user.identities.length === 0
+  ) {
+    throw new Error(
+      'An account with this email already exists. Please log in.'
+    )
   }
 
   return data
