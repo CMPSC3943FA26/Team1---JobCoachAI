@@ -1,32 +1,41 @@
 # schemas/resume.py
 from datetime import date
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from uuid import UUID
+
+def fix_empty(value):
+    if value == "":
+        return None
+    return value
+
 
 
 # ---------- Work Experience ----------
-
+   
 class WorkExperienceCreate(BaseModel):
     job_title: str
     company: str
     location: Optional[str] = None
-    start_date: date
+    start_date: Optional[date] = None
     end_date: Optional[date] = None
     description: str
     sort_order: int
 
-
+    start_date_fix=  field_validator("start_date",mode="before")(fix_empty)
+    end_date_fix  =  field_validator("end_date",mode="before")(fix_empty)
 class WorkExperienceUpdate(BaseModel):
     id: Optional[UUID] = None
     job_title: str
     company: str
     location: Optional[str] = None
-    start_date: date
+    start_date: Optional[date] = None
     end_date: Optional[date] = None
     description: str
     sort_order: int
-
+    start_date_fix=  field_validator("start_date",mode="before")(fix_empty)
+    end_date_fix  =  field_validator("end_date",mode="before")(fix_empty)
+    
 
 # ---------- Education ----------
 
@@ -37,8 +46,8 @@ class EducationCreate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     sort_order: int
-
-
+    start_date_fix=  field_validator("start_date",mode="before")(fix_empty)
+    end_date_fix  =  field_validator("end_date",mode="before")(fix_empty)
 class EducationUpdate(BaseModel):
     id: Optional[UUID] = None
     school: str
@@ -47,6 +56,9 @@ class EducationUpdate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     sort_order: int
+
+    start_date_fix=  field_validator("start_date",mode="before")(fix_empty)
+    end_date_fix  =  field_validator("end_date",mode="before")(fix_empty)
 
 
 # ---------- Skill ----------
@@ -86,7 +98,7 @@ class CertificationCreate(BaseModel):
     issuer: Optional[str] = None
     date_earned: Optional[date] = None
     sort_order: int
-
+    date_earned_fix= field_validator("date_earned", mode="before")(fix_empty)
 
 class CertificationUpdate(BaseModel):
     id: Optional[UUID] = None
@@ -94,9 +106,8 @@ class CertificationUpdate(BaseModel):
     issuer: Optional[str] = None
     date_earned: Optional[date] = None
     sort_order: int
-
-# -----------Section-Order--------
-
+    date_earned_fix= field_validator("date_earned", mode="before")(fix_empty)
+#-----------Section-Order--------
 
 class SectionOrderCreate(BaseModel):
     section_name: str

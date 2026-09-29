@@ -7,32 +7,30 @@ resume_bp = Blueprint("resume", __name__, url_prefix='/resume')
 
 @resume_bp.route('/add_resume/<uuid:user_id>', methods=['POST'])
 def insert(user_id):
-    data = request.get_json()
-    result = create_resume(user_id, data)
+    data = ResumeSaveRequest(**request.get_json())
+    result = create_resume(data,user_id)
     if result:
-        return jsonify({'message': 'resume created successfully'}), 201
+       resume_id = result["id"]
+       return jsonify({'message':'resume created successfully','resume_id':str(resume_id)}),201
     else:
-        return jsonify({'error': 'issue with creating resume'})
+       return jsonify({'error':'issue with creating resume'})
 
-
-@resume_bp.route('/update_resume/<uuid:user_id>/<uuid:resume_id>', methods=['PATCH'])
-def put(user_id, resume_id):
-    data = ResumeUpdateRequest(**request.get_json())
-    result = update_resume(resume_id, user_id, data)
-    if result:
-        return jsonify({'message': 'resume updated successfully'}), 200
-    else:
-        return jsonify({'error': 'issue with updating resume', 'result': result}), 400
-
-
-@resume_bp.route('/delete_resume/<uuid:user_id>/<uuid:resume_id>', methods=['DELETE'])
-def delete(user_id, resume_id):
-    result = delete_resume(user_id, resume_id)
-    if result:
-        return jsonify({'resume successfully deleted'}), 200
-    else:
-        return jsonify({'error': 'no resume found to delete'}), 404
-
+@resume_bp.route('/update_resume/<uuid:user_id>/<uuid:resume_id>',methods=['PATCH'])
+def put(user_id,resume_id):
+   data = ResumeUpdateRequest(**request.get_json())
+   result = update_resume(resume_id,user_id,data)
+   if result:
+      return jsonify({'message':'resume updated successfully'}),200
+   else:
+      return jsonify({'error':'issue with updating resume','result': result}),400
+   
+@resume_bp.route('/delete_resume/<uuid:user_id>/<uuid:resume_id>',methods=['DELETE'])
+def delete(user_id,resume_id):
+   result = delete_resume(resume_id,user_id)
+   if result:
+      return jsonify({'message': 'resume successfully deleted'}), 200
+   else:
+      return jsonify({'error':'no resume found to delete'}),404
 
 @resume_bp.route('/get_resume/<uuid:user_id>/<uuid:resume_id>', methods=['GET'])
 def get(user_id, resume_id):

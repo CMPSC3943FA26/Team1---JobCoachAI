@@ -4,6 +4,7 @@
 
 import type { ReactNode } from 'react'
 
+// Reusable form field wrapper for consistent labels and spacing.
 type FieldGroupProps = {
   label: string
   required?: boolean
