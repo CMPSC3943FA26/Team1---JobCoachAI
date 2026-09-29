@@ -5,8 +5,9 @@
 
 import { getUserId, getjwt } from '../lib/supabase'
 
+console.log("ENV:", import.meta.env);
 const api_url =import.meta.env.VITE_API_URL
-
+console.log("VITE_API_URL =", api_url)
 
 export async function loadResumeFromDatabase(resume_id: string) {
   const jwt = await getjwt()
@@ -44,7 +45,10 @@ export async function updateResumeToDatabase(resume_id: string,data: object) {
   const request = `${api_url}/update_resume/${userId}/${resume_id}`
   const headers = {'Authorization': `Bearer ${jwt}`,'Content-Type': 'application/json'}
   const response = await fetch(request, {headers: headers, method: 'PATCH', body: JSON.stringify(data)})
-
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || "failed to save resume")
+  }
   return response.json()
 }
 

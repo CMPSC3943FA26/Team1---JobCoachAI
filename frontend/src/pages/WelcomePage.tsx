@@ -457,7 +457,23 @@ export function WelcomePage({
           <button
             className="guest-link"
             type="button"
-            onClick={handleGuestLogin}
+            onClick= {async () => {
+              try {
+                setError(false)
+                const response = await signInAsGuest()
+                 console.log("Guest sign-in successful:", response)
+
+                const { data } = await supabase.auth.getSession()
+                console.log("Session after sign-in:", data.session)
+               } catch (err) {
+                  console.error("Guest sign-in error:", err)
+                  setError(true)
+              }
+              setError(false)
+              return onContinueAsGuest()
+              
+            }}
+            
           >
             Continue as guest
           </button>

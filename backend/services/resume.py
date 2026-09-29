@@ -28,7 +28,7 @@ def create_resume(data: ResumeSaveRequest, user_id: str):
     resume_data = {
         **resume_payload,
         'user_id': str(user_id),
-    }
+    }).execute()
 
     print("resume_data:", resume_data)
     print("user_id value:", resume_data["user_id"])

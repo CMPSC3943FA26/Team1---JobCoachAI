@@ -22,6 +22,7 @@ import {
   type ResumeProfile,
   type Skill,
   type WorkExperience,
+  type ResumeSaveRequest
 } from "../features/resume/resumeData";
 // Props passed from App.tsx
 type ResumePageProps = {

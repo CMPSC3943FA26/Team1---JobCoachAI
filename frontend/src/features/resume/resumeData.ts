@@ -51,6 +51,12 @@ export type Certification = {
   sort_order?: number;
 };
 
+export type SectionOrder = {
+  id?: string
+  section_name: string
+  section_order: number
+}
+
 export type ResumeProfile = {
   first_name: string;
   last_name: string;
@@ -111,7 +117,25 @@ export type ResumeSaveRequest = {
   certifications: Certification[];
 };
 
-// Sample resume data used to populate the editor during development.
+export type ResumeSaveRequest = {
+  resume: {
+  full_name: string
+  email: string
+  phone: string
+  location: string
+  professional_summary: string
+},
+  section_order: SectionOrder[]
+  work_experience: WorkExperience[]
+  education: Education[]
+  skills: Skill[]
+  projects: Project[]
+  certifications: Certification[]
+}
+
+
+
+
 export const initialResume: Resume = {
   first_name: "Jordan",
   last_name: "Lee",

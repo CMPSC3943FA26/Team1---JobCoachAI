@@ -7,7 +7,7 @@ resume_bp = Blueprint("resume", __name__, url_prefix='/resume')
 
 @resume_bp.route('/add_resume/<uuid:user_id>', methods=['POST'])
 def insert(user_id):
-    data = ResumeSaveRequest(**request.get_json())
+    data = ResumeSaveRequest(**request.get_json()) 
     result = create_resume(data,user_id)
     if result:
        resume_id = result["id"]
