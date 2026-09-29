@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from backend.schemas.resume import ResumeUpdateRequest
+from backend.schemas.resume import ResumeUpdateRequest,ResumeSaveRequest
 from backend.services.resume import create_resume, get_resume, delete_resume, update_resume, list_resumes
 
 resume_bp = Blueprint("resume", __name__, url_prefix='/resume')

@@ -123,9 +123,9 @@ class SectionOrderUpdate(BaseModel):
 # ---------- Resume ----------
 
 class ResumeCreate(BaseModel):
-    title: str
-    career_field: str
-    is_default: bool = False
+    title: Optional[str] = None 
+    career_field: Optional[str] = None
+    is_default: Optional[bool] = False
     full_name: str
     email: str
     phone: Optional[str] = None
