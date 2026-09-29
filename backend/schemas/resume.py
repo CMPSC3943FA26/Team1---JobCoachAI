@@ -25,7 +25,7 @@ class WorkExperienceCreate(BaseModel):
     start_date_fix=  field_validator("start_date",mode="before")(fix_empty)
     end_date_fix  =  field_validator("end_date",mode="before")(fix_empty)
 class WorkExperienceUpdate(BaseModel):
-    id: Optional[UUID]=None
+    id: Optional[UUID] = None
     job_title: str
     company: str
     location: Optional[str] = None
@@ -36,9 +36,6 @@ class WorkExperienceUpdate(BaseModel):
     start_date_fix=  field_validator("start_date",mode="before")(fix_empty)
     end_date_fix  =  field_validator("end_date",mode="before")(fix_empty)
     
-
-
-
 
 # ---------- Education ----------
 
@@ -52,7 +49,7 @@ class EducationCreate(BaseModel):
     start_date_fix=  field_validator("start_date",mode="before")(fix_empty)
     end_date_fix  =  field_validator("end_date",mode="before")(fix_empty)
 class EducationUpdate(BaseModel):
-    id: Optional[UUID]=None
+    id: Optional[UUID] = None
     school: str
     degree: Optional[str] = None
     field_of_study: Optional[str] = None
@@ -70,11 +67,11 @@ class SkillCreate(BaseModel):
     skill_name: str
     sort_order: int
 
+
 class SkillUpdate(BaseModel):
-    id: Optional[UUID]= None
+    id: Optional[UUID] = None
     skill_name: str
     sort_order: int
-
 
 
 # ---------- Project ----------
@@ -85,8 +82,9 @@ class ProjectCreate(BaseModel):
     link: Optional[str] = None
     sort_order: int
 
+
 class ProjectUpdate(BaseModel):
-    id: Optional[UUID]=None
+    id: Optional[UUID] = None
     name: str
     description: Optional[str] = None
     link: Optional[str] = None
@@ -103,7 +101,7 @@ class CertificationCreate(BaseModel):
     date_earned_fix= field_validator("date_earned", mode="before")(fix_empty)
 
 class CertificationUpdate(BaseModel):
-    id: Optional[UUID]=None
+    id: Optional[UUID] = None
     name: str
     issuer: Optional[str] = None
     date_earned: Optional[date] = None
@@ -117,7 +115,7 @@ class SectionOrderCreate(BaseModel):
 
 
 class SectionOrderUpdate(BaseModel):
-    id: Optional[UUID]=None
+    id: Optional[UUID] = None
     section_name: str
     section_order: int
 
@@ -125,19 +123,27 @@ class SectionOrderUpdate(BaseModel):
 # ---------- Resume ----------
 
 class ResumeCreate(BaseModel):
+    title: str
+    career_field: str
+    is_default: bool = False
     full_name: str
     email: str
     phone: Optional[str] = None
     location: Optional[str] = None
     professional_summary: Optional[str] = None
 
+
 class ResumeUpdate(BaseModel):
-    id: Optional[UUID]=None
+    id: Optional[UUID] = None
+    title: Optional[str] = None
+    career_field: Optional[str] = None
+    is_default: Optional[bool] = None
     full_name: str
     email: str
     phone: Optional[str] = None
     location: Optional[str] = None
     professional_summary: Optional[str] = None
+
 
 class ResumeUpdateRequest(BaseModel):
     resume: ResumeUpdate
@@ -149,9 +155,6 @@ class ResumeUpdateRequest(BaseModel):
     certifications: list[CertificationUpdate] = []
 
 
-
-
-
 class ResumeSaveRequest(BaseModel):
     """Full save: resume fields + all six sections at once."""
     resume: ResumeCreate
@@ -161,6 +164,3 @@ class ResumeSaveRequest(BaseModel):
     skills: list[SkillCreate] = []
     projects: list[ProjectCreate] = []
     certifications: list[CertificationCreate] = []
-
-
-

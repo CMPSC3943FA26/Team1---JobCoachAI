@@ -1,8 +1,9 @@
 from flask import Blueprint, request, jsonify
-from backend.schemas.resume import ResumeUpdateRequest, ResumeSaveRequest
-from backend.services.resume import create_resume, get_resume, delete_resume, update_resume
+from backend.schemas.resume import ResumeUpdateRequest
+from backend.services.resume import create_resume, get_resume, delete_resume, update_resume, list_resumes
 
-resume_bp = Blueprint("resume",__name__,url_prefix='/resume')
+resume_bp = Blueprint("resume", __name__, url_prefix='/resume')
+
 
 @resume_bp.route('/add_resume/<uuid:user_id>', methods=['POST'])
 def insert(user_id):
@@ -32,11 +33,19 @@ def delete(user_id,resume_id):
       return jsonify({'error':'no resume found to delete'}),404
 
 @resume_bp.route('/get_resume/<uuid:user_id>/<uuid:resume_id>', methods=['GET'])
-def get(user_id,resume_id):
-   data = get_resume(user_id,resume_id)
-   if data:
-        return jsonify({'resume':data,'id':data['id']}),200
-   else:
-      return jsonify({'error':'no resume found'}),404
+def get(user_id, resume_id):
+    data = get_resume(user_id, resume_id)
+    if data:
+        return jsonify({'resume': data, 'id': data['id']}), 200
+    else:
+        return jsonify({'error': 'no resume found'}), 404
+
+    # list all resumes for a user_id
 
 
+@resume_bp.route('/list_resumes/<uuid:user_id>', methods=['GET'])
+def list_all(user_id):
+    title = request.args.get('title')
+    career_field = request.args.get('career_field')
+    data = list_resumes(user_id, title=title, career_field=career_field)
+    return jsonify({'resumes': data}), 200
