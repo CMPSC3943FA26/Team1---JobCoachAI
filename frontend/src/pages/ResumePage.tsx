@@ -8,7 +8,9 @@ import { useEffect, useState, type DragEvent, type KeyboardEvent } from "react";
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from "docx";
 import { Button } from "../components/Button";
 import {
+  deleteResumeFromDatabase,
   saveResumeToDatabase,
+  updateResumeToDatabase,
 } from "../services/resumeService";
 import { DocumentEditor } from "../components/DocumentEditor";
 import {
@@ -314,6 +316,10 @@ export function ResumePage({
   const [resumeDeleted, setResumeDeleted] = useState(false);
   const [draggedSection, setDraggedSection] = useState<SectionKey | null>(null);
   const [dropTarget, setDropTarget] = useState<SectionKey | null>(null);
+  const resumeIdStorageKey = ""
+  const [resumeId,setResumeID] = useState<string | null>(
+  () => sessionStorage.getItem(resumeIdStorageKey)
+);
   // Track which resume sections are expanded
   const [openSections, setOpenSections] = useState<Partial<Record<SectionKey, boolean>>>({
     summary: true,
@@ -325,6 +331,7 @@ export function ResumePage({
   });
   // Clear the visible editor and the stored draft; do not delete any saved database resume.
   const handleClearResume = () => {
+    setResumeID(null)
     // Remove the persisted sample/draft before navigating away from this page.
     sessionStorage.removeItem(resumeDraftStorageKey);
     // All displayed fields and preview use these controlled React values.
@@ -580,14 +587,31 @@ export function ResumePage({
 }
   const handleSave = async () => {
     try {
-     const payload = buildResumePayload()
-      await saveResumeToDatabase(payload)
+      const payload = buildResumePayload()
+      if (resumeId == null) {
+            console.log("DOING INSERT")
+      const newResumeId = await saveResumeToDatabase(payload)
+      const resume_id = newResumeId["resume_id"]
+      sessionStorage.setItem(resumeIdStorageKey, resume_id);
+      console.log("SAVE RESPONSE:", newResumeId)
+      console.log("NEW RESUME ID:", resume_id)
+      setResumeID(resume_id)
       setStatus("saved Resume to Database")
       console.log("Resume Saved to Database")
+      }
+      else {
+            console.log("DOING UPDATE:", resumeId)
+        await updateResumeToDatabase(resumeId,payload)
+        setStatus("Updated Resume in Database")
+        console.log("Resume updated in Database")
+      }
+      return true
+
     }
     catch(error) {
       setStatus("error saving resume")
       console.log("error saving resume:",error)
+      return false
     }
   }
 const hasExportableData = Boolean(
@@ -679,10 +703,26 @@ const hasExportableData = Boolean(
       document.title = originalTitle;
     }, 1000);
   };
-  const handleDelete = () => {
+  const handleDelete = async () => {
+    try {
+    if (resumeId == null) {
     setResumeDeleted(true);
     setShowDeleteDialog(false);
     setStatus("Resume deleted from this workspace.");
+    }
+    else  {
+      await deleteResumeFromDatabase(resumeId)
+      sessionStorage.removeItem(resumeIdStorageKey)
+      setResumeID(null)
+      setResumeDeleted(true);
+      setShowDeleteDialog(false);
+      setStatus("Resume deleted from this workspace.");
+    }
+  }
+  catch(error) {
+    setStatus("Failed to delete resume")
+    console.error("Error deleting resume:",error)
+  }
   };
   const handleResumeFileChange = (file: File | null) => {
     if (!file) return;
@@ -1242,7 +1282,7 @@ const hasExportableData = Boolean(
           <Button
             variant="secondary"
             type="button"
-            onClick={() => {
+            onClick={async() => {
               const showContinueError = (message: string) => {
                 setStatus(message);
                 // Keep the user near the Continue button and its validation message.
@@ -1267,6 +1307,10 @@ const hasExportableData = Boolean(
               }
               if (isGuest && hasResumeContent && !guestExportIsCurrent) {
                 setShowGuestExportWarning(true);
+                return;
+              }
+              const saved = await handleSave()
+              if (!saved) {
                 return;
               }
               setStatus("");
@@ -1309,7 +1353,12 @@ const hasExportableData = Boolean(
                   onClick={() => setShowGuestExportWarning(false)}>
                   Stay on resume
                 </Button>
-                <Button variant="secondary" type="button" onClick={() => {
+                <Button variant="secondary" type="button" onClick={async() => {
+                  const saved = await handleSave();
+
+                  if (!saved) {
+                  return;
+                  }
                   setShowGuestExportWarning(false);
                   setStatus("");
                   window.location.hash = '#tailor';
