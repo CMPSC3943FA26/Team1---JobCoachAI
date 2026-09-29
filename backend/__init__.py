@@ -2,6 +2,7 @@ from flask import Flask
 from flask_cors import CORS
 
 from backend.supabase_client import supabase
+from backend.routes.resume import resume_bp
 
 
 def create_app():
@@ -11,6 +12,7 @@ def create_app():
         origins=["http://localhost:5173"],
         supports_credentials=True,
     )
+    app.register_blueprint(resume_bp)
     return app
 
 

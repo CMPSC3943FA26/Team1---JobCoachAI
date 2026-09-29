@@ -98,3 +98,38 @@ export async function signIn(email: string, password: string) {
 
   return data
 }
+
+export async function updateCurrentUserProfile(input: {
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+  location: string
+}) {
+  const { data: current, error: currentError } = await supabase.auth.getUser()
+
+  if (currentError) throw currentError
+  if (!current.user) throw new Error('No active user session.')
+
+  const trimmedEmail = input.email.trim()
+  const emailChanged = trimmedEmail !== (current.user.email ?? '')
+
+  const { data, error } = await supabase.auth.updateUser({
+    ...(emailChanged ? { email: trimmedEmail } : {}),
+    data: {
+      ...current.user.user_metadata,
+      first_name: input.firstName.trim(),
+      last_name: input.lastName.trim(),
+      phone: input.phone.trim(),
+      location: input.location.trim(),
+    },
+  })
+
+  if (error) throw error
+  return data
+}
+
+export async function signOutUser() {
+  const { error } = await supabase.auth.signOut()
+  if (error) throw error
+}

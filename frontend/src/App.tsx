@@ -8,9 +8,11 @@ import TailorPage, {
   type TailorSubmission,
 } from './pages/TailorPage'
 import { ResumePage, resumeDraftStorageKey } from './pages/ResumePage'
+import { ProfilePage } from './pages/ProfilePage'
+import { signOutUser } from './lib/supabase'
 
 // Available screens in the application
-const screenNames = ['welcome', 'parsed', 'tailor'] as const
+const screenNames = ['welcome', 'parsed', 'tailor', 'profile'] as const
 
 type ScreenName = (typeof screenNames)[number]
 
@@ -35,6 +37,8 @@ function App() {
 
   const [resumeReady, setResumeReady] = useState(false)
   const [profileInitials, setProfileInitials] = useState<string | null>(null)
+  const [accountName, setAccountName] = useState<string | null>(null)
+  const [profileSection, setProfileSection] = useState<'profile' | 'resumes'>('profile')
   const [accountType, setAccountType] =
     useState<'guest' | 'user' | null>(null)
   const [showHomeWarning, setShowHomeWarning] = useState(false)
@@ -55,6 +59,7 @@ function App() {
         sessionStorage.removeItem(resumeDraftStorageKey)
         setResumeReady(false)
         setProfileInitials(null)
+        setAccountName(null)
         setAccountType(null)
         setResumeSession(current => current + 1)
         window.dispatchEvent(new Event('resetWelcomeForm'))
@@ -77,6 +82,7 @@ function App() {
     setAccountType('guest')
     setResumeReady(false)
     setProfileInitials('G')
+    setAccountName(null)
     setResumeSession(current => current + 1)
     window.location.hash = '#parsed'
   }
@@ -88,6 +94,7 @@ function App() {
     const initials = `${firstInitial}${lastInitial}`.toUpperCase() || 'U'
 
     setProfileInitials(initials)
+    setAccountName(`${firstName.trim()} ${lastName.trim()}`.trim() || 'User')
     setAccountType('user')
     setResumeReady(false)
     setResumeSession(current => current + 1)
@@ -102,6 +109,7 @@ function App() {
     setAccountType(null)
     setResumeReady(false)
     setProfileInitials(null)
+    setAccountName(null)
 
     window.dispatchEvent(new Event('resetWelcomeForm'))
     window.location.hash = '#welcome'
@@ -122,6 +130,38 @@ function App() {
     }
 
     goHome()
+  }
+
+
+  const handleOpenProfile = (section: 'profile' | 'resumes' = 'profile') => {
+    if (accountType !== 'user') return
+    setProfileSection(section)
+    window.location.hash = '#profile'
+  }
+
+  const handleProfileNameChange = (firstName: string, lastName: string) => {
+    const firstInitial = firstName.trim().charAt(0)
+    const lastInitial = lastName.trim().charAt(0)
+    setProfileInitials(`${firstInitial}${lastInitial}`.toUpperCase() || 'U')
+    setAccountName(`${firstName.trim()} ${lastName.trim()}`.trim() || 'User')
+  }
+
+  const handleLogout = async () => {
+    try {
+      await signOutUser()
+    } catch (error) {
+      console.error('Logout error:', error)
+    }
+
+    sessionStorage.removeItem(resumeDraftStorageKey)
+    setAccountType(null)
+    setProfileInitials(null)
+    setAccountName(null)
+    setResumeReady(false)
+    setResumeSession(current => current + 1)
+    window.dispatchEvent(new Event('resetWelcomeForm'))
+    window.location.hash = '#welcome'
+    setCurrentScreen('welcome')
   }
 
   // Open the Resume page when creating or editing a resume
@@ -156,6 +196,28 @@ function App() {
           />
         )
 
+
+      case 'profile':
+        if (accountType !== 'user') {
+          return (
+            <WelcomePage
+              onContinueAsGuest={handleContinueAsGuest}
+              onLogin={handleAccountLogin}
+            />
+          )
+        }
+
+        return (
+          <ProfilePage
+            focusSection={profileSection}
+            onNameChange={handleProfileNameChange}
+            onResumeOpened={() => {
+              setResumeReady(true)
+              setResumeSession(current => current + 1)
+            }}
+          />
+        )
+
       case 'tailor':
         return (
           <TailorPage
@@ -181,7 +243,11 @@ function App() {
       currentScreen={currentScreen}
       profileInitials={profileInitials}
       isGuest={accountType === 'guest'}
+      accountName={accountName}
       onHomeClick={handleHomeClick}
+      onOpenProfile={() => handleOpenProfile('profile')}
+      onOpenSavedResumes={() => handleOpenProfile('resumes')}
+      onLogout={() => void handleLogout()}
     >
       {renderCurrentPage()}
 

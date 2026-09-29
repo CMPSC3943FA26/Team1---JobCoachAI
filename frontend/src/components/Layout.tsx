@@ -1,15 +1,16 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import jobCoachLogo from '../assets/jobcoach-logo.png'
 
 type LayoutProps = {
   children: ReactNode
-  currentScreen:
-    | 'welcome'
-    | 'parsed'
-    | 'tailor'
+  currentScreen: 'welcome' | 'parsed' | 'tailor' | 'profile'
   profileInitials: string | null
   isGuest: boolean
+  accountName?: string | null
   onHomeClick: () => void
+  onOpenProfile?: () => void
+  onOpenSavedResumes?: () => void
+  onLogout?: () => void
 }
 
 export function Layout({
@@ -17,10 +18,33 @@ export function Layout({
   currentScreen,
   profileInitials,
   isGuest,
+  accountName,
   onHomeClick,
+  onOpenProfile,
+  onOpenSavedResumes,
+  onLogout,
 }: LayoutProps) {
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false)
+  const accountMenuRef = useRef<HTMLDivElement | null>(null)
 
-  // Defines the navigation steps displayed in the sidebar.
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (
+        accountMenuRef.current &&
+        !accountMenuRef.current.contains(event.target as Node)
+      ) {
+        setAccountMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [])
+
+  useEffect(() => {
+    setAccountMenuOpen(false)
+  }, [currentScreen])
+
   const steps = [
     {
       key: 'welcome',
@@ -44,12 +68,7 @@ export function Layout({
 
   return (
     <main className="app-shell">
-      {/* LEFT SIDEBAR */}
-      <aside
-        className="sidebar"
-        aria-label="Workflow navigation"
-      >
-        {/* BRAND */}
+      <aside className="sidebar" aria-label="Workflow navigation">
         <a
           className="brand"
           href="#welcome"
@@ -60,10 +79,7 @@ export function Layout({
           }}
         >
           <span className="brand-logo">
-            <img
-              src={jobCoachLogo}
-              alt="JobCoachAI logo"
-            />
+            <img src={jobCoachLogo} alt="JobCoachAI logo" />
           </span>
 
           <span className="brand-name">
@@ -71,12 +87,8 @@ export function Layout({
           </span>
         </a>
 
-        {/* SIDEBAR INTRO */}
         <div className="sidebar-intro">
-          <p className="eyebrow">
-            Your personal AI Job Coach
-          </p>
-
+          <p className="eyebrow">Your personal AI Job Coach</p>
           <h1>
             Build With
             <br />
@@ -84,74 +96,114 @@ export function Layout({
           </h1>
         </div>
 
-        {/* NAVIGATION */}
-        <nav
-          className="stepper"
-          aria-label="Application steps"
-        >
+        <nav className="stepper" aria-label="Application steps">
           {steps.map((step) => {
-
-            // Highlights the step that matches the current page.
-            const isActive =
-              currentScreen === step.key
+            const isActive = currentScreen === step.key
 
             return (
               <a
                 key={step.key}
                 href={`#${step.key}`}
-                className={`step ${
-                  isActive ? 'active' : ''
-                }`}
-                aria-current={
-                  isActive
-                    ? 'page'
-                    : undefined
-                }
+                className={`step ${isActive ? 'active' : ''}`}
+                aria-current={isActive ? 'page' : undefined}
               >
-                <span className="step-number">
-                  {step.number}
-                </span>
-
+                <span className="step-number">{step.number}</span>
                 <span className="step-text">
-                  <strong>
-                    {step.title}
-                  </strong>
-
-                  <small>
-                    {step.subtitle}
-                  </small>
+                  <strong>{step.title}</strong>
+                  <small>{step.subtitle}</small>
                 </span>
               </a>
             )
           })}
         </nav>
 
-        {/* SIDEBAR FOOTER */}
         <p className="sidebar-footer">
           Built for the next chapter
-          <span aria-hidden="true">
-            →
-          </span>
+          <span aria-hidden="true">→</span>
         </p>
       </aside>
 
-      {/* RIGHT SIDE CONTENT */}
-      <section
-        className="content"
-        aria-live="polite"
-      >
-        {/* Show the profile icon after the user leaves the welcome page. */}
-        {profileInitials &&
-          currentScreen !== 'welcome' && (
+      <section className="content" aria-live="polite">
+        {profileInitials && currentScreen !== 'welcome' && (
+          isGuest ? (
             <button
               className="profile-avatar"
               type="button"
-              aria-label={isGuest ? 'Guest' : 'User'}
-              title={isGuest ? 'Guest' : 'User'}
+              aria-label="Guest"
+              title="Guest"
             >
               {profileInitials}
             </button>
-          )}
+          ) : (
+            <div className="account-menu-wrap" ref={accountMenuRef}>
+              <button
+                className="account-trigger"
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={accountMenuOpen}
+                onClick={() => setAccountMenuOpen((open) => !open)}
+              >
+                <span className="profile-avatar account-avatar" aria-hidden="true">
+                  {profileInitials}
+                </span>
+                <span className="account-trigger-name">{accountName || 'User'}</span>
+                <span className={`account-chevron ${accountMenuOpen ? 'open' : ''}`} aria-hidden="true">
+                 ⌄
+                </span>
+              </button>
+
+              {accountMenuOpen && (
+                <div className="account-dropdown" role="menu">
+                  <div className="account-dropdown-heading">
+                    <span>Signed in as</span>
+                    <strong>{accountName || 'User'}</strong>
+                  </div>
+
+                  <button
+                    className="account-menu-item"
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setAccountMenuOpen(false)
+                      onOpenProfile?.()
+                    }}
+                  >
+                    <span aria-hidden="true">♙</span>
+                    My Profile
+                  </button>
+
+                  <button
+                    className="account-menu-item"
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setAccountMenuOpen(false)
+                      onOpenSavedResumes?.()
+                    }}
+                  >
+                    <span aria-hidden="true">▤</span>
+                    Saved Resumes
+                  </button>
+
+                  <div className="account-menu-divider" />
+
+                  <button
+                    className="account-menu-item account-menu-logout"
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setAccountMenuOpen(false)
+                      onLogout?.()
+                    }}
+                  >
+                    <span aria-hidden="true">↪</span>
+                    Log out
+                  </button>
+                </div>
+              )}
+            </div>
+          )
+        )}
 
         {children}
       </section>
