@@ -51,15 +51,20 @@ class Certification(BaseModel):
     date_earned: Optional[date] = None
     sort_order: int
 
+
 class Section_Order(BaseModel):
     id: Optional[UUID] = None
     resume_id: UUID
     section_name: str
     section_order: int
 
+
 class Resume(BaseModel):
     id: Optional[UUID] = None
     user_id: UUID
+    title: str
+    career_field: str
+    is_default: bool = False
     full_name: str
     email: str
     phone: Optional[str] = None

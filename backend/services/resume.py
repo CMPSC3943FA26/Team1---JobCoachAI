@@ -1,10 +1,13 @@
 from datetime import date, datetime
+from typing import Optional
 from uuid import UUID
 
 from backend.supabase_client import supabase
 from backend.schemas.resume import ResumeSaveRequest, ResumeUpdateRequest
 
 # jsonify values to stop errors
+
+
 def _to_json_safe(value):
     if isinstance(value, (date, datetime)):
         return value.isoformat()
@@ -16,15 +19,22 @@ def _to_json_safe(value):
         return {key: _to_json_safe(item) for key, item in value.items()}
     return value
 
-#create a new resume
+# create a new resume
+
+
 def create_resume(data: ResumeSaveRequest, user_id: str):
     resume_payload = _to_json_safe(data.resume.dict(exclude_unset=True))
 
-    resume_row = supabase.table('resumes').insert({
+    resume_data = {
         **resume_payload,
         'user_id': str(user_id),
     }).execute()
 
+    print("resume_data:", resume_data)
+    print("user_id value:", resume_data["user_id"])
+    print("user_id type:", type(resume_data["user_id"]))
+
+    resume_row = supabase.table('resumes').insert(resume_data).execute()
     resume_id = resume_row.data[0]['id']
 
     for section_name, rows in [
@@ -34,7 +44,9 @@ def create_resume(data: ResumeSaveRequest, user_id: str):
         ('projects', data.projects),
         ('certifications', data.certifications),
         ('section_order', data.section_order),
+        
     ]:
+          
         if rows:
             payload = [
                 {**_to_json_safe(row.dict()), 'resume_id': resume_id}
@@ -44,31 +56,56 @@ def create_resume(data: ResumeSaveRequest, user_id: str):
 
     return get_resume(resume_id, user_id)
 
+# list all resumes for a user, optional filters like title or career_field can be added later
+
+
+def list_resumes(user_id: str, title: Optional[str] = None, career_field: Optional[str] = None):
+    query = supabase.table("resumes").select("*").eq("user_id", user_id)
+    if title:
+        query = query.ilike("title", f"%{title}%")
+    if career_field:
+        query = query.eq("career_field", career_field)
+    query = query.order("updated_at", desc=True)
+    response = query.execute()
+    return response.data or []
+
 # get the resume as a dict from the database
+
+
 def get_resume(resume_id: str, user_id: str):
-    resume = supabase.table("resumes").select("*, work_experience(*), education(*), skills(*), projects(*), certifications(*),section_order(*)").eq("id", resume_id).eq("user_id", user_id).execute()
+    resume = supabase.table("resumes").select(
+        "*, work_experience(*), education(*), skills(*), projects(*), certifications(*),section_order(*)").eq("id", resume_id).eq("user_id", user_id).execute()
     return resume.data[0] if resume.data else None
 
-#delete resume from database
+# delete resume from database
+
+
 def delete_resume(resume_id: str, user_id: str):
+    resume_id = str(resume_id)
+    user_id = str(user_id)
     if not get_resume(resume_id,user_id):
         return None
-    supabase.table("resumes").delete().eq("id", resume_id).eq("user_id", user_id).execute()
+    supabase.table("resumes").delete().eq(
+        "id", resume_id).eq("user_id", user_id).execute()
     return True
 
-#update resume tables
+# update resume tables
+
+
 def update_resume(resume_id: str, user_id: str, data: ResumeUpdateRequest):
     if not get_resume(resume_id, user_id):
         return None
+    resume_id = str(resume_id)
+    user_id = str(user_id)
 
-    resume_payload = _to_json_safe(data.resume.dict(exclude_unset=True))
+    resume_payload = _to_json_safe(data.resume.model_dump(exclude_unset=True))
     supabase.table("resumes").update(resume_payload).eq(
         "id", resume_id
     ).eq("user_id", user_id).execute()
 
     provided_fields = getattr(data, "model_fields_set", None)
     if provided_fields is None:
-        provided_fields = data.__fields_set__
+        provided_fields = data.model_fields_set
 
     for table, rows in [
         ("work_experience", data.work_experience),
@@ -115,4 +152,3 @@ def update_resume(resume_id: str, user_id: str, data: ResumeUpdateRequest):
             ).eq("id", row_id).execute()
 
     return get_resume(resume_id, user_id)
-

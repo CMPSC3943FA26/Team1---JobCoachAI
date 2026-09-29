@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react'
-import { signInAsGuest, supabase } from '../lib/supabase'
+import {
+  signIn,
+  signUp,
+  signInAsGuest,
+  supabase,
+} from '../lib/supabase'
 
 type WelcomePageProps = {
   onContinueAsGuest: () => void
@@ -13,18 +18,26 @@ export function WelcomePage({
   onContinueAsGuest,
   onLogin,
 }: WelcomePageProps) {
-  // Controls the login and registration form.
+  // Controls login and registration.
   const [isRegistering, setIsRegistering] = useState(false)
   const [accountCreated, setAccountCreated] = useState(false)
 
-  // Form input values.
+  // Form values.
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
-
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
 
-  // Clear form data when the user returns to the welcome page.
+  // Authentication error message.
+  const [error, setError] = useState('')
+
+  const isPasswordValid =
+  password.length >= 8 &&
+  !/\s/.test(password)
+
+
+  // Reset the welcome page when returning home.
   useEffect(() => {
     const resetWelcomeForm = () => {
       setIsRegistering(false)
@@ -34,38 +47,136 @@ export function WelcomePage({
       setLastName('')
       setEmail('')
       setPassword('')
+      setError('')
     }
 
-    window.addEventListener('resetWelcomeForm', resetWelcomeForm)
+    window.addEventListener(
+      'resetWelcomeForm',
+      resetWelcomeForm
+    )
 
     return () => {
-      window.removeEventListener('resetWelcomeForm', resetWelcomeForm)
+      window.removeEventListener(
+        'resetWelcomeForm',
+        resetWelcomeForm
+      )
     }
   }, [])
 
-  // Display the account creation confirmation.
-  const handleRegisterSubmit = (
+  // Create a new account.
+  const handleRegisterSubmit = async (
     event: React.FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault()
 
-    setAccountCreated(true)
-    setIsRegistering(false)
+    setError('')
+
+    // Prevent weak passwords from being submitted.
+    if (!isPasswordValid) {
+  setError(
+    'Password must be at least 8 characters and cannot contain spaces.'
+  )
+  return
+}
+
+    try {
+      const data = await signUp(
+        email.trim(),
+        password,
+        firstName,
+        lastName
+      )
+
+      console.log('Account created:', data)
+
+      setAccountCreated(true)
+      setIsRegistering(false)
+      setPassword('')
+      setError('')
+    } catch (err) {
+      console.error('Registration error:', err)
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to create your account. Please try again.'
+      )
+    }
   }
 
-  // Continue to the application using the entered profile name.
-  const handleLoginSubmit = (
+  // Log in to an existing account.
+  const handleLoginSubmit = async (
     event: React.FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault()
 
-    onLogin(
-      firstName || 'User',
-      lastName || ''
-    )
+    try {
+      setError('')
+
+      const data = await signIn(
+        email.trim(),
+        password
+      )
+
+      console.log('Login successful:', data)
+
+      const loggedInUser = data.user
+
+      const savedFirstName =
+        typeof loggedInUser?.user_metadata?.first_name === 'string'
+          ? loggedInUser.user_metadata.first_name
+          : ''
+
+      const savedLastName =
+        typeof loggedInUser?.user_metadata?.last_name === 'string'
+          ? loggedInUser.user_metadata.last_name
+          : ''
+
+      onLogin(
+        savedFirstName || 'User',
+        savedLastName
+      )
+    } catch (err) {
+      console.error('Login error:', err)
+
+      setError(
+        'Invalid email or password. Please try again.'
+      )
+    }
   }
-  const [error,setError] = useState(false)
-  
+
+  // Continue without creating an account.
+  const handleGuestLogin = async () => {
+    try {
+      setError('')
+
+      const response = await signInAsGuest()
+
+      console.log(
+        'Guest sign-in successful:',
+        response
+      )
+
+      const { data } =
+        await supabase.auth.getSession()
+
+      console.log(
+        'Session after sign-in:',
+        data.session
+      )
+
+      onContinueAsGuest()
+    } catch (err) {
+      console.error(
+        'Guest sign-in error:',
+        err
+      )
+
+      setError(
+        'Unable to continue as guest. Please try again.'
+      )
+    }
+  }
 
   return (
     <section
@@ -82,8 +193,9 @@ export function WelcomePage({
         </h2>
 
         <p>
-          Your next resume, tailored to your needs. JobCoachAI turns your experience
-          into a polished, job-ready resume designed to{' '}
+          Your next resume, tailored to your needs.
+          JobCoachAI turns your experience into a
+          polished, job-ready resume designed to{' '}
           improve your chances of landing an interview.
         </p>
       </div>
@@ -98,7 +210,7 @@ export function WelcomePage({
         }
       >
         <div className="auth-fields">
-          {/* Show name fields only when creating an account. */}
+          {/* Name fields appear only during registration. */}
           {isRegistering && (
             <>
               <div className="field-group">
@@ -113,7 +225,9 @@ export function WelcomePage({
                   placeholder="First name"
                   value={firstName}
                   onChange={(event) =>
-                    setFirstName(event.target.value)
+                    setFirstName(
+                      event.target.value
+                    )
                   }
                   required
                 />
@@ -131,7 +245,9 @@ export function WelcomePage({
                   placeholder="Last name"
                   value={lastName}
                   onChange={(event) =>
-                    setLastName(event.target.value)
+                    setLastName(
+                      event.target.value
+                    )
                   }
                   required
                 />
@@ -139,6 +255,7 @@ export function WelcomePage({
             </>
           )}
 
+          {/* Email */}
           <div className="field-group">
             <label htmlFor="auth-email">
               Email address
@@ -150,40 +267,135 @@ export function WelcomePage({
               type="email"
               placeholder="Enter your email address"
               value={email}
-              onChange={(event) =>
+              onChange={(event) => {
                 setEmail(event.target.value)
-              }
+
+                if (error) {
+                  setError('')
+                }
+              }}
               required
             />
           </div>
 
-          <div className="field-group">
-            <label htmlFor="auth-password">
-              Password
-            </label>
+        {/* Password */}
+<div className="field-group">
+  <label htmlFor="auth-password">
+    Password
+  </label>
 
-            <input
-              id="auth-password"
-              name="password"
-              type="password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(event) =>
-                setPassword(event.target.value)
-              }
-              required
-            />
+  <div className="password-field">
+    <input
+      id="auth-password"
+      name="password"
+      type={showPassword ? 'text' : 'password'}
+      placeholder="Enter your password"
+      value={password}
+      onChange={(event) => {
+        setPassword(event.target.value)
+
+        if (error) {
+          setError('')
+        }
+      }}
+      autoComplete={
+        isRegistering
+          ? 'new-password'
+          : 'current-password'
+      }
+      required
+    />
+
+    <button
+      type="button"
+      className="password-eye"
+      onClick={() =>
+        setShowPassword(current => !current)
+      }
+      aria-label={
+        showPassword
+          ? 'Hide password'
+          : 'Show password'
+      }
+      title={
+        showPassword
+          ? 'Hide password'
+          : 'Show password'
+      }
+    >
+      {showPassword ? (
+        /* Eye with slash */
+        <svg
+          viewBox="0 0 24 24"
+          width="19"
+          height="19"
+          aria-hidden="true"
+        >
+          <path
+            d="M3 3l18 18M10.6 10.7a2 2 0 002.7 2.7M9.9 4.2A10.7 10.7 0 0112 4c5.5 0 9 5 9 5a16.8 16.8 0 01-3.1 3.6M6.6 6.6C4.3 8.1 3 10 3 10s3.5 5 9 5a10.5 10.5 0 004-.8"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ) : (
+        /* Eye */
+        <svg
+          viewBox="0 0 24 24"
+          width="19"
+          height="19"
+          aria-hidden="true"
+        >
+          <path
+            d="M3 12s3.5-5 9-5 9 5 9 5-3.5 5-9 5-9-5-9-5z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+
+          <circle
+            cx="12"
+            cy="12"
+            r="2"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+          />
+        </svg>
+      )}
+    </button>
+  </div>
+
+            
+            
           </div>
         </div>
 
+        {/* Account creation confirmation */}
         {accountCreated && (
           <>
             <p className="success-message">
-              Account created successfully! Please log in or continue as guest.
+              Account created! Please check your email
+              and click the verification link before
+              logging in.
             </p>
 
             <div className="success-divider" />
           </>
+        )}
+
+        {/* Authentication error */}
+        {error && (
+          <p
+            className="field-error"
+            role="alert"
+          >
+            {error}
+          </p>
         )}
 
         <div
@@ -195,18 +407,21 @@ export function WelcomePage({
               : ''
           }`}
         >
+          {/* Login */}
           {!isRegistering && (
             <button
               className="button button-primary"
               type="submit"
             >
               Log in
+
               <span aria-hidden="true">
                 →
               </span>
             </button>
           )}
 
+          {/* Create account */}
           {!accountCreated && (
             <button
               className={
@@ -223,18 +438,21 @@ export function WelcomePage({
                 if (!isRegistering) {
                   setIsRegistering(true)
                   setAccountCreated(false)
+                  setError('')
+                  setPassword('')
                 }
               }}
             >
               Create Account
+
               <span aria-hidden="true">
                 →
               </span>
             </button>
           )}
         </div>
-        
-        
+
+        {/* Guest access */}
         {!isRegistering && (
           <button
             className="guest-link"
@@ -260,9 +478,10 @@ export function WelcomePage({
             Continue as guest
           </button>
         )}
-        {error && (<div>error signing in, try again later</div>)}
+
         <p className="privacy-line">
-          By continuing, you agree to our terms and privacy policy.
+          By continuing, you agree to our terms and
+          privacy policy.
         </p>
       </form>
     </section>
