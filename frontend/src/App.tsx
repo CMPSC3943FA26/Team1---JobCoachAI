@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
 
 import { Layout } from './components/Layout'
@@ -42,6 +42,7 @@ function App() {
   const [accountType, setAccountType] =
     useState<'guest' | 'user' | null>(null)
   const [showHomeWarning, setShowHomeWarning] = useState(false)
+  const bypassWelcomeWarningRef = useRef(false)
 
   // Handle page navigation and prevent access to Tailor without a resume
   useEffect(() => {
@@ -54,13 +55,22 @@ function App() {
       }
 
       if (nextScreen === 'welcome') {
-        // Any route to Welcome ends the current draft, including browser Back
-        // and the Welcome link in the sidebar. Page 2 <-> page 3 does not.
+        const leavingResumeWorkspace =
+          currentScreen === 'parsed' || currentScreen === 'tailor'
+
+        if (
+          accountType !== null &&
+          leavingResumeWorkspace &&
+          !bypassWelcomeWarningRef.current
+        ) {
+          setShowHomeWarning(true)
+          window.location.hash = `#${currentScreen}`
+          return
+        }
+
+        bypassWelcomeWarningRef.current = false
         sessionStorage.removeItem(resumeDraftStorageKey)
         setResumeReady(false)
-        setProfileInitials(null)
-        setAccountName(null)
-        setAccountType(null)
         setResumeSession(current => current + 1)
         window.dispatchEvent(new Event('resetWelcomeForm'))
       }
@@ -74,7 +84,7 @@ function App() {
 
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
-  }, [resumeReady, accountType])
+  }, [resumeReady, accountType, currentScreen])
 
   // Start a guest session and open the Resume page
   const handleContinueAsGuest = () => {
@@ -104,27 +114,26 @@ function App() {
   // Complete the requested Home navigation after the user confirms.
   const goHome = () => {
     setShowHomeWarning(false)
+    bypassWelcomeWarningRef.current = true
     sessionStorage.removeItem(resumeDraftStorageKey)
     setResumeSession(current => current + 1)
-    setAccountType(null)
     setResumeReady(false)
-    setProfileInitials(null)
-    setAccountName(null)
 
     window.dispatchEvent(new Event('resetWelcomeForm'))
     window.location.hash = '#welcome'
     setCurrentScreen('welcome')
   }
 
-  // Layout calls this when the top-left JobCoachAI logo is clicked.
+  // Route every explicit Welcome/Home navigation through the same guard.
+  // This covers both page 2 (parsed) and page 3 (tailor), including the
+  // JobCoachAI logo and the Welcome item in the left workflow panel.
   const handleHomeClick = () => {
+    const activeScreen = getCurrentScreen()
     const onResumeOrTailor =
+      activeScreen === 'parsed' || activeScreen === 'tailor' ||
       currentScreen === 'parsed' || currentScreen === 'tailor'
-    const hasResumeDraft = Boolean(
-      sessionStorage.getItem(resumeDraftStorageKey)
-    )
 
-    if (onResumeOrTailor && (resumeReady || hasResumeDraft)) {
+    if (accountType !== null && onResumeOrTailor) {
       setShowHomeWarning(true)
       return
     }

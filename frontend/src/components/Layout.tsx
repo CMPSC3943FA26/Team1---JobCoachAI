@@ -106,6 +106,13 @@ export function Layout({
                 href={`#${step.key}`}
                 className={`step ${isActive ? 'active' : ''}`}
                 aria-current={isActive ? 'page' : undefined}
+                onClick={(event) => {
+                  if (step.key === 'welcome') {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    onHomeClick()
+                  }
+                }}
               >
                 <span className="step-number">{step.number}</span>
                 <span className="step-text">
