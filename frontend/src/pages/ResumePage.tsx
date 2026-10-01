@@ -126,7 +126,11 @@ const parseResumeProfileCsv = (csv: string, uploadedFilename: string): ResumeDra
       entryMaps.set(key, mapped);
     }
   }
-  const orderedKeys = [...new Set([...(importedOrder ?? sectionOrder), ...sectionOrder])];
+  const importedMovableOrder = (importedOrder ?? sectionOrder).filter((key) => key !== "summary");
+  const orderedKeys: SectionKey[] = [
+    "summary",
+    ...new Set([...importedMovableOrder, ...sectionOrder.filter((key) => key !== "summary")]),
+  ];
   const sections: ResumeSection[] = orderedKeys.filter((key) => entryMaps.has(key)).map((key) => {
     const entries: SectionEntry[] = [...(entryMaps.get(key)?.entries() ?? [])]
       .sort(([left], [right]) => left - right)
@@ -226,6 +230,20 @@ const sectionOrder: SectionKey[] = [
   "projects",
   "certifications",
 ];
+
+// Professional Summary is a required, fixed section. It must always remain
+// the first editable section; every other section can only be reordered below it.
+const lockProfessionalSummaryFirst = (items: ResumeSection[]): ResumeSection[] => {
+  const summary = items.find((section) => section.key === "summary");
+  const movableSections = items.filter((section) => section.key !== "summary");
+
+  return summary
+    ? [summary, ...movableSections]
+    : [
+        { key: "summary", title: sectionLabels.summary, entries: [""] },
+        ...movableSections,
+      ];
+};
 // Create an empty entry based on the selected section
 const getBlankSectionEntry = (sectionKey: SectionKey): SectionEntry => {
   switch (sectionKey) {
@@ -297,17 +315,17 @@ export function ResumePage({
     storedDraft?.profile ?? { ...emptyProfile },
   );
   const [sections, setSections] = useState<ResumeSection[]>(() =>
-    storedDraft?.sections ?? createSections(true),
+    lockProfessionalSummaryFirst(storedDraft?.sections ?? createSections(true)),
   );
   // File upload and status messages
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [importedCsvFilename, setImportedCsvFilename] = useState<string | null>(storedDraft?.csvSourceFilename ?? null);
   const [resumeFilename, setResumeFilename] = useState(storedDraft?.filename ?? "");
   const [status, setStatus] = useState("");
+  const [savingResume, setSavingResume] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [showGuestExportWarning, setShowGuestExportWarning] = useState(false);
   const [exportedGuestSnapshot, setExportedGuestSnapshot] = useState<string | null>(null);
-  const [guestExporting, setGuestExporting] = useState(false);
   // Confirmation dialogs and resume deletion state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showBackWarning, setShowBackWarning] = useState(false);
@@ -388,15 +406,20 @@ export function ResumePage({
   };
   // Only editable sections can move; personal information is rendered separately above them.
   const moveSection = (source: SectionKey, target: SectionKey) => {
-    if (source === target) return;
+    // Professional Summary is locked in the first position. It cannot move,
+    // and no other section can be moved onto or above it.
+    if (source === target || source === "summary" || target === "summary") return;
+
     setSections((current) => {
-      const sourceIndex = current.findIndex((section) => section.key === source);
-      const targetIndex = current.findIndex((section) => section.key === target);
-      if (sourceIndex < 0 || targetIndex < 0) return current;
-      const reordered = [...current];
+      const lockedCurrent = lockProfessionalSummaryFirst(current);
+      const sourceIndex = lockedCurrent.findIndex((section) => section.key === source);
+      const targetIndex = lockedCurrent.findIndex((section) => section.key === target);
+      if (sourceIndex < 1 || targetIndex < 1) return lockedCurrent;
+
+      const reordered = [...lockedCurrent];
       const [moved] = reordered.splice(sourceIndex, 1);
       reordered.splice(targetIndex, 0, moved);
-      return reordered;
+      return lockProfessionalSummaryFirst(reordered);
     });
   };
   const handleSectionDragStart = (event: DragEvent<HTMLButtonElement>, key: SectionKey) => {
@@ -458,6 +481,9 @@ export function ResumePage({
   };
   // Remove an entry without leaving the section empty
   const removeEntry = (sectionKey: string, entryIndex: number) => {
+    // The first entry in every resume section is permanent. Only additional
+    // entries created with the Add button can be removed.
+    if (entryIndex === 0) return;
     setSections((current) =>
       current.map((section) => {
         if (section.key !== sectionKey) return section;
@@ -579,17 +605,27 @@ export function ResumePage({
   }
 }
   const handleSave = async () => {
+    if (isGuest || savingResume) return;
+
+    if (!hasResumeContent) {
+      setStatus("Add resume information before saving your resume.");
+      return;
+    }
+
+    setSavingResume(true);
+    setStatus("Saving resume…");
+
     try {
-     const payload = buildResumePayload()
-      await saveResumeToDatabase(payload)
-      setStatus("saved Resume to Database")
-      console.log("Resume Saved to Database")
+      const payload = buildResumePayload();
+      await saveResumeToDatabase(payload);
+      setStatus("Resume saved to your account. You can open it from Profile → Saved Resumes.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to save your resume. Please try again.");
+      console.error("Error saving resume:", error);
+    } finally {
+      setSavingResume(false);
     }
-    catch(error) {
-      setStatus("error saving resume")
-      console.log("error saving resume:",error)
-    }
-  }
+  };
 const hasExportableData = Boolean(
     Object.values(profile).some((value) => value.trim() !== "") || hasResumeContent,
   );
@@ -597,7 +633,7 @@ const hasExportableData = Boolean(
     try {
       const draft = parseResumeProfileCsv(await file.text(), file.name);
       setProfile(draft.profile);
-      setSections(draft.sections);
+      setSections(lockProfessionalSummaryFirst(draft.sections));
       setResumeFilename(draft.filename);
       setResumeFile(null);
       setImportedCsvFilename(file.name);
@@ -757,8 +793,8 @@ const hasExportableData = Boolean(
         id="resume-form"
         className="resume-editor"
         onSubmit={(event) => {
-        event.preventDefault();
-        void handleSave();
+          event.preventDefault();
+          if (!isGuest) void handleSave();
         }}
       >
         {/* Resume file upload */}
@@ -860,12 +896,21 @@ const hasExportableData = Boolean(
               className={`resume-section${dropTarget === section.key && draggedSection !== section.key ? " resume-section-drop-target" : ""}${draggedSection === section.key ? " resume-section-dragging" : ""}`}
               key={section.key}
               onDragOver={(event) => {
-                if (!draggedSection || draggedSection === section.key) return;
+                // Summary is a locked boundary: movable sections may only be
+                // dropped on other sections beneath it.
+                if (
+                  section.key === "summary" ||
+                  !draggedSection ||
+                  draggedSection === section.key
+                ) return;
                 event.preventDefault();
                 event.dataTransfer.dropEffect = "move";
                 setDropTarget(section.key);
               }}
-              onDrop={(event) => handleSectionDrop(event, section.key)}
+              onDrop={(event) => {
+                if (section.key === "summary") return;
+                handleSectionDrop(event, section.key);
+              }}
               onDragEnd={() => { setDraggedSection(null); setDropTarget(null); }}
             >
               <div className="resume-section-header">
@@ -940,7 +985,7 @@ const hasExportableData = Boolean(
                               placeholder="Write a concise professional summary..."
                               aria-label={`${section.title} entry ${entryIndex + 1}`}
                             />
-                            {section.key !== "summary" && (
+                            {entryIndex > 0 && (
                               <button
                                 className="text-button resume-remove-entry"
                                 type="button"
@@ -1015,14 +1060,16 @@ const hasExportableData = Boolean(
                               </div>
                             ))}
                           </div>
-                          <button
-                            className="text-button resume-remove-entry"
-                            type="button"
-                            onClick={() => removeEntry(section.key, entryIndex)}
-                            aria-label={`Remove ${section.title} entry ${entryIndex + 1}`}
-                          >
-                            Remove entry
-                          </button>
+                          {entryIndex > 0 && (
+                            <button
+                              className="text-button resume-remove-entry"
+                              type="button"
+                              onClick={() => removeEntry(section.key, entryIndex)}
+                              aria-label={`Remove ${section.title} entry ${entryIndex + 1}`}
+                            >
+                              Remove entry
+                            </button>
+                          )}
                         </div>
                       );
                     })
@@ -1065,6 +1112,17 @@ const hasExportableData = Boolean(
             <h3>Resume preview</h3>
             <p>Review your completed resume before exporting.</p>
           </div>
+          {!isGuest && (
+            <Button
+              variant="secondary"
+              type="button"
+              className="resume-preview-save-button"
+              disabled={savingResume || !hasResumeContent}
+              onClick={() => void handleSave()}
+            >
+              {savingResume ? "Saving…" : "Save Resume"}
+            </Button>
+          )}
         </div>
         <div className="resume-preview-background">
           <div className="resume-preview-page-frame">
@@ -1214,7 +1272,9 @@ const hasExportableData = Boolean(
         >
           <span className="resume-info-icon">i</span>
           <span>
-            {status || "Changes stay local until connected to your account."}
+            {status || (isGuest
+              ? "Changes stay local while you continue as a guest."
+              : "Use Save Resume above to keep this resume in your account.")}
           </span>
         </div>
       </section>
@@ -1298,10 +1358,9 @@ const hasExportableData = Boolean(
             aria-describedby="guest-export-description"
           >
             <span className="panel-icon">GUEST RESUME</span>
-            <h3 id="guest-export-title">Save your resume before continuing?</h3>
+            <h3 id="guest-export-title">Continue without saving?</h3>
             <p id="guest-export-description">
-              You are continuing as a Guest. Please export a copy of your resume profile
-              to keep your work after this session. You can also continue without exporting.
+              You are continuing as a Guest. Your resume data may not be retained after this session.
             </p>
             <div className="dialog-actions guest-export-dialog-actions">
               <div className="guest-export-navigation">
@@ -1316,21 +1375,6 @@ const hasExportableData = Boolean(
                 }}>
                   Continue anyway <span aria-hidden="true">→</span>
                 </Button>
-              </div>
-              <div className="guest-export-file-actions">
-                <Button variant="primary" type="button" disabled={guestExporting}
-                  onClick={async () => {
-                    setGuestExporting(true);
-                    try { await exportResumeAsDocx(); }
-                    catch (error) {
-                      setStatus("Could not export resume. Please try again.");
-                      console.error("Resume export failed:", error);
-                    } finally { setGuestExporting(false); }
-                  }}>
-                  {guestExporting ? "Preparing DOCX…" : "Export resume as DOCX"}
-                </Button>
-                <Button variant="primary" type="button" disabled={guestExporting}
-                  onClick={exportResumeAsPdf}>Export resume as PDF</Button>
               </div>
             </div>
           </div>

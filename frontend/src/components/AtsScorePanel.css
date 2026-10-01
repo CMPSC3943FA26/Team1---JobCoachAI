@@ -295,8 +295,10 @@
 
 /* Inline keyword dismissal and add-missed-skill form */
 .ats-chip { display: inline-flex; align-items: center; gap: 7px; }
-.ats-chip-remove { border: 0; background: transparent; color: inherit; cursor: pointer; padding: 0 2px; border-radius: 4px; font: inherit; line-height: 1; }
-.ats-chip-remove:hover, .ats-chip-remove:focus-visible { background: rgba(0,0,0,.09); outline-offset: 2px; }
+.ats-chip-remove, .ats-chip-add { border: 0; background: transparent; color: inherit; cursor: pointer; padding: 0 2px; border-radius: 4px; font: inherit; line-height: 1; }
+.ats-chip-add { font-size: 16px; font-weight: 800; }
+.ats-chip-remove:hover, .ats-chip-remove:focus-visible,
+.ats-chip-add:hover, .ats-chip-add:focus-visible { background: rgba(0,0,0,.09); outline-offset: 2px; }
 .ats-skill-add-form { display: flex; flex-direction: column; gap: 7px; margin-top: 7px; }
 .ats-skill-add-form label { font-size: 12px; font-weight: 600; color: var(--ink); }
 .ats-skill-add-row { display: flex; flex-wrap: wrap; gap: 8px; }

@@ -51,9 +51,19 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
       {keywords.map((keyword) => (
         <span key={keyword} className={`ats-chip ats-chip-${kind}`}>
           <span>{keyword}</span>
-          <button type="button" className="ats-chip-remove"
-            aria-label={`Remove ${keyword} from ${kind === 'matched' ? 'found' : 'missing'} keywords`}
-            onClick={() => { onRemoveKeyword(keyword); setFeedback(`“${keyword}” removed from the ATS keyword display.`) }}>×</button>
+          {kind === 'missing' ? (
+            <button type="button" className="ats-chip-add"
+              aria-label={`Add ${keyword} to found keywords`}
+              title="Add to Found in your resume"
+              onClick={() => {
+                const error = onAddSkill(keyword)
+                setFeedback(error ?? `“${keyword}” moved to Found in your resume.`)
+              }}>+</button>
+          ) : (
+            <button type="button" className="ats-chip-remove"
+              aria-label={`Remove ${keyword} from found keywords`}
+              onClick={() => { onRemoveKeyword(keyword); setFeedback(`“${keyword}” removed from the ATS keyword display.`) }}>×</button>
+          )}
         </span>
       ))}
     </div>
