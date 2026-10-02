@@ -111,7 +111,6 @@ export type ResumeSaveRequest = {
   certifications: Certification[];
 };
 
-// Sample resume data used to populate the editor during development.
 export const initialResume: Resume = {
   first_name: "Jordan",
   last_name: "Lee",

@@ -7,7 +7,7 @@ import TailorPage, {
   type ResumeSource,
   type TailorSubmission,
 } from './pages/TailorPage'
-import { ResumePage, resumeDraftStorageKey } from './pages/ResumePage'
+import { ResumePage, resumeDraftStorageKey, resumeIdStorageKey } from './pages/ResumePage'
 import { ProfilePage } from './pages/ProfilePage'
 import { signOutUser } from './lib/supabase'
 
@@ -89,6 +89,7 @@ function App() {
   // Start a guest session and open the Resume page
   const handleContinueAsGuest = () => {
     sessionStorage.removeItem(resumeDraftStorageKey)
+    sessionStorage.removeItem(resumeIdStorageKey)
     setAccountType('guest')
     setResumeReady(false)
     setProfileInitials('G')
@@ -99,6 +100,7 @@ function App() {
 
   // Set up the user profile after login
   const handleAccountLogin = (firstName: string, lastName: string) => {
+    sessionStorage.removeItem(resumeIdStorageKey)
     const firstInitial = firstName.trim().charAt(0)
     const lastInitial = lastName.trim().charAt(0)
     const initials = `${firstInitial}${lastInitial}`.toUpperCase() || 'U'
@@ -116,6 +118,7 @@ function App() {
     setShowHomeWarning(false)
     bypassWelcomeWarningRef.current = true
     sessionStorage.removeItem(resumeDraftStorageKey)
+    sessionStorage.removeItem(resumeIdStorageKey)
     setResumeSession(current => current + 1)
     setResumeReady(false)
 
@@ -163,6 +166,7 @@ function App() {
     }
 
     sessionStorage.removeItem(resumeDraftStorageKey)
+    sessionStorage.removeItem(resumeIdStorageKey)
     setAccountType(null)
     setProfileInitials(null)
     setAccountName(null)

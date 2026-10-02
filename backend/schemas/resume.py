@@ -1,34 +1,41 @@
 # schemas/resume.py
 from datetime import date
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from uuid import UUID
+
+def fix_empty(value):
+    if value == "":
+        return None
+    return value
+
 
 
 # ---------- Work Experience ----------
-
+   
 class WorkExperienceCreate(BaseModel):
     job_title: str
     company: str
     location: Optional[str] = None
-    start_date: date
+    start_date: Optional[date] = None
     end_date: Optional[date] = None
     description: str
     sort_order: int
 
+    start_date_fix=  field_validator("start_date",mode="before")(fix_empty)
+    end_date_fix  =  field_validator("end_date",mode="before")(fix_empty)
 class WorkExperienceUpdate(BaseModel):
-    id: Optional[UUID]=None
+    id: Optional[UUID] = None
     job_title: str
     company: str
     location: Optional[str] = None
-    start_date: date
+    start_date: Optional[date] = None
     end_date: Optional[date] = None
     description: str
     sort_order: int
-
-
-
-
+    start_date_fix=  field_validator("start_date",mode="before")(fix_empty)
+    end_date_fix  =  field_validator("end_date",mode="before")(fix_empty)
+    
 
 # ---------- Education ----------
 
@@ -39,9 +46,10 @@ class EducationCreate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     sort_order: int
-
+    start_date_fix=  field_validator("start_date",mode="before")(fix_empty)
+    end_date_fix  =  field_validator("end_date",mode="before")(fix_empty)
 class EducationUpdate(BaseModel):
-    id: Optional[UUID]=None
+    id: Optional[UUID] = None
     school: str
     degree: Optional[str] = None
     field_of_study: Optional[str] = None
@@ -49,7 +57,8 @@ class EducationUpdate(BaseModel):
     end_date: Optional[date] = None
     sort_order: int
 
-
+    start_date_fix=  field_validator("start_date",mode="before")(fix_empty)
+    end_date_fix  =  field_validator("end_date",mode="before")(fix_empty)
 
 
 # ---------- Skill ----------
@@ -58,11 +67,11 @@ class SkillCreate(BaseModel):
     skill_name: str
     sort_order: int
 
+
 class SkillUpdate(BaseModel):
-    id: Optional[UUID]= None
+    id: Optional[UUID] = None
     skill_name: str
     sort_order: int
-
 
 
 # ---------- Project ----------
@@ -73,8 +82,9 @@ class ProjectCreate(BaseModel):
     link: Optional[str] = None
     sort_order: int
 
+
 class ProjectUpdate(BaseModel):
-    id: Optional[UUID]=None
+    id: Optional[UUID] = None
     name: str
     description: Optional[str] = None
     link: Optional[str] = None
@@ -88,15 +98,15 @@ class CertificationCreate(BaseModel):
     issuer: Optional[str] = None
     date_earned: Optional[date] = None
     sort_order: int
-
+    date_earned_fix= field_validator("date_earned", mode="before")(fix_empty)
 
 class CertificationUpdate(BaseModel):
-    id: Optional[UUID]=None
+    id: Optional[UUID] = None
     name: str
     issuer: Optional[str] = None
     date_earned: Optional[date] = None
     sort_order: int
-
+    date_earned_fix= field_validator("date_earned", mode="before")(fix_empty)
 #-----------Section-Order--------
 
 class SectionOrderCreate(BaseModel):
@@ -105,7 +115,7 @@ class SectionOrderCreate(BaseModel):
 
 
 class SectionOrderUpdate(BaseModel):
-    id: Optional[UUID]=None
+    id: Optional[UUID] = None
     section_name: str
     section_order: int
 
@@ -113,19 +123,27 @@ class SectionOrderUpdate(BaseModel):
 # ---------- Resume ----------
 
 class ResumeCreate(BaseModel):
+    title: Optional[str] = None 
+    career_field: Optional[str] = None
+    is_default: Optional[bool] = False
     full_name: str
     email: str
     phone: Optional[str] = None
     location: Optional[str] = None
     professional_summary: Optional[str] = None
 
+
 class ResumeUpdate(BaseModel):
-    id: Optional[UUID]=None
+    id: Optional[UUID] = None
+    title: Optional[str] = None
+    career_field: Optional[str] = None
+    is_default: Optional[bool] = None
     full_name: str
     email: str
     phone: Optional[str] = None
     location: Optional[str] = None
     professional_summary: Optional[str] = None
+
 
 class ResumeUpdateRequest(BaseModel):
     resume: ResumeUpdate
@@ -137,9 +155,6 @@ class ResumeUpdateRequest(BaseModel):
     certifications: list[CertificationUpdate] = []
 
 
-
-
-
 class ResumeSaveRequest(BaseModel):
     """Full save: resume fields + all six sections at once."""
     resume: ResumeCreate
@@ -149,6 +164,3 @@ class ResumeSaveRequest(BaseModel):
     skills: list[SkillCreate] = []
     projects: list[ProjectCreate] = []
     certifications: list[CertificationCreate] = []
-
-
-

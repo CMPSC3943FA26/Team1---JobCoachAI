@@ -6,7 +6,7 @@ import {
   loadResumeFromDatabase,
   type SavedResumeSummary,
 } from '../services/resumeService'
-import { resumeDraftStorageKey } from './ResumePage'
+import { resumeDraftStorageKey, resumeIdStorageKey } from './ResumePage'
 
 type ProfilePageProps = {
   focusSection?: 'profile' | 'resumes'
@@ -55,6 +55,9 @@ function withoutDatabaseFields<T extends Record<string, unknown>>(row: T) {
 }
 
 function saveDatabaseResumeAsDraft(databaseResume: Record<string, any>) {
+  if (typeof databaseResume.id === 'string') {
+    sessionStorage.setItem(resumeIdStorageKey, databaseResume.id)
+  }
   const name = splitFullName(databaseResume.full_name)
   const profile = {
     first_name: name.first_name,

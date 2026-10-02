@@ -8,7 +8,9 @@ import { useEffect, useState, type DragEvent, type KeyboardEvent } from "react";
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from "docx";
 import { Button } from "../components/Button";
 import {
+  deleteResumeFromDatabase,
   saveResumeToDatabase,
+  updateResumeToDatabase,
 } from "../services/resumeService";
 import { DocumentEditor } from "../components/DocumentEditor";
 import {
@@ -20,6 +22,7 @@ import {
   type ResumeProfile,
   type Skill,
   type WorkExperience,
+  type ResumeSaveRequest
 } from "../features/resume/resumeData";
 // Props passed from App.tsx
 type ResumePageProps = {
@@ -50,6 +53,7 @@ type ResumeSection = {
   entries: SectionEntry[];
 };
 export const resumeDraftStorageKey = "jobcoachai.resumeDraft";
+export const resumeIdStorageKey = "jobcoachai.resumeId";
 type ResumeDraft = {
   profile: ResumeProfile;
   sections: ResumeSection[];
@@ -332,6 +336,9 @@ export function ResumePage({
   const [resumeDeleted, setResumeDeleted] = useState(false);
   const [draggedSection, setDraggedSection] = useState<SectionKey | null>(null);
   const [dropTarget, setDropTarget] = useState<SectionKey | null>(null);
+  const [resumeId, setResumeID] = useState<string | null>(() =>
+    sessionStorage.getItem(resumeIdStorageKey),
+  );
   // Track which resume sections are expanded
   const [openSections, setOpenSections] = useState<Partial<Record<SectionKey, boolean>>>({
     summary: true,
@@ -343,6 +350,8 @@ export function ResumePage({
   });
   // Clear the visible editor and the stored draft; do not delete any saved database resume.
   const handleClearResume = () => {
+    setResumeID(null);
+    sessionStorage.removeItem(resumeIdStorageKey);
     // Remove the persisted sample/draft before navigating away from this page.
     sessionStorage.removeItem(resumeDraftStorageKey);
     // All displayed fields and preview use these controlled React values.
@@ -563,7 +572,7 @@ export function ResumePage({
       })
       .join(" • ");
   };
- function buildResumePayload() {
+ function buildResumePayload(): ResumeSaveRequest {
  return {
   resume: {
     full_name: `${profile.first_name} ${profile.last_name}`.trim(),
@@ -605,11 +614,11 @@ export function ResumePage({
   }
 }
   const handleSave = async () => {
-    if (isGuest || savingResume) return;
+    if (savingResume) return false;
 
     if (!hasResumeContent) {
       setStatus("Add resume information before saving your resume.");
-      return;
+      return false;
     }
 
     setSavingResume(true);
@@ -617,11 +626,26 @@ export function ResumePage({
 
     try {
       const payload = buildResumePayload();
-      await saveResumeToDatabase(payload);
-      setStatus("Resume saved to your account. You can open it from Profile → Saved Resumes.");
+      if (resumeId) {
+        await updateResumeToDatabase(resumeId, payload);
+        setStatus(isGuest ? "Resume saved to your guest session." : "Resume updated in your account.");
+      } else {
+        const result = await saveResumeToDatabase(payload);
+        const savedId = result.id ?? result.resume_id ?? result.resume?.id;
+        if (typeof savedId !== "string") {
+          throw new Error("The saved resume response did not include an ID.");
+        }
+        sessionStorage.setItem(resumeIdStorageKey, savedId);
+        setResumeID(savedId);
+        setStatus(isGuest
+          ? "Resume saved to your guest session."
+          : "Resume saved to your account. You can open it from Profile → Saved Resumes.");
+      }
+      return true;
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to save your resume. Please try again.");
       console.error("Error saving resume:", error);
+      return false;
     } finally {
       setSavingResume(false);
     }
@@ -715,10 +739,26 @@ const hasExportableData = Boolean(
       document.title = originalTitle;
     }, 1000);
   };
-  const handleDelete = () => {
+  const handleDelete = async () => {
+    try {
+    if (resumeId == null) {
     setResumeDeleted(true);
     setShowDeleteDialog(false);
     setStatus("Resume deleted from this workspace.");
+    }
+    else  {
+      await deleteResumeFromDatabase(resumeId)
+      sessionStorage.removeItem(resumeIdStorageKey)
+      setResumeID(null)
+      setResumeDeleted(true);
+      setShowDeleteDialog(false);
+      setStatus("Resume deleted from this workspace.");
+    }
+  }
+  catch(error) {
+    setStatus("Failed to delete resume")
+    console.error("Error deleting resume:",error)
+  }
   };
   const handleResumeFileChange = (file: File | null) => {
     if (!file) return;
@@ -1302,7 +1342,7 @@ const hasExportableData = Boolean(
           <Button
             variant="secondary"
             type="button"
-            onClick={() => {
+            onClick={async() => {
               const showContinueError = (message: string) => {
                 setStatus(message);
                 // Keep the user near the Continue button and its validation message.
@@ -1326,7 +1366,12 @@ const hasExportableData = Boolean(
                 return;
               }
               if (isGuest && hasResumeContent && !guestExportIsCurrent) {
+                setStatus("");
                 setShowGuestExportWarning(true);
+                return;
+              }
+              const saved = await handleSave()
+              if (!saved) {
                 return;
               }
               setStatus("");
@@ -1358,22 +1403,28 @@ const hasExportableData = Boolean(
             aria-describedby="guest-export-description"
           >
             <span className="panel-icon">GUEST RESUME</span>
-            <h3 id="guest-export-title">Continue without saving?</h3>
+            <h3 id="guest-export-title">Save and continue?</h3>
             <p id="guest-export-description">
-              You are continuing as a Guest. Your resume data may not be retained after this session.
+              Your resume will be saved to this guest session. It may not be available if you lose access to the session.
             </p>
+            {status && <p role="status" aria-live="polite">{status}</p>}
             <div className="dialog-actions guest-export-dialog-actions">
               <div className="guest-export-navigation">
                 <Button variant="secondary" type="button"
                   onClick={() => setShowGuestExportWarning(false)}>
                   Stay on resume
                 </Button>
-                <Button variant="secondary" type="button" onClick={() => {
+                <Button variant="secondary" type="button" disabled={savingResume} onClick={async() => {
+                  const saved = await handleSave();
+
+                  if (!saved) {
+                  return;
+                  }
                   setShowGuestExportWarning(false);
                   setStatus("");
                   window.location.hash = '#tailor';
                 }}>
-                  Continue anyway <span aria-hidden="true">→</span>
+                  {savingResume ? "Saving…" : "Save and continue"} <span aria-hidden="true">→</span>
                 </Button>
               </div>
             </div>

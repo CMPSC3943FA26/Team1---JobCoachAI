@@ -457,7 +457,7 @@ export function WelcomePage({
           <button
             className="guest-link"
             type="button"
-            onClick={handleGuestLogin}
+            onClick={() => void handleGuestLogin()}
           >
             Continue as guest
           </button>

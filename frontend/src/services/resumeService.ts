@@ -60,7 +60,6 @@ export async function listResumesFromDatabase(): Promise<SavedResumeSummary[]> {
 
 export async function saveResumeToDatabase(data: object) {
   const userId = await getUserId()
-
   return authorizedRequest(
     `/resume/add_resume/${userId}`,
     {
@@ -88,7 +87,6 @@ export async function updateResumeToDatabase(
   data: object
 ) {
   const userId = await getUserId()
-
   return authorizedRequest(
     `/resume/update_resume/${userId}/${resume_id}`,
     {
