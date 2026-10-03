@@ -10,6 +10,7 @@ import { Button } from "../components/Button";
 import {
   deleteResumeFromDatabase,
   saveResumeToDatabase,
+  setSavedResumeDisplayMeta,
   updateResumeToDatabase,
 } from "../services/resumeService";
 import { DocumentEditor } from "../components/DocumentEditor";
@@ -462,6 +463,12 @@ export function ResumePage({
     fieldKey: string,
     value: string,
   ) => {
+    // Keep the profile-level professional summary synchronized with the
+    // editable summary section so loaded resumes save the user's latest edit.
+    if (sectionKey === "summary" && entryIndex === 0) {
+      setProfile((current) => ({ ...current, professional_summary: value }));
+    }
+
     setSections((current) =>
       current.map((section) => {
         if (section.key !== sectionKey) return section;
@@ -572,6 +579,27 @@ export function ResumePage({
       })
       .join(" • ");
   };
+  // Normalize the editor's display-friendly date values to the concrete ISO
+  // dates required by the current backend/database schema. This keeps the
+  // frontend compatible without changing backend or database files.
+  const toApiDate = (value: string | undefined) => {
+    const trimmed = String(value ?? "").trim();
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    if (/^\d{4}-\d{2}$/.test(trimmed)) return `${trimmed}-01`;
+    if (/^\d{4}$/.test(trimmed)) return `${trimmed}-01-01`;
+
+    if (/^(present|current|now)$/i.test(trimmed)) {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+
+    return "";
+  };
+
  function buildResumePayload(): ResumeSaveRequest {
  return {
   resume: {
@@ -579,7 +607,10 @@ export function ResumePage({
     email: profile.email,
     phone: profile.phone,
     location: profile.location,
-    professional_summary: profile.professional_summary
+    professional_summary: String(
+      sections.find((section) => section.key === "summary")?.entries[0] ??
+        profile.professional_summary,
+    )
     },
     section_order: sections.map((section,index) => ({
       section_name: section.key,
@@ -589,11 +620,15 @@ export function ResumePage({
       (sections.find((section) => section.key === "work_experience")?.entries as WorkExperience[]) ?? []
     ).filter(hasEntryContent).map((entry,index)=> ({
       ...entry,
+      start_date: toApiDate(entry.start_date),
+      end_date: toApiDate(entry.end_date),
       sort_order: index
     })),
     education: ((sections.find((section) => section.key === "education")?.entries as Education[]) ?? []
      ).filter(hasEntryContent).map((entry,index)=> ({
       ...entry,
+      start_date: toApiDate(entry.start_date),
+      end_date: toApiDate(entry.end_date),
       sort_order: index
     })),
     skills:( (sections.find((section)=> section.key === "skills")?.entries as Skill[]) ?? []
@@ -609,6 +644,7 @@ export function ResumePage({
     certifications:( (sections.find((section)=> section.key === "certifications")?.entries as Certification[]) ?? []
      ).filter(hasEntryContent).map((entry,index)=> ({
       ...entry,
+      date_earned: toApiDate(entry.date_earned),
       sort_order: index
     }))
   }
@@ -621,15 +657,32 @@ export function ResumePage({
       return false;
     }
 
+    // Guests do not own a persistent database resume. Their draft is already
+    // maintained in sessionStorage by the effect above; write it once more
+    // here so "Save and continue" is guaranteed to persist the latest edits
+    // before Page 3 opens.
+    if (isGuest) {
+      sessionStorage.setItem(
+        resumeDraftStorageKey,
+        JSON.stringify({
+          profile,
+          sections,
+          filename: resumeFilename,
+          csvSourceFilename: importedCsvFilename ?? undefined,
+        }),
+      );
+      sessionStorage.removeItem(resumeIdStorageKey);
+      setResumeID(null);
+      setStatus("Resume saved to your guest session.");
+      return true;
+    }
+
     setSavingResume(true);
     setStatus("Saving resume…");
 
     try {
       const payload = buildResumePayload();
-      if (resumeId) {
-        await updateResumeToDatabase(resumeId, payload);
-        setStatus(isGuest ? "Resume saved to your guest session." : "Resume updated in your account.");
-      } else {
+      const createAndRememberResume = async () => {
         const result = await saveResumeToDatabase(payload);
         const savedId = result.id ?? result.resume_id ?? result.resume?.id;
         if (typeof savedId !== "string") {
@@ -637,9 +690,46 @@ export function ResumePage({
         }
         sessionStorage.setItem(resumeIdStorageKey, savedId);
         setResumeID(savedId);
-        setStatus(isGuest
-          ? "Resume saved to your guest session."
-          : "Resume saved to your account. You can open it from Profile → Saved Resumes.");
+        const currentSavedFilename = `${profile.first_name} ${profile.last_name}`
+          .trim()
+          .replace(/\s+/g, "-") || "resume";
+        setSavedResumeDisplayMeta(savedId, {
+          filename: currentSavedFilename,
+          kind: "original",
+        });
+        return savedId;
+      };
+
+      if (resumeId) {
+        try {
+          await updateResumeToDatabase(resumeId, payload);
+          const currentSavedFilename = `${profile.first_name} ${profile.last_name}`
+            .trim()
+            .replace(/\s+/g, "-") || "resume";
+          setSavedResumeDisplayMeta(resumeId, {
+            filename: currentSavedFilename,
+            kind: "original",
+          });
+          setStatus("Resume updated in your account.");
+        } catch (updateError) {
+          // sessionStorage can outlive a saved resume (for example after a
+          // logout, deletion, failed earlier save, or switching accounts).
+          // The backend reports this case as "issue with updating resume".
+          // Recover on the frontend by creating a fresh resume and replacing
+          // the stale stored ID instead of leaving the user stuck.
+          const message = updateError instanceof Error ? updateError.message : "";
+          if (message.toLowerCase().includes("issue with updating resume")) {
+            sessionStorage.removeItem(resumeIdStorageKey);
+            setResumeID(null);
+            await createAndRememberResume();
+            setStatus("Resume saved to your account.");
+          } else {
+            throw updateError;
+          }
+        }
+      } else {
+        await createAndRememberResume();
+        setStatus("Resume saved to your account. You can open it from Profile → Saved Resumes.");
       }
       return true;
     } catch (error) {

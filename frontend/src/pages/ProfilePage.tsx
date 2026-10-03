@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase, updateCurrentUserProfile } from '../lib/supabase'
 import {
   deleteResumeFromDatabase,
+  getSavedResumeDisplayMeta,
+  removeSavedResumeDisplayMeta,
   listResumesFromDatabase,
   loadResumeFromDatabase,
   type SavedResumeSummary,
@@ -12,6 +14,7 @@ type ProfilePageProps = {
   focusSection?: 'profile' | 'resumes'
   onNameChange?: (firstName: string, lastName: string) => void
   onResumeOpened?: () => void
+  onResumePreviewed?: (resume: Record<string, any>) => void
 }
 
 type ProfileForm = {
@@ -30,14 +33,16 @@ const emptyForm: ProfileForm = {
   location: '',
 }
 
-function formatDate(value?: string | null) {
+function formatDateTime(value?: string | null) {
   if (!value) return '—'
   const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime())) return '—'
-  return parsed.toLocaleDateString(undefined, {
+  return parsed.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
   })
 }
 
@@ -129,6 +134,7 @@ export function ProfilePage({
   focusSection = 'profile',
   onNameChange,
   onResumeOpened,
+  onResumePreviewed,
 }: ProfilePageProps) {
   const [form, setForm] = useState<ProfileForm>(emptyForm)
   const [initialForm, setInitialForm] = useState<ProfileForm>(emptyForm)
@@ -136,6 +142,9 @@ export function ProfilePage({
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [resumeLoadingId, setResumeLoadingId] = useState<string | null>(null)
+  const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null)
+  const [resumePendingDelete, setResumePendingDelete] = useState<SavedResumeSummary | null>(null)
+  const [deletingResume, setDeletingResume] = useState(false)
   const [message, setMessage] = useState('')
   const [search, setSearch] = useState('')
 
@@ -201,7 +210,7 @@ export function ProfilePage({
     if (!query) return resumes
 
     return resumes.filter((resume) =>
-      `${resume.full_name ?? ''} ${resume.email ?? ''}`.toLowerCase().includes(query),
+      `${getSavedResumeDisplayMeta(resume.id)?.filename ?? ''} ${getSavedResumeDisplayMeta(resume.id)?.kind ?? ''} ${resume.full_name ?? ''} ${resume.email ?? ''}`.toLowerCase().includes(query),
     )
   }, [resumes, search])
 
@@ -224,7 +233,7 @@ export function ProfilePage({
 
       setInitialForm(form)
       onNameChange?.(form.firstName, form.lastName)
-      setMessage('Profile updated successfully.')
+      setMessage('Personal information saved.')
     } catch (error) {
       console.error('Profile save error:', error)
       setMessage(
@@ -234,6 +243,29 @@ export function ProfilePage({
       )
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handlePreviewResume = async (resumeId: string) => {
+    setPreviewLoadingId(resumeId)
+    setMessage('')
+
+    try {
+      const response = await loadResumeFromDatabase(resumeId)
+      const databaseResume = response?.resume ?? response
+
+      if (!databaseResume || databaseResume.error) {
+        throw new Error(databaseResume?.error ?? 'Unable to preview this resume.')
+      }
+
+      onResumePreviewed?.(databaseResume)
+    } catch (error) {
+      console.error('Preview saved resume error:', error)
+      setMessage(
+        error instanceof Error ? error.message : 'Unable to preview this resume.',
+      )
+    } finally {
+      setPreviewLoadingId(null)
     }
   }
 
@@ -262,22 +294,25 @@ export function ProfilePage({
     }
   }
 
-  const handleDeleteResume = async (resume: SavedResumeSummary) => {
-    const displayName = resume.full_name?.trim()
-      ? `${resume.full_name} Resume`
-      : 'this saved resume'
+  const handleDeleteResume = async () => {
+    if (!resumePendingDelete || deletingResume) return
 
-    if (!window.confirm(`Delete ${displayName}? This cannot be undone.`)) return
+    setDeletingResume(true)
+    setMessage('')
 
     try {
-      await deleteResumeFromDatabase(resume.id)
-      setResumes((current) => current.filter((item) => item.id !== resume.id))
+      await deleteResumeFromDatabase(resumePendingDelete.id)
+      removeSavedResumeDisplayMeta(resumePendingDelete.id)
+      setResumes((current) => current.filter((item) => item.id !== resumePendingDelete.id))
+      setResumePendingDelete(null)
       setMessage('Saved resume deleted.')
     } catch (error) {
       console.error('Delete saved resume error:', error)
       setMessage(
         error instanceof Error ? error.message : 'Unable to delete this resume.',
       )
+    } finally {
+      setDeletingResume(false)
     }
   }
 
@@ -386,7 +421,7 @@ export function ProfilePage({
           <div>
             <span className="panel-icon">RESUMES</span>
             <h3>Saved Resumes</h3>
-            <p>View, open, or delete resumes saved to your account.</p>
+            <p>Preview, open, or delete resumes saved to your account.</p>
           </div>
 
           <input
@@ -407,52 +442,111 @@ export function ProfilePage({
           </p>
         ) : (
           <div className="saved-resume-list">
-            <div className="saved-resume-row saved-resume-row-header" aria-hidden="true">
-              <span>Resume</span>
-              <span>Last Updated</span>
-              <span>Actions</span>
-            </div>
-
-            {filteredResumes.map((resume) => (
-              <div className="saved-resume-row" key={resume.id}>
-                <div className="saved-resume-name">
-                  <span className="saved-resume-icon" aria-hidden="true">▤</span>
-                  <span>
-                    <strong>
-                      {resume.full_name?.trim()
-                        ? `${resume.full_name} Resume`
-                        : 'Saved Resume'}
-                    </strong>
-                    <small>{resume.email || 'Saved to your account'}</small>
-                  </span>
-                </div>
-
-                <span className="saved-resume-date">
-                  {formatDate(resume.updated_at ?? resume.created_at)}
-                </span>
-
-                <div className="saved-resume-actions">
-                  <button
-                    className="button button-secondary"
-                    type="button"
-                    onClick={() => void handleOpenResume(resume.id)}
-                    disabled={resumeLoadingId === resume.id}
-                  >
-                    {resumeLoadingId === resume.id ? 'Opening…' : 'Open'}
-                  </button>
-                  <button
-                    className="text-button saved-resume-delete"
-                    type="button"
-                    onClick={() => void handleDeleteResume(resume)}
-                  >
-                    Delete
-                  </button>
-                </div>
+              <div className="saved-resume-row saved-resume-row-header" aria-hidden="true">
+                <span>Resume</span>
+                <span>Last Updated</span>
+                <span>Actions</span>
               </div>
-            ))}
+
+              {filteredResumes.map((resume) => (
+                <div className="saved-resume-row" key={resume.id}>
+                  <div className="saved-resume-name">
+                    <span className="saved-resume-icon" aria-hidden="true">▤</span>
+                    <span>
+                      <strong>
+                        {(() => {
+                          const meta = getSavedResumeDisplayMeta(resume.id)
+                          if (meta) return `${meta.filename}-${meta.kind}`
+                          return resume.full_name?.trim()
+                            ? `${resume.full_name} Resume`
+                            : 'Saved Resume'
+                        })()}
+                      </strong>
+                      <small>
+                        {(() => {
+                          const meta = getSavedResumeDisplayMeta(resume.id)
+                          const accountText = resume.email || 'Saved to your account'
+                          return meta
+                            ? `${meta.kind === 'original' ? 'Original resume' : 'Tailored resume'} • ${accountText}`
+                            : accountText
+                        })()}
+                      </small>
+                    </span>
+                  </div>
+
+                  <span className="saved-resume-date">
+                    {formatDateTime(resume.updated_at ?? resume.created_at)}
+                  </span>
+
+                  <div className="saved-resume-actions">
+                    <button
+                      className="button button-secondary"
+                      type="button"
+                      onClick={() => void handlePreviewResume(resume.id)}
+                      disabled={previewLoadingId === resume.id}
+                    >
+                      {previewLoadingId === resume.id ? 'Previewing…' : 'Preview'}
+                    </button>
+                    <button
+                      className="button button-secondary"
+                      type="button"
+                      onClick={() => void handleOpenResume(resume.id)}
+                      disabled={resumeLoadingId === resume.id}
+                    >
+                      {resumeLoadingId === resume.id ? 'Opening…' : 'Open'}
+                    </button>
+                    <button
+                      className="text-button saved-resume-delete"
+                      type="button"
+                      onClick={() => setResumePendingDelete(resume)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
           </div>
         )}
       </section>
+
+      {resumePendingDelete && (
+        <div className="dialog-backdrop" role="presentation">
+          <div
+            className="confirm-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-saved-resume-title"
+            aria-describedby="delete-saved-resume-description"
+          >
+            <span className="panel-icon">DELETE RESUME</span>
+            <h3 id="delete-saved-resume-title">Delete saved resume?</h3>
+            <p id="delete-saved-resume-description">
+              {resumePendingDelete.title?.trim() ||
+                (resumePendingDelete.full_name?.trim()
+                  ? `${resumePendingDelete.full_name} Resume`
+                  : 'This saved resume')} will be permanently deleted.
+            </p>
+            <div className="dialog-actions">
+              <button
+                className="button button-secondary"
+                type="button"
+                disabled={deletingResume}
+                onClick={() => setResumePendingDelete(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="button button-primary saved-resume-confirm-delete"
+                type="button"
+                disabled={deletingResume}
+                onClick={() => void handleDeleteResume()}
+              >
+                {deletingResume ? 'Deleting…' : 'Delete resume'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

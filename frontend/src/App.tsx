@@ -42,6 +42,7 @@ function App() {
   const [accountType, setAccountType] =
     useState<'guest' | 'user' | null>(null)
   const [showHomeWarning, setShowHomeWarning] = useState(false)
+  const [sidebarResumePreview, setSidebarResumePreview] = useState<Record<string, any> | null>(null)
   const bypassWelcomeWarningRef = useRef(false)
 
   // Handle page navigation and prevent access to Tailor without a resume
@@ -90,6 +91,7 @@ function App() {
   const handleContinueAsGuest = () => {
     sessionStorage.removeItem(resumeDraftStorageKey)
     sessionStorage.removeItem(resumeIdStorageKey)
+    setSidebarResumePreview(null)
     setAccountType('guest')
     setResumeReady(false)
     setProfileInitials('G')
@@ -105,6 +107,7 @@ function App() {
     const lastInitial = lastName.trim().charAt(0)
     const initials = `${firstInitial}${lastInitial}`.toUpperCase() || 'U'
 
+    setSidebarResumePreview(null)
     setProfileInitials(initials)
     setAccountName(`${firstName.trim()} ${lastName.trim()}`.trim() || 'User')
     setAccountType('user')
@@ -121,6 +124,7 @@ function App() {
     sessionStorage.removeItem(resumeIdStorageKey)
     setResumeSession(current => current + 1)
     setResumeReady(false)
+    setSidebarResumePreview(null)
 
     window.dispatchEvent(new Event('resetWelcomeForm'))
     window.location.hash = '#welcome'
@@ -167,6 +171,7 @@ function App() {
 
     sessionStorage.removeItem(resumeDraftStorageKey)
     sessionStorage.removeItem(resumeIdStorageKey)
+    setSidebarResumePreview(null)
     setAccountType(null)
     setProfileInitials(null)
     setAccountName(null)
@@ -225,9 +230,11 @@ function App() {
             focusSection={profileSection}
             onNameChange={handleProfileNameChange}
             onResumeOpened={() => {
+              setSidebarResumePreview(null)
               setResumeReady(true)
               setResumeSession(current => current + 1)
             }}
+            onResumePreviewed={setSidebarResumePreview}
           />
         )
 
@@ -261,6 +268,8 @@ function App() {
       onOpenProfile={() => handleOpenProfile('profile')}
       onOpenSavedResumes={() => handleOpenProfile('resumes')}
       onLogout={() => void handleLogout()}
+      resumePreview={sidebarResumePreview}
+      onCloseResumePreview={() => setSidebarResumePreview(null)}
     >
       {renderCurrentPage()}
 

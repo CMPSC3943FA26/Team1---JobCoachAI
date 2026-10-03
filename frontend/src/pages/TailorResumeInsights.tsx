@@ -28,6 +28,7 @@ type Sections = ComponentProps<typeof ResumeSuggestions>['sections']
 type TailorSection = Sections[number] & { title?: string }
 type Draft = { profile: ResumeProfile; sections: TailorSection[]; filename: string }
 const DRAFT_KEY = 'jobcoachai.resumeDraft'
+export const TAILORED_PAYLOAD_KEY = 'jobcoachai.tailoredResumePayload'
 
 const skillKey = (name: string) => name.trim().replace(/\s+/g, ' ').toLocaleLowerCase()
 
@@ -90,9 +91,10 @@ function entryText(entry: Sections[number]['entries'][number]): string {
 
 export interface TailorResumeInsightsProps {
   jobDescription: string
+  onTailoredReadyChange?: (ready: boolean) => void
 }
 
-export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsProps) {
+export function TailorResumeInsights({ jobDescription, onTailoredReadyChange }: TailorResumeInsightsProps) {
   const [tailored, setTailored] = useState<Draft | null>(readDraft)
   const [baseDraft, setBaseDraft] = useState<Draft | null>(readDraft)
   const [changedFields, setChangedFields] = useState<Set<string>>(() => new Set())
@@ -109,6 +111,22 @@ export function TailorResumeInsights({ jobDescription }: TailorResumeInsightsPro
   const [showResetConfirmation, setShowResetConfirmation] = useState(false)
   const [hiddenAtsKeywords, setHiddenAtsKeywords] = useState<Set<string>>(() => new Set())
   const [manuallyFoundSkills, setManuallyFoundSkills] = useState<string[]>([])
+
+  // Keep the latest live tailored copy available to TailorPage's Save button.
+  // This stores a save-ready payload, not the original base resume draft.
+  useEffect(() => {
+    if (!tailored) {
+      sessionStorage.removeItem(TAILORED_PAYLOAD_KEY)
+      return
+    }
+    sessionStorage.setItem(TAILORED_PAYLOAD_KEY, JSON.stringify(payloadFromDraft(tailored)))
+  }, [tailored])
+
+  // Page 3 is considered save-ready only after an AI recommendation or
+  // generated summary has actually been applied to the tailored copy.
+  useEffect(() => {
+    onTailoredReadyChange?.(changedFields.size > 0)
+  }, [changedFields, onTailoredReadyChange])
   // Keyword dismissals are display-only and reset for a new job description.
   useEffect(() => {
     setHiddenAtsKeywords(new Set())

@@ -3540,3 +3540,136 @@ textarea::placeholder {
     display: none;
   }
 }
+
+/* Saved resume preview now replaces the workflow navigation in the left panel. */
+.sidebar-resume-preview {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  width: 100%;
+}
+
+.sidebar-resume-preview-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+}
+
+.sidebar-resume-preview-topbar > div {
+  min-width: 0;
+}
+
+.sidebar-resume-preview-topbar strong {
+  display: block;
+  margin-top: 6px;
+  overflow: hidden;
+  color: var(--white);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-preview-close {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--white);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sidebar-preview-close:hover,
+.sidebar-preview-close:focus-visible {
+  background: rgba(255, 255, 255, 0.16);
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
+}
+
+.sidebar-resume-preview-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding-right: 6px;
+}
+
+.sidebar-resume-preview-page {
+  min-height: 100%;
+  padding: 28px 26px;
+  background: var(--white);
+  color: var(--ink);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.18);
+}
+
+.sidebar-preview-header {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--divider);
+  text-align: center;
+}
+
+.sidebar-preview-header h2 {
+  margin: 0 0 6px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 24px;
+  letter-spacing: -0.7px;
+}
+
+.sidebar-preview-header p,
+.sidebar-resume-preview-page section p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.sidebar-resume-preview-page section {
+  margin-top: 20px;
+}
+
+.sidebar-resume-preview-page section h3 {
+  margin: 0 0 9px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--divider);
+  color: var(--blue-deep);
+  font-size: 11px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.sidebar-preview-entry {
+  display: grid;
+  gap: 3px;
+  margin-top: 12px;
+}
+
+.sidebar-preview-entry strong {
+  font-size: 12px;
+}
+
+.sidebar-preview-entry span,
+.sidebar-preview-entry small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.sidebar-preview-entry p {
+  margin-top: 5px !important;
+  white-space: pre-line;
+}
+
+.saved-resume-confirm-delete {
+  border-color: #b42318;
+  background: #b42318;
+}
+
+.saved-resume-confirm-delete:hover:not(:disabled) {
+  background: #912018;
+}

@@ -5,7 +5,9 @@ import {
   type FormEvent,
 } from 'react'
 
-import { TailorResumeInsights } from './TailorResumeInsights'
+import { TailorResumeInsights, TAILORED_PAYLOAD_KEY } from './TailorResumeInsights'
+import type { ResumeSaveRequest } from '../features/resume/resumeData'
+import { saveResumeToDatabase, setSavedResumeDisplayMeta, updateResumeToDatabase } from '../services/resumeService'
 
 /**
  * Tailor / intake page (Page 3).
@@ -39,6 +41,9 @@ export default function TailorPage({
   const [jobDescription, setJobDescription] = useState('')
   const [error, setError] = useState('')
   const [tailoredSaveMessage, setTailoredSaveMessage] = useState('')
+  const [savingTailoredResume, setSavingTailoredResume] = useState(false)
+  const [tailoredReady, setTailoredReady] = useState(false)
+  const [tailoredResumeId, setTailoredResumeId] = useState<string | null>(null)
   const [showNewCopyConfirmation, setShowNewCopyConfirmation] = useState(false)
   const cancelConfirmationRef = useRef<HTMLButtonElement>(null)
   const [submitted, setSubmitted] = useState<{
@@ -76,6 +81,9 @@ export default function TailorPage({
   function createTailoredCopy() {
     setError('')
     setShowNewCopyConfirmation(false)
+    setTailoredResumeId(null)
+    setTailoredReady(false)
+    sessionStorage.removeItem(TAILORED_PAYLOAD_KEY)
     setSubmitted((previous) => ({
       company: company.trim(),
       jobTitle: jobTitle.trim(),
@@ -89,6 +97,124 @@ export default function TailorPage({
       resumeFile: null,
       source: 'scratch',
     })
+  }
+
+  function toApiDate(value: string): string {
+    const trimmed = String(value ?? '').trim()
+    if (!trimmed) return ''
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
+    if (/^\d{4}$/.test(trimmed)) return `${trimmed}-01-01`
+    if (trimmed.toLowerCase() === 'present' || trimmed.toLowerCase() === 'current') {
+      return new Date().toISOString().slice(0, 10)
+    }
+    return ''
+  }
+
+  function normalizeTailoredPayload(payload: ResumeSaveRequest): ResumeSaveRequest {
+    return {
+      ...payload,
+      work_experience: payload.work_experience.map((entry, index) => ({
+        ...entry,
+        start_date: toApiDate(entry.start_date),
+        end_date: toApiDate(entry.end_date),
+        sort_order: index,
+      })),
+      education: payload.education.map((entry, index) => ({
+        ...entry,
+        start_date: toApiDate(entry.start_date),
+        end_date: toApiDate(entry.end_date),
+        sort_order: index,
+      })),
+      skills: payload.skills.map((entry, index) => ({ ...entry, sort_order: index })),
+      projects: payload.projects.map((entry, index) => ({ ...entry, sort_order: index })),
+      certifications: payload.certifications.map((entry, index) => ({
+        ...entry,
+        date_earned: toApiDate(entry.date_earned),
+        sort_order: index,
+      })),
+    }
+  }
+
+  async function handleSaveTailoredResume() {
+    if (isGuest || savingTailoredResume) return
+
+    const title = jobTitle.trim()
+    if (!title) {
+      setTailoredSaveMessage('Add the job title below before saving a tailored resume.')
+      return
+    }
+    if (!submitted) {
+      setTailoredSaveMessage('Submit the job details first so the tailored copy can be generated.')
+      return
+    }
+    if (!tailoredReady) {
+      setTailoredSaveMessage('Apply at least one AI suggestion or generated summary before saving the tailored resume.')
+      return
+    }
+
+    const raw = sessionStorage.getItem(TAILORED_PAYLOAD_KEY)
+    if (!raw) {
+      setTailoredSaveMessage('The tailored copy is not ready yet. Submit the job details again, then save.')
+      return
+    }
+
+    setSavingTailoredResume(true)
+    setTailoredSaveMessage('Saving tailored resume…')
+
+    try {
+      const payload = normalizeTailoredPayload(JSON.parse(raw) as ResumeSaveRequest)
+      let baseFilename = jobTitle.trim() || 'resume'
+      try {
+        const draftRaw = sessionStorage.getItem('jobcoachai.resumeDraft')
+        if (draftRaw) {
+          const draft = JSON.parse(draftRaw) as { filename?: string }
+          if (draft.filename?.trim()) baseFilename = draft.filename.trim()
+        }
+      } catch {
+        // Keep the job-title fallback if the local draft is unavailable.
+      }
+      const tailoredDisplayFilename = baseFilename.replace(/-(original|tailored)$/i, '')
+
+      const createTailoredCopy = async () => {
+        const result = await saveResumeToDatabase(payload)
+        const savedId = result.id ?? result.resume_id ?? result.resume?.id
+        if (typeof savedId !== 'string') {
+          throw new Error('The saved tailored resume response did not include an ID.')
+        }
+        setTailoredResumeId(savedId)
+        setSavedResumeDisplayMeta(savedId, {
+          filename: tailoredDisplayFilename,
+          kind: 'tailored',
+        })
+      }
+
+      if (tailoredResumeId) {
+        try {
+          await updateResumeToDatabase(tailoredResumeId, payload)
+          setSavedResumeDisplayMeta(tailoredResumeId, {
+            filename: tailoredDisplayFilename,
+            kind: 'tailored',
+          })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : ''
+          if (message.toLowerCase().includes('issue with updating resume')) {
+            setTailoredResumeId(null)
+            await createTailoredCopy()
+          } else {
+            throw error
+          }
+        }
+      } else {
+        await createTailoredCopy()
+      }
+
+      setTailoredSaveMessage(`Tailored resume for ${title} saved to your account.`)
+    } catch (error) {
+      setTailoredSaveMessage(error instanceof Error ? error.message : 'Unable to save the tailored resume.')
+      console.error('Error saving tailored resume:', error)
+    } finally {
+      setSavingTailoredResume(false)
+    }
   }
 
   function handleBackToResume() {
@@ -112,27 +238,18 @@ export default function TailorPage({
             <span className="panel-icon">JOB-SPECIFIC VERSION</span>
             <h3>Save a tailored resume</h3>
             <p>
-              Save a copy for this role without changing your main resume.
-              The job title you enter below will be used to label the copy.
+              Save the AI-tailored copy for this role without changing your main resume.
+              Apply at least one AI suggestion or generated summary first.
             </p>
           </div>
 
-          {/* Placeholder until tailored resume saving is implemented. */}
           <button
             className="button button-secondary"
             type="button"
-            disabled={isGuest || !jobTitle.trim()}
-            onClick={() => {
-              if (isGuest) return
-              const title = jobTitle.trim()
-              if (!title) {
-                setTailoredSaveMessage('Add the job title below before saving a tailored resume.')
-                return
-              }
-              setTailoredSaveMessage(`Tailored resume for ${title} is ready for a future save workflow. Saving is not connected yet.`)
-            }}
+            disabled={isGuest || !jobTitle.trim() || !tailoredReady || savingTailoredResume}
+            onClick={() => void handleSaveTailoredResume()}
           >
-            Save tailored resume
+            {savingTailoredResume ? 'Saving…' : 'Save tailored resume'}
           </button>
 
           {(isGuest || tailoredSaveMessage) && (
@@ -240,7 +357,11 @@ export default function TailorPage({
               <p role="status">Job details changed. Submit again to update these results.</p>
             )}
           </div>
-          <TailorResumeInsights key={submitted.version} jobDescription={submitted.jobDescription} />
+          <TailorResumeInsights
+            key={submitted.version}
+            jobDescription={submitted.jobDescription}
+            onTailoredReadyChange={setTailoredReady}
+          />
         </div>
       )}
     </section>

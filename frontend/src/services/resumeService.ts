@@ -3,10 +3,68 @@
 
 import { getUserId, getjwt } from '../lib/supabase'
 
-const api_url = import.meta.env.VITE_API_URL
+const configuredApiUrl = String(import.meta.env.VITE_API_URL ?? '').trim()
+
+function getApiBaseUrl() {
+  const hostname = window.location.hostname
+  const isLocalFrontend = hostname === 'localhost' || hostname === '127.0.0.1'
+
+  // The Flask backend for local development runs on port 5000.
+  // Call it directly instead of depending on a Vite proxy.
+  if (isLocalFrontend) return 'http://127.0.0.1:5000'
+
+  return (
+    configuredApiUrl && configuredApiUrl !== 'your_api_url_here'
+      ? configuredApiUrl
+      : window.location.origin
+  ).replace(/\/$/, '')
+}
+
+const api_url = getApiBaseUrl()
+
+
+export type SavedResumeDisplayMeta = {
+  filename: string
+  kind: 'original' | 'tailored'
+}
+
+const SAVED_RESUME_META_KEY = 'jobcoachai.savedResumeMeta'
+
+function readSavedResumeMeta(): Record<string, SavedResumeDisplayMeta> {
+  try {
+    const raw = localStorage.getItem(SAVED_RESUME_META_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+export function setSavedResumeDisplayMeta(
+  resumeId: string,
+  meta: SavedResumeDisplayMeta,
+) {
+  const current = readSavedResumeMeta()
+  current[resumeId] = meta
+  localStorage.setItem(SAVED_RESUME_META_KEY, JSON.stringify(current))
+}
+
+export function getSavedResumeDisplayMeta(resumeId: string) {
+  return readSavedResumeMeta()[resumeId] ?? null
+}
+
+export function removeSavedResumeDisplayMeta(resumeId: string) {
+  const current = readSavedResumeMeta()
+  if (!(resumeId in current)) return
+  delete current[resumeId]
+  localStorage.setItem(SAVED_RESUME_META_KEY, JSON.stringify(current))
+}
 
 export type SavedResumeSummary = {
   id: string
+  title?: string | null
+  career_field?: string | null
   full_name?: string | null
   email?: string | null
   phone?: string | null
@@ -27,11 +85,27 @@ async function authorizedRequest(path: string, options: RequestInit = {}) {
     },
   })
 
-  const body = await response.json().catch(() => ({}))
+  const responseText = await response.text()
+  let body: any = {}
+
+  if (responseText) {
+    try {
+      body = JSON.parse(responseText)
+    } catch {
+      // Flask/Vite may return HTML for an error response. Keep the body empty
+      // and surface the HTTP status below instead of hiding it behind a
+      // generic database error.
+    }
+  }
 
   if (!response.ok) {
+    const serverMessage =
+      (typeof body.error === 'string' && body.error) ||
+      (typeof body.message === 'string' && body.message)
+
     throw new Error(
-      body.error ?? body.message ?? 'Database request failed.'
+      serverMessage ||
+      `Resume request failed (${response.status} ${response.statusText || 'HTTP error'}).`
     )
   }
 

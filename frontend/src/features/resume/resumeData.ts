@@ -97,6 +97,9 @@ export type SectionOrder = {
 // Resume payload used when saving to the backend/database.
 export type ResumeSaveRequest = {
   resume: {
+    title?: string;
+    career_field?: string;
+    is_default?: boolean;
     full_name: string;
     email: string;
     phone: string;
