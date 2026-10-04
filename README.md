@@ -146,6 +146,28 @@ npm run build
 npm run lint
 npm run preview
 ```
+### Running the Backend
+
+Features that interact with the backend require the Flask server to be running.
+
+1. Frontend .env
+
+Make sure the frontend .env contains:
+
+VITE_API_URL=http://localhost:5000
+2. Start the Flask backend
+
+From the root of the project, run:
+
+python -m backend.app
+
+Keep the backend running while testing backend-dependent features.
+
+3. Start the frontend
+
+In a separate terminal, run:
+
+npm run dev
 
 ## Planned features
 
