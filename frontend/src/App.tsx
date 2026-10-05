@@ -52,11 +52,19 @@ function App() {
     const onHashChange = () => {
       const nextScreen = getCurrentScreen()
 
-      if (nextScreen === 'tailor' && !resumeReady) {
-        window.location.hash = accountType ? '#parsed' : '#welcome'
+      // Users must log in or explicitly continue as guest
+      // before accessing Page 2, Page 3, or Profile.
+      if (accountType === null && nextScreen !== 'welcome') {
+        window.location.hash = '#welcome'
+        setCurrentScreen('welcome')
         return
       }
 
+      // Page 3 also requires a resume.
+      if (nextScreen === 'tailor' && !resumeReady) {
+        window.location.hash = '#parsed'
+        return
+      }
       if (nextScreen === 'welcome') {
         const leavingResumeWorkspace =
           currentScreen === 'parsed' || currentScreen === 'tailor'
@@ -81,8 +89,13 @@ function App() {
       setCurrentScreen(nextScreen)
     }
 
-    if (getCurrentScreen() === 'tailor' && !resumeReady) {
-      window.location.hash = accountType ? '#parsed' : '#welcome'
+    const initialScreen = getCurrentScreen()
+
+    if (accountType === null && initialScreen !== 'welcome') {
+      window.location.hash = '#welcome'
+      setCurrentScreen('welcome')
+    } else if (initialScreen === 'tailor' && !resumeReady) {
+      window.location.hash = '#parsed'
     }
 
     window.addEventListener('hashchange', onHashChange)
@@ -229,6 +242,15 @@ function App() {
         )
 
       case 'parsed':
+        if (accountType === null) {
+          return (
+            <WelcomePage
+              onContinueAsGuest={handleContinueAsGuest}
+              onLogin={handleAccountLogin}
+            />
+          )
+        }
+
         return (
           <ResumePage
             key={resumeSession}
@@ -236,7 +258,6 @@ function App() {
             onResumeReadyChange={setResumeReady}
           />
         )
-
 
       case 'profile':
         if (accountType !== 'user') {
@@ -261,26 +282,35 @@ function App() {
           />
         )
 
-      case 'tailor':
-        return (
-          <TailorPage
-            onOpenResume={handleOpenResume}
-            onSubmit={handleTailorSubmit}
-            onBack={handleHomeClick}
-            isGuest={accountType !== 'user'}
-            onResumePreviewed={setSidebarResumePreview}
-          />
-        )
+        case 'tailor':
+          if (accountType === null || !resumeReady) {
+            return (
+              <WelcomePage
+                onContinueAsGuest={handleContinueAsGuest}
+                onLogin={handleAccountLogin}
+              />
+            )
+          }
 
-      default:
-        return (
-          <WelcomePage
-            onContinueAsGuest={handleContinueAsGuest}
-            onLogin={handleAccountLogin}
-          />
-        )
-    }
-  }
+          return (
+            <TailorPage
+              onOpenResume={handleOpenResume}
+              onSubmit={handleTailorSubmit}
+              onBack={handleHomeClick}
+              isGuest={accountType !== 'user'}
+              onResumePreviewed={setSidebarResumePreview}
+            />
+          )
+
+        default:
+          return (
+            <WelcomePage
+              onContinueAsGuest={handleContinueAsGuest}
+              onLogin={handleAccountLogin}
+            />
+          )
+        }
+      }
 
   return (
     <Layout

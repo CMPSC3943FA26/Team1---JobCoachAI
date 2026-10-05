@@ -391,15 +391,15 @@ export function WelcomePage({
           )}
         </div>
         {/* Guest access */}
-        {!isRegistering && (
-          <button
-            className="guest-link"
-            type="button"
-            onClick={handleGuestLogin}
-          >
-            Continue as guest
-          </button>
-        )}
+          {(!isRegistering || (isRegistering && error)) && (
+            <button
+              className="guest-link"
+              type="button"
+              onClick={handleGuestLogin}
+            >
+              Continue as guest
+            </button>
+          )}
         <p className="privacy-line">
           By continuing, you agree to our terms and
           privacy policy.
