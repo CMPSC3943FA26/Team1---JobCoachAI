@@ -2693,7 +2693,6 @@ textarea::placeholder {
   white-space: nowrap;
 }
 
-.document-editor-close,
 .document-editor-toolbar button,
 .document-editor-findbar button {
   padding: 8px 11px;
@@ -2702,6 +2701,30 @@ textarea::placeholder {
   background: #fff;
   font: inherit;
   cursor: pointer;
+}
+
+.document-editor-close {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.document-editor-close:hover,
+.document-editor-close:focus-visible {
+  background: rgba(255, 255, 255, 0.16);
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
 }
 
 .document-editor-close {

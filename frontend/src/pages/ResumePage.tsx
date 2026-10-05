@@ -677,57 +677,68 @@ export function ResumePage({
       return true;
     }
 
-    setSavingResume(true);
-    setStatus("Saving resume…");
+      setSavingResume(true);
+      setStatus("Saving resume…");
 
-    try {
-      const payload = buildResumePayload();
-      const createAndRememberResume = async () => {
-        const result = await saveResumeToDatabase(payload);
-        const savedId = result.id ?? result.resume_id ?? result.resume?.id;
-        if (typeof savedId !== "string") {
-          throw new Error("The saved resume response did not include an ID.");
-        }
-        sessionStorage.setItem(resumeIdStorageKey, savedId);
-        setResumeID(savedId);
-        const currentSavedFilename = `${profile.first_name} ${profile.last_name}`
-          .trim()
-          .replace(/\s+/g, "-") || "resume";
-        setSavedResumeDisplayMeta(savedId, {
-          filename: currentSavedFilename,
-          kind: "original",
-        });
-        return savedId;
-      };
+      try {
+        const payload = buildResumePayload();
 
-      if (resumeId) {
-        try {
-          await updateResumeToDatabase(resumeId, payload);
-          const currentSavedFilename = `${profile.first_name} ${profile.last_name}`
-            .trim()
-            .replace(/\s+/g, "-") || "resume";
-          setSavedResumeDisplayMeta(resumeId, {
+        const createAndRememberResume = async () => {
+          const result = await saveResumeToDatabase(payload);
+          const savedId = result.id ?? result.resume_id ?? result.resume?.id;
+
+          if (typeof savedId !== "string") {
+            throw new Error("The saved resume response did not include an ID.");
+          }
+
+          sessionStorage.setItem(resumeIdStorageKey, savedId);
+          setResumeID(savedId);
+
+          const currentSavedFilename =
+            resumeFilename.trim().replace(/-(original|tailored)$/i, "") || "resume";
+
+          setSavedResumeDisplayMeta(savedId, {
             filename: currentSavedFilename,
             kind: "original",
           });
-          setStatus("Resume updated in your account.");
-        } catch (updateError) {
-          // sessionStorage can outlive a saved resume (for example after a
-          // logout, deletion, failed earlier save, or switching accounts).
-          // The backend reports this case as "issue with updating resume".
-          // Recover on the frontend by creating a fresh resume and replacing
-          // the stale stored ID instead of leaving the user stuck.
-          const message = updateError instanceof Error ? updateError.message : "";
-          if (message.toLowerCase().includes("issue with updating resume")) {
-            sessionStorage.removeItem(resumeIdStorageKey);
-            setResumeID(null);
-            await createAndRememberResume();
-            setStatus("Resume saved to your account.");
-          } else {
-            throw updateError;
+
+          return savedId;
+        };
+
+        if (resumeId) {
+          try {
+            await updateResumeToDatabase(resumeId, payload);
+
+            const currentSavedFilename =
+              resumeFilename.trim().replace(/-(original|tailored)$/i, "") || "resume";
+
+            setSavedResumeDisplayMeta(resumeId, {
+              filename: currentSavedFilename,
+              kind: "original",
+            });
+
+            setStatus("Resume updated in your account.");
+          } catch (updateError) {
+            // sessionStorage can outlive a saved resume (for example after a
+            // logout, deletion, failed earlier save, or switching accounts).
+            // The backend reports this case as "issue with updating resume".
+            // Recover on the frontend by creating a fresh resume and replacing
+            // the stale stored ID instead of leaving the user stuck.
+            const message =
+              updateError instanceof Error ? updateError.message : "";
+
+            if (message.toLowerCase().includes("issue with updating resume")) {
+              sessionStorage.removeItem(resumeIdStorageKey);
+              setResumeID(null);
+
+              await createAndRememberResume();
+
+              setStatus("Resume saved to your account.");
+            } else {
+              throw updateError;
+            }
           }
-        }
-      } else {
+        } else {
         await createAndRememberResume();
         setStatus("Resume saved to your account. You can open it from Profile → Saved Resumes.");
       }
@@ -740,6 +751,7 @@ export function ResumePage({
       setSavingResume(false);
     }
   };
+  
 const hasExportableData = Boolean(
     Object.values(profile).some((value) => value.trim() !== "") || hasResumeContent,
   );

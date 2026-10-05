@@ -268,6 +268,7 @@ function App() {
             onSubmit={handleTailorSubmit}
             onBack={handleHomeClick}
             isGuest={accountType !== 'user'}
+            onResumePreviewed={setSidebarResumePreview}
           />
         )
 

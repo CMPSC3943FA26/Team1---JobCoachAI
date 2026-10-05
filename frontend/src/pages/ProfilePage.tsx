@@ -120,12 +120,19 @@ function saveDatabaseResumeAsDraft(databaseResume: Record<string, any>) {
     }
   })
 
+  const savedMeta =
+  typeof databaseResume.id === 'string'
+    ? getSavedResumeDisplayMeta(databaseResume.id)
+    : null
+
   sessionStorage.setItem(
     resumeDraftStorageKey,
     JSON.stringify({
       profile,
       sections,
-      filename: `${databaseResume.full_name || 'saved-resume'}-resume`,
+      filename:
+        savedMeta?.filename ||
+        `${databaseResume.full_name || 'saved-resume'}-resume`,
     }),
   )
 }
