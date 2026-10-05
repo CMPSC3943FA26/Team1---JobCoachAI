@@ -224,12 +224,7 @@ export default function TailorPage({
   return (
     <section className="screen" data-screen="tailor">
       <div className="screen-intro">
-        <span className="section-kicker">03 / Tailor your resume</span>
         <h2>Tailor smarter.<br /><em>Apply stronger.</em></h2>
-        <p>
-          Add the company name, job title, and job description, then click{' '}
-          <strong>Submit</strong> to see your resume match and expand the summary or suggestion panels.
-        </p>
       </div>
 
       <form className="job-form" noValidate onSubmit={handleSubmit}>

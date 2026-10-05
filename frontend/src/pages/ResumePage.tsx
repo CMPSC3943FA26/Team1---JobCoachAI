@@ -867,7 +867,6 @@ const hasExportableData = Boolean(
     return (
       <section className="screen resume-screen" data-screen="parsed">
         <div className="resume-empty-state">
-          <span className="section-kicker">02 / Build your resume</span>
           <div className="empty-state-icon" aria-hidden="true">
             +
           </div>
@@ -912,7 +911,6 @@ const hasExportableData = Boolean(
         <div className="resume-main-pane">
           <div className="resume-editor-header" style={{ marginBottom: "12px" }}>
             <div className="screen-intro">
-              <span className="section-kicker">02 / Build your resume</span>
               <h2>
                 Build your <em>Resume</em>
               </h2>

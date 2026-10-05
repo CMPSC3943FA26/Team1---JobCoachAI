@@ -246,11 +246,6 @@ export function Layout({
           })}
         </nav>
 
-        <p className="sidebar-footer">
-          Built for the next chapter
-          <span aria-hidden="true">→</span>
-        </p>
-
 </>
         )}
       </aside>
