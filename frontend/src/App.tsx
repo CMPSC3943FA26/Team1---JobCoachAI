@@ -39,8 +39,10 @@ function App() {
   const [profileInitials, setProfileInitials] = useState<string | null>(null)
   const [accountName, setAccountName] = useState<string | null>(null)
   const [profileSection, setProfileSection] = useState<'profile' | 'resumes'>('profile')
-  const [accountType, setAccountType] =
-    useState<'guest' | 'user' | null>(null)
+  const [accountType, setAccountType] =useState<'guest' | 'user' | null>(null)
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [logoutError, setLogoutError] = useState('')
+  const [logoutPending, setLogoutPending] = useState(false)
   const [showHomeWarning, setShowHomeWarning] = useState(false)
   const [sidebarResumePreview, setSidebarResumePreview] = useState<Record<string, any> | null>(null)
   const bypassWelcomeWarningRef = useRef(false)
@@ -163,23 +165,44 @@ function App() {
   }
 
   const handleLogout = async () => {
+    setLogoutPending(true)
+    setLogoutError('')
+
     try {
       await signOutUser()
+
+      // Bypass the normal Leave Workspace warning during logout
+      bypassWelcomeWarningRef.current = true
+      setShowHomeWarning(false)
+
+      sessionStorage.removeItem(resumeDraftStorageKey)
+      sessionStorage.removeItem(resumeIdStorageKey)
+
+      setSidebarResumePreview(null)
+      setAccountType(null)
+      setProfileInitials(null)
+      setAccountName(null)
+      setResumeReady(false)
+      setResumeSession((current) => current + 1)
+
+      window.dispatchEvent(new Event('resetWelcomeForm'))
+
+      setShowLogoutConfirm(false)
+
+      // Go directly back to Welcome
+      setCurrentScreen('welcome')
+      window.location.hash = '#welcome'
     } catch (error) {
       console.error('Logout error:', error)
-    }
 
-    sessionStorage.removeItem(resumeDraftStorageKey)
-    sessionStorage.removeItem(resumeIdStorageKey)
-    setSidebarResumePreview(null)
-    setAccountType(null)
-    setProfileInitials(null)
-    setAccountName(null)
-    setResumeReady(false)
-    setResumeSession(current => current + 1)
-    window.dispatchEvent(new Event('resetWelcomeForm'))
-    window.location.hash = '#welcome'
-    setCurrentScreen('welcome')
+      setLogoutError(
+        error instanceof Error
+          ? error.message
+          : 'Unable to log out. Please try again.',
+      )
+    } finally {
+      setLogoutPending(false)
+    }
   }
 
   // Open the Resume page when creating or editing a resume
@@ -267,7 +290,10 @@ function App() {
       onHomeClick={handleHomeClick}
       onOpenProfile={() => handleOpenProfile('profile')}
       onOpenSavedResumes={() => handleOpenProfile('resumes')}
-      onLogout={() => void handleLogout()}
+      onLogout={() => {
+        setLogoutError('')
+        setShowLogoutConfirm(true)
+      }}
       resumePreview={sidebarResumePreview}
       onCloseResumePreview={() => setSidebarResumePreview(null)}
     >
@@ -322,6 +348,7 @@ function App() {
               >
                 Stay on page
               </button>
+
               <button
                 className="button button-primary"
                 type="button"
@@ -333,8 +360,88 @@ function App() {
           </div>
         </div>
       )}
+
+      {showLogoutConfirm && (
+        <div
+          className="dialog-backdrop"
+          role="presentation"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            display: 'grid',
+            placeItems: 'center',
+            padding: 20,
+            background: 'rgba(23, 32, 51, 0.55)',
+          }}
+        >
+          <div
+            className="confirm-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="logout-confirm-title"
+            aria-describedby="logout-confirm-description"
+            style={{
+              width: 'min(460px, 100%)',
+              padding: 28,
+              background: '#fff',
+              color: '#172033',
+              boxShadow: '0 24px 60px rgba(23, 32, 51, 0.24)',
+            }}
+          >
+            <span className="panel-icon">LOG OUT</span>
+            <p id="logout-confirm-description">
+              Are you sure you want to log out?
+            </p>
+
+            {logoutError && (
+              <p
+                role="alert"
+                style={{
+                  marginTop: 16,
+                  color: '#b91c1c',
+                }}
+              >
+                {logoutError}
+              </p>
+            )}
+
+            <div
+              className="dialog-actions"
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                flexWrap: 'wrap',
+                gap: 10,
+                marginTop: 24,
+              }}
+            >
+              <button
+                className="button button-secondary"
+                type="button"
+                disabled={logoutPending}
+                onClick={() => {
+                  setLogoutError('')
+                  setShowLogoutConfirm(false)
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="button button-primary"
+                type="button"
+                disabled={logoutPending}
+                onClick={() => void handleLogout()}
+              >
+                {logoutPending ? 'Logging out…' : 'Log out'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   )
-}
+  }
 
-export default App
+  export default App
