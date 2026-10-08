@@ -39,8 +39,10 @@ function App() {
   const [profileInitials, setProfileInitials] = useState<string | null>(null)
   const [accountName, setAccountName] = useState<string | null>(null)
   const [profileSection, setProfileSection] = useState<'profile' | 'resumes'>('profile')
-  const [accountType, setAccountType] =
-    useState<'guest' | 'user' | null>(null)
+  const [accountType, setAccountType] =useState<'guest' | 'user' | null>(null)
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [logoutError, setLogoutError] = useState('')
+  const [logoutPending, setLogoutPending] = useState(false)
   const [showHomeWarning, setShowHomeWarning] = useState(false)
   const [sidebarResumePreview, setSidebarResumePreview] = useState<Record<string, any> | null>(null)
   const bypassWelcomeWarningRef = useRef(false)
@@ -50,11 +52,19 @@ function App() {
     const onHashChange = () => {
       const nextScreen = getCurrentScreen()
 
-      if (nextScreen === 'tailor' && !resumeReady) {
-        window.location.hash = accountType ? '#parsed' : '#welcome'
+      // Users must log in or explicitly continue as guest
+      // before accessing Page 2, Page 3, or Profile.
+      if (accountType === null && nextScreen !== 'welcome') {
+        window.location.hash = '#welcome'
+        setCurrentScreen('welcome')
         return
       }
 
+      // Page 3 also requires a resume.
+      if (nextScreen === 'tailor' && !resumeReady) {
+        window.location.hash = '#parsed'
+        return
+      }
       if (nextScreen === 'welcome') {
         const leavingResumeWorkspace =
           currentScreen === 'parsed' || currentScreen === 'tailor'
@@ -79,8 +89,13 @@ function App() {
       setCurrentScreen(nextScreen)
     }
 
-    if (getCurrentScreen() === 'tailor' && !resumeReady) {
-      window.location.hash = accountType ? '#parsed' : '#welcome'
+    const initialScreen = getCurrentScreen()
+
+    if (accountType === null && initialScreen !== 'welcome') {
+      window.location.hash = '#welcome'
+      setCurrentScreen('welcome')
+    } else if (initialScreen === 'tailor' && !resumeReady) {
+      window.location.hash = '#parsed'
     }
 
     window.addEventListener('hashchange', onHashChange)
@@ -163,23 +178,44 @@ function App() {
   }
 
   const handleLogout = async () => {
+    setLogoutPending(true)
+    setLogoutError('')
+
     try {
       await signOutUser()
+
+      // Bypass the normal Leave Workspace warning during logout
+      bypassWelcomeWarningRef.current = true
+      setShowHomeWarning(false)
+
+      sessionStorage.removeItem(resumeDraftStorageKey)
+      sessionStorage.removeItem(resumeIdStorageKey)
+
+      setSidebarResumePreview(null)
+      setAccountType(null)
+      setProfileInitials(null)
+      setAccountName(null)
+      setResumeReady(false)
+      setResumeSession((current) => current + 1)
+
+      window.dispatchEvent(new Event('resetWelcomeForm'))
+
+      setShowLogoutConfirm(false)
+
+      // Go directly back to Welcome
+      setCurrentScreen('welcome')
+      window.location.hash = '#welcome'
     } catch (error) {
       console.error('Logout error:', error)
-    }
 
-    sessionStorage.removeItem(resumeDraftStorageKey)
-    sessionStorage.removeItem(resumeIdStorageKey)
-    setSidebarResumePreview(null)
-    setAccountType(null)
-    setProfileInitials(null)
-    setAccountName(null)
-    setResumeReady(false)
-    setResumeSession(current => current + 1)
-    window.dispatchEvent(new Event('resetWelcomeForm'))
-    window.location.hash = '#welcome'
-    setCurrentScreen('welcome')
+      setLogoutError(
+        error instanceof Error
+          ? error.message
+          : 'Unable to log out. Please try again.',
+      )
+    } finally {
+      setLogoutPending(false)
+    }
   }
 
   // Open the Resume page when creating or editing a resume
@@ -206,6 +242,15 @@ function App() {
         )
 
       case 'parsed':
+        if (accountType === null) {
+          return (
+            <WelcomePage
+              onContinueAsGuest={handleContinueAsGuest}
+              onLogin={handleAccountLogin}
+            />
+          )
+        }
+
         return (
           <ResumePage
             key={resumeSession}
@@ -213,7 +258,6 @@ function App() {
             onResumeReadyChange={setResumeReady}
           />
         )
-
 
       case 'profile':
         if (accountType !== 'user') {
@@ -238,25 +282,35 @@ function App() {
           />
         )
 
-      case 'tailor':
-        return (
-          <TailorPage
-            onOpenResume={handleOpenResume}
-            onSubmit={handleTailorSubmit}
-            onBack={handleHomeClick}
-            isGuest={accountType !== 'user'}
-          />
-        )
+        case 'tailor':
+          if (accountType === null || !resumeReady) {
+            return (
+              <WelcomePage
+                onContinueAsGuest={handleContinueAsGuest}
+                onLogin={handleAccountLogin}
+              />
+            )
+          }
 
-      default:
-        return (
-          <WelcomePage
-            onContinueAsGuest={handleContinueAsGuest}
-            onLogin={handleAccountLogin}
-          />
-        )
-    }
-  }
+          return (
+            <TailorPage
+              onOpenResume={handleOpenResume}
+              onSubmit={handleTailorSubmit}
+              onBack={handleHomeClick}
+              isGuest={accountType !== 'user'}
+              onResumePreviewed={setSidebarResumePreview}
+            />
+          )
+
+        default:
+          return (
+            <WelcomePage
+              onContinueAsGuest={handleContinueAsGuest}
+              onLogin={handleAccountLogin}
+            />
+          )
+        }
+      }
 
   return (
     <Layout
@@ -267,7 +321,10 @@ function App() {
       onHomeClick={handleHomeClick}
       onOpenProfile={() => handleOpenProfile('profile')}
       onOpenSavedResumes={() => handleOpenProfile('resumes')}
-      onLogout={() => void handleLogout()}
+      onLogout={() => {
+        setLogoutError('')
+        setShowLogoutConfirm(true)
+      }}
       resumePreview={sidebarResumePreview}
       onCloseResumePreview={() => setSidebarResumePreview(null)}
     >
@@ -322,6 +379,7 @@ function App() {
               >
                 Stay on page
               </button>
+
               <button
                 className="button button-primary"
                 type="button"
@@ -333,8 +391,88 @@ function App() {
           </div>
         </div>
       )}
+
+      {showLogoutConfirm && (
+        <div
+          className="dialog-backdrop"
+          role="presentation"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            display: 'grid',
+            placeItems: 'center',
+            padding: 20,
+            background: 'rgba(23, 32, 51, 0.55)',
+          }}
+        >
+          <div
+            className="confirm-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="logout-confirm-title"
+            aria-describedby="logout-confirm-description"
+            style={{
+              width: 'min(460px, 100%)',
+              padding: 28,
+              background: '#fff',
+              color: '#172033',
+              boxShadow: '0 24px 60px rgba(23, 32, 51, 0.24)',
+            }}
+          >
+            <span className="panel-icon">LOG OUT</span>
+            <p id="logout-confirm-description">
+              Are you sure you want to log out?
+            </p>
+
+            {logoutError && (
+              <p
+                role="alert"
+                style={{
+                  marginTop: 16,
+                  color: '#b91c1c',
+                }}
+              >
+                {logoutError}
+              </p>
+            )}
+
+            <div
+              className="dialog-actions"
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                flexWrap: 'wrap',
+                gap: 10,
+                marginTop: 24,
+              }}
+            >
+              <button
+                className="button button-secondary"
+                type="button"
+                disabled={logoutPending}
+                onClick={() => {
+                  setLogoutError('')
+                  setShowLogoutConfirm(false)
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="button button-primary"
+                type="button"
+                disabled={logoutPending}
+                onClick={() => void handleLogout()}
+              >
+                {logoutPending ? 'Logging out…' : 'Log out'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   )
-}
+  }
 
-export default App
+  export default App

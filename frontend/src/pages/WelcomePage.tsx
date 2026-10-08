@@ -5,7 +5,6 @@ import {
   signInAsGuest,
   supabase,
 } from '../lib/supabase'
-
 type WelcomePageProps = {
   onContinueAsGuest: () => void
   onLogin: (
@@ -13,7 +12,6 @@ type WelcomePageProps = {
     lastName: string
   ) => void
 }
-
 export function WelcomePage({
   onContinueAsGuest,
   onLogin,
@@ -21,40 +19,32 @@ export function WelcomePage({
   // Controls login and registration.
   const [isRegistering, setIsRegistering] = useState(false)
   const [accountCreated, setAccountCreated] = useState(false)
-
   // Form values.
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-
   // Authentication error message.
   const [error, setError] = useState('')
-
   const isPasswordValid =
   password.length >= 8 &&
   !/\s/.test(password)
-
-
   // Reset the welcome page when returning home.
   useEffect(() => {
     const resetWelcomeForm = () => {
       setIsRegistering(false)
       setAccountCreated(false)
-
       setFirstName('')
       setLastName('')
       setEmail('')
       setPassword('')
       setError('')
     }
-
     window.addEventListener(
       'resetWelcomeForm',
       resetWelcomeForm
     )
-
     return () => {
       window.removeEventListener(
         'resetWelcomeForm',
@@ -62,15 +52,12 @@ export function WelcomePage({
       )
     }
   }, [])
-
   // Create a new account.
   const handleRegisterSubmit = async (
     event: React.FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault()
-
     setError('')
-
     // Prevent weak passwords from being submitted.
     if (!isPasswordValid) {
   setError(
@@ -78,7 +65,6 @@ export function WelcomePage({
   )
   return
 }
-
     try {
       const data = await signUp(
         email.trim(),
@@ -86,16 +72,13 @@ export function WelcomePage({
         firstName,
         lastName
       )
-
       console.log('Account created:', data)
-
       setAccountCreated(true)
       setIsRegistering(false)
       setPassword('')
       setError('')
     } catch (err) {
       console.error('Registration error:', err)
-
       setError(
         err instanceof Error
           ? err.message
@@ -103,95 +86,73 @@ export function WelcomePage({
       )
     }
   }
-
   // Log in to an existing account.
   const handleLoginSubmit = async (
     event: React.FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault()
-
     try {
       setError('')
-
       const data = await signIn(
         email.trim(),
         password
       )
-
       console.log('Login successful:', data)
-
       const loggedInUser = data.user
-
       const savedFirstName =
         typeof loggedInUser?.user_metadata?.first_name === 'string'
           ? loggedInUser.user_metadata.first_name
           : ''
-
       const savedLastName =
         typeof loggedInUser?.user_metadata?.last_name === 'string'
           ? loggedInUser.user_metadata.last_name
           : ''
-
       onLogin(
         savedFirstName || 'User',
         savedLastName
       )
     } catch (err) {
       console.error('Login error:', err)
-
       setError(
         'Invalid email or password. Please try again.'
       )
     }
   }
-
   // Continue without creating an account.
   const handleGuestLogin = async () => {
     try {
       setError('')
-
       const response = await signInAsGuest()
-
       console.log(
         'Guest sign-in successful:',
         response
       )
-
       const { data } =
         await supabase.auth.getSession()
-
       console.log(
         'Session after sign-in:',
         data.session
       )
-
       onContinueAsGuest()
     } catch (err) {
       console.error(
         'Guest sign-in error:',
         err
       )
-
       setError(
         'Unable to continue as guest. Please try again.'
       )
     }
   }
-
   return (
     <section
       className="screen welcome-screen"
       data-screen="welcome"
     >
       <div className="welcome-header">
-        <span className="section-kicker">
-          01 / Welcome
-        </span>
-
         <h2>
           Welcome to <em>JobCoachAI</em>
         </h2>
-
         <p>
           Your next resume, tailored to your needs.
           JobCoachAI turns your experience into a
@@ -199,7 +160,6 @@ export function WelcomePage({
           improve your chances of landing an interview.
         </p>
       </div>
-
       <form
         className="auth-panel"
         id="auth-form"
@@ -217,7 +177,6 @@ export function WelcomePage({
                 <label htmlFor="auth-first-name">
                   First Name
                 </label>
-
                 <input
                   id="auth-first-name"
                   name="firstName"
@@ -232,12 +191,10 @@ export function WelcomePage({
                   required
                 />
               </div>
-
               <div className="field-group">
                 <label htmlFor="auth-last-name">
                   Last Name
                 </label>
-
                 <input
                   id="auth-last-name"
                   name="lastName"
@@ -254,13 +211,11 @@ export function WelcomePage({
               </div>
             </>
           )}
-
           {/* Email */}
           <div className="field-group">
             <label htmlFor="auth-email">
               Email address
             </label>
-
             <input
               id="auth-email"
               name="email"
@@ -269,7 +224,6 @@ export function WelcomePage({
               value={email}
               onChange={(event) => {
                 setEmail(event.target.value)
-
                 if (error) {
                   setError('')
                 }
@@ -277,13 +231,11 @@ export function WelcomePage({
               required
             />
           </div>
-
         {/* Password */}
 <div className="field-group">
   <label htmlFor="auth-password">
     Password
   </label>
-
   <div className="password-field">
     <input
       id="auth-password"
@@ -293,7 +245,6 @@ export function WelcomePage({
       value={password}
       onChange={(event) => {
         setPassword(event.target.value)
-
         if (error) {
           setError('')
         }
@@ -305,7 +256,6 @@ export function WelcomePage({
       }
       required
     />
-
     <button
       type="button"
       className="password-eye"
@@ -356,7 +306,6 @@ export function WelcomePage({
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-
           <circle
             cx="12"
             cy="12"
@@ -369,12 +318,8 @@ export function WelcomePage({
       )}
     </button>
   </div>
-
-            
-            
           </div>
         </div>
-
         {/* Account creation confirmation */}
         {accountCreated && (
           <>
@@ -383,11 +328,9 @@ export function WelcomePage({
               and click the verification link before
               logging in.
             </p>
-
             <div className="success-divider" />
           </>
         )}
-
         {/* Authentication error */}
         {error && (
           <p
@@ -397,7 +340,6 @@ export function WelcomePage({
             {error}
           </p>
         )}
-
         <div
           className={`auth-actions ${
             isRegistering
@@ -414,13 +356,11 @@ export function WelcomePage({
               type="submit"
             >
               Log in
-
               <span aria-hidden="true">
                 →
               </span>
             </button>
           )}
-
           {/* Create account */}
           {!accountCreated && (
             <button
@@ -444,25 +384,22 @@ export function WelcomePage({
               }}
             >
               Create Account
-
               <span aria-hidden="true">
                 →
               </span>
             </button>
           )}
         </div>
-
         {/* Guest access */}
-        {!isRegistering && (
-          <button
-            className="guest-link"
-            type="button"
-            onClick={() => void handleGuestLogin()}
-          >
-            Continue as guest
-          </button>
-        )}
-
+          {(!isRegistering || (isRegistering && error)) && (
+            <button
+              className="guest-link"
+              type="button"
+              onClick={handleGuestLogin}
+            >
+              Continue as guest
+            </button>
+          )}
         <p className="privacy-line">
           By continuing, you agree to our terms and
           privacy policy.

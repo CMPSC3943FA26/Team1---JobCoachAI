@@ -85,8 +85,13 @@ export function DocumentEditor({ file, onClose, readOnly = false }: DocumentEdit
   return (
     <section className="document-editor-window" aria-label="Word document editor">
       <header className="document-editor-titlebar">
-        <button className="document-editor-close" type="button" onClick={onClose} aria-label="Close document editor">
-          Close
+        <button
+          className="document-editor-close"
+          type="button"
+          aria-label="Close resume preview"
+          onClick={onClose}
+        >
+          ×
         </button>
       </header>
 
@@ -100,7 +105,7 @@ export function DocumentEditor({ file, onClose, readOnly = false }: DocumentEdit
       ) : (
         <>
           {readOnly ? (
-            <p className="document-editor-preview-label">Preview only. Editing is disabled for uploaded documents.</p>
+            <p className="document-editor-preview-label">This is a preview only. Editing is disabled for uploaded documents.</p>
           ) : (
             <>
           <div className="document-editor-toolbar" role="toolbar" aria-label="Document formatting tools">

@@ -7,7 +7,7 @@ import {
 
 import { TailorResumeInsights, TAILORED_PAYLOAD_KEY } from './TailorResumeInsights'
 import type { ResumeSaveRequest } from '../features/resume/resumeData'
-import { saveResumeToDatabase, setSavedResumeDisplayMeta, updateResumeToDatabase } from '../services/resumeService'
+import {loadResumeFromDatabase, saveResumeToDatabase, setSavedResumeDisplayMeta, updateResumeToDatabase } from '../services/resumeService'
 
 /**
  * Tailor / intake page (Page 3).
@@ -30,11 +30,13 @@ export interface TailorPageProps {
   onBack?: () => void
   hasSavedResume?: boolean
   isGuest?: boolean
+  onResumePreviewed?: (resume: Record<string, any>) => void
 }
 
 export default function TailorPage({
   onSubmit,
   isGuest = true,
+  onResumePreviewed,
 }: TailorPageProps) {
   const [company, setCompany] = useState('')
   const [jobTitle, setJobTitle] = useState('')
@@ -42,10 +44,13 @@ export default function TailorPage({
   const [error, setError] = useState('')
   const [tailoredSaveMessage, setTailoredSaveMessage] = useState('')
   const [savingTailoredResume, setSavingTailoredResume] = useState(false)
+  const [previewingTailoredResume, setPreviewingTailoredResume] = useState(false)
   const [tailoredReady, setTailoredReady] = useState(false)
   const [tailoredResumeId, setTailoredResumeId] = useState<string | null>(null)
   const [showNewCopyConfirmation, setShowNewCopyConfirmation] = useState(false)
+
   const cancelConfirmationRef = useRef<HTMLButtonElement>(null)
+
   const [submitted, setSubmitted] = useState<{
     company: string
     jobTitle: string
@@ -217,6 +222,36 @@ export default function TailorPage({
     }
   }
 
+  async function handleViewTailoredResume() {
+    if (!tailoredResumeId || previewingTailoredResume) return
+
+    setPreviewingTailoredResume(true)
+    setTailoredSaveMessage('')
+
+    try {
+      const response = await loadResumeFromDatabase(tailoredResumeId)
+      const databaseResume = response?.resume ?? response
+
+      if (!databaseResume || databaseResume.error) {
+        throw new Error(
+          databaseResume?.error ?? 'Unable to preview the tailored resume.',
+        )
+      }
+
+      onResumePreviewed?.(databaseResume)
+    } catch (error) {
+      console.error('Preview tailored resume error:', error)
+
+      setTailoredSaveMessage(
+        error instanceof Error
+          ? error.message
+          : 'Unable to preview the tailored resume.',
+      )
+    } finally {
+      setPreviewingTailoredResume(false)
+    }
+  }
+
   function handleBackToResume() {
     window.location.hash = '#parsed'
   }
@@ -224,12 +259,7 @@ export default function TailorPage({
   return (
     <section className="screen" data-screen="tailor">
       <div className="screen-intro">
-        <span className="section-kicker">03 / Tailor your resume</span>
         <h2>Tailor smarter.<br /><em>Apply stronger.</em></h2>
-        <p>
-          Add the company name, job title, and job description, then click{' '}
-          <strong>Submit</strong> to see your resume match and expand the summary or suggestion panels.
-        </p>
       </div>
 
       <form className="job-form" noValidate onSubmit={handleSubmit}>
@@ -243,14 +273,39 @@ export default function TailorPage({
             </p>
           </div>
 
-          <button
-            className="button button-secondary"
-            type="button"
-            disabled={isGuest || !jobTitle.trim() || !tailoredReady || savingTailoredResume}
-            onClick={() => void handleSaveTailoredResume()}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'stretch',
+              gap: '8px',
+            }}
           >
-            {savingTailoredResume ? 'Saving…' : 'Save tailored resume'}
-          </button>
+            <button
+              className="button button-secondary"
+              type="button"
+              disabled={
+                isGuest ||
+                !jobTitle.trim() ||
+                !tailoredReady ||
+                savingTailoredResume
+              }
+              onClick={() => void handleSaveTailoredResume()}
+            >
+              {savingTailoredResume ? 'Saving…' : 'Save tailored resume'}
+            </button>
+
+            <button
+              className="button button-secondary"
+              type="button"
+              disabled={!tailoredResumeId || previewingTailoredResume}
+              onClick={() => void handleViewTailoredResume()}
+            >
+              {previewingTailoredResume
+                ? 'Opening preview…'
+                : 'View tailored resume'}
+            </button>
+          </div>
 
           {(isGuest || tailoredSaveMessage) && (
             <p className="tailored-save-message" role="status">
