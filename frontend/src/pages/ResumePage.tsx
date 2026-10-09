@@ -657,10 +657,8 @@ export function ResumePage({
       return false;
     }
 
-    // Guests do not own a persistent database resume. Their draft is already
-    // maintained in sessionStorage by the effect above; write it once more
-    // here so "Save and continue" is guaranteed to persist the latest edits
-    // before Page 3 opens.
+    // Keep the guest draft current, then save using the existing anonymous
+    // Supabase session so tailoring can load the resume by its database ID.
     if (isGuest) {
       sessionStorage.setItem(
         resumeDraftStorageKey,
@@ -671,10 +669,6 @@ export function ResumePage({
           csvSourceFilename: importedCsvFilename ?? undefined,
         }),
       );
-      sessionStorage.removeItem(resumeIdStorageKey);
-      setResumeID(null);
-      setStatus("Resume saved to your guest session.");
-      return true;
     }
 
       setSavingResume(true);
@@ -717,7 +711,7 @@ export function ResumePage({
               kind: "original",
             });
 
-            setStatus("Resume updated in your account.");
+            setStatus(isGuest ? "Resume updated for your guest session." : "Resume updated in your account.");
           } catch (updateError) {
             // sessionStorage can outlive a saved resume (for example after a
             // logout, deletion, failed earlier save, or switching accounts).
@@ -733,14 +727,14 @@ export function ResumePage({
 
               await createAndRememberResume();
 
-              setStatus("Resume saved to your account.");
+              setStatus(isGuest ? "Resume saved for your guest session." : "Resume saved to your account.");
             } else {
               throw updateError;
             }
           }
         } else {
         await createAndRememberResume();
-        setStatus("Resume saved to your account. You can open it from Profile → Saved Resumes.");
+        setStatus(isGuest ? "Resume saved for your guest session." : "Resume saved to your account. You can open it from Profile → Saved Resumes.");
       }
       return true;
     } catch (error) {
@@ -1505,7 +1499,7 @@ const hasExportableData = Boolean(
             <span className="panel-icon">GUEST RESUME</span>
             <h3 id="guest-export-title">Save and continue?</h3>
             <p id="guest-export-description">
-              Your resume will be saved to this guest session. It may not be available if you lose access to the session.
+               Your resume will be saved to the database for this guest session. It may not be available if you lose access to the session.
             </p>
             {status && <p role="status" aria-live="polite">{status}</p>}
             <div className="dialog-actions guest-export-dialog-actions">

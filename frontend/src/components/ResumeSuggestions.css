@@ -575,6 +575,10 @@
 
 /* Ensure editable suggestions remain inside their boxes */
 
+.tailor-results section[hidden] {
+  display: none !important;
+}
+
 .resume-suggestions-region textarea {
   display: block;
   width: 100%;

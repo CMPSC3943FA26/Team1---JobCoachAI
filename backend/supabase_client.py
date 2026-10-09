@@ -21,3 +21,16 @@ supabase: Client = create_client(
     SUPABASE_URL,
     SUPABASE_PUBLISHABLE_KEY,
 )
+def verify_user(jwt):
+    try:
+        response=supabase.auth.get_user(jwt)
+        user = response.user
+        if user:
+            user_id=user.id
+            return user_id
+        else:
+            return None
+    except:
+        return None
+
+    

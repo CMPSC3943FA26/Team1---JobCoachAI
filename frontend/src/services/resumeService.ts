@@ -1,7 +1,9 @@
+import type { TailoringResponse } from '../types/ai'
 // resumeService.ts
 // Database persistence functions used by the resume editor and profile page.
 
 import { getUserId, getjwt } from '../lib/supabase'
+
 
 const configuredApiUrl = String(import.meta.env.VITE_API_URL ?? '').trim()
 
@@ -168,4 +170,25 @@ export async function updateResumeToDatabase(
       body: JSON.stringify(data),
     }
   )
+}
+const pendingTailoringRequests = new Map<string, Promise<TailoringResponse>>()
+
+export async function tailor_resume(
+  resume_id: string,
+  job: { title: string; company: string; description: string },
+): Promise<TailoringResponse> {
+  const body = JSON.stringify({ resume_id, job })
+  const pending = pendingTailoringRequests.get(body)
+  if (pending) return pending
+
+  const request: Promise<TailoringResponse> = authorizedRequest('/ai/tailor_resume', {
+    method: 'POST',
+    body,
+  })
+  pendingTailoringRequests.set(body, request)
+  try {
+    return await request
+  } finally {
+    pendingTailoringRequests.delete(body)
+  }
 }

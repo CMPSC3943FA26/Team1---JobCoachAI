@@ -52,6 +52,7 @@ export default function TailorPage({
   const cancelConfirmationRef = useRef<HTMLButtonElement>(null)
 
   const [submitted, setSubmitted] = useState<{
+    resumeId: string
     company: string
     jobTitle: string
     jobDescription: string
@@ -84,12 +85,18 @@ export default function TailorPage({
   }
 
   function createTailoredCopy() {
+    const resumeId = sessionStorage.getItem('jobcoachai.resumeId')
+    if (!resumeId) {
+      setError('Save your resume before tailoring it.')
+      return
+    }
     setError('')
     setShowNewCopyConfirmation(false)
     setTailoredResumeId(null)
     setTailoredReady(false)
     sessionStorage.removeItem(TAILORED_PAYLOAD_KEY)
     setSubmitted((previous) => ({
+      resumeId,
       company: company.trim(),
       jobTitle: jobTitle.trim(),
       jobDescription: jobDescription.trim(),
@@ -406,7 +413,7 @@ export default function TailorPage({
           <div className="resume-suggestions-toolbar-copy">
             <span className="panel-icon">YOUR TAILORING RESULTS</span>
             <h3>{submitted.jobTitle} — {submitted.company}</h3>
-            <p>Review the compatibility score, then open either panel to improve your tailored copy.</p>
+            <p>Review the AI recommendations and apply changes to your tailored copy.</p>
             {(company.trim() !== submitted.company || jobTitle.trim() !== submitted.jobTitle ||
               jobDescription.trim() !== submitted.jobDescription) && (
               <p role="status">Job details changed. Submit again to update these results.</p>
@@ -415,6 +422,9 @@ export default function TailorPage({
           <TailorResumeInsights
             key={submitted.version}
             jobDescription={submitted.jobDescription}
+            title={submitted.jobTitle}
+            company={submitted.company}
+            resume_id={submitted.resumeId}
             onTailoredReadyChange={setTailoredReady}
           />
         </div>
