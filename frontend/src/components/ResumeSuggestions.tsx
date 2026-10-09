@@ -17,7 +17,7 @@ interface ResumeSuggestionsProps {
 type DiffKept = Record<number, boolean>
 
 function splitWords(text: string): string[] {
-  return text.split(/\s+/).filter(Boolean)
+  return text.match(/\s+|\S+/g) ?? []
 }
 
 function computeDiff(original: string, suggested: string): {

@@ -8,6 +8,8 @@ export interface AtsScorePanelProps {
   onRemoveKeyword: (keyword: string) => void
   onAddSkill: (skill: string) => string | null
   manuallyFoundSkills: readonly string[]
+  missingRequirements?: readonly { requirement: string }[]
+  readOnly?: boolean
 }
 
 const scoreBand = (score: number): { label: string; className: string } => {
@@ -19,18 +21,21 @@ const scoreBand = (score: number): { label: string; className: string } => {
 
 const keywordKey = (keyword: string) => keyword.trim().replace(/\s+/g, ' ').toLocaleLowerCase()
 
-export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAddSkill, manuallyFoundSkills }: AtsScorePanelProps) {
+export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAddSkill, manuallyFoundSkills, missingRequirements, readOnly = false }: AtsScorePanelProps) {
   const [skill, setSkill] = useState('')
   const [feedback, setFeedback] = useState('')
   if (!response) return null
 
   const band = scoreBand(response.ATS_score)
-  const matchedKeywords = [...new Set(response.suggestions.map((item) => item.requirement).filter(Boolean))]
+  const matchedKeywords = [...new Set(response.suggestions
+    .filter((item) => !readOnly || item.type === 'supported')
+    .map((item) => item.requirement).filter(Boolean))]
     .filter((keyword) => !hiddenKeywords.has(keywordKey(keyword)))
   const displayedFound = [...matchedKeywords,
     ...manuallyFoundSkills.filter((skill) => !matchedKeywords.some((keyword) => keywordKey(keyword) === keywordKey(skill))
       && !hiddenKeywords.has(keywordKey(skill)))]
-  const missingKeywords = [...new Set(response.improvements.map((item) => item.requirement).filter(Boolean))]
+  const missingKeywords = [...new Set((missingRequirements ?? response.improvements)
+    .map((item) => item.requirement).filter(Boolean))]
     .filter((keyword) => !hiddenKeywords.has(keywordKey(keyword))
       && !manuallyFoundSkills.some((skill) => keywordKey(skill) === keywordKey(keyword)))
 
@@ -51,7 +56,7 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
       {keywords.map((keyword) => (
         <span key={keyword} className={`ats-chip ats-chip-${kind}`}>
           <span>{keyword}</span>
-          {kind === 'missing' ? (
+          {!readOnly && (kind === 'missing' ? (
             <button type="button" className="ats-chip-add"
               aria-label={`Add ${keyword} to found keywords`}
               title="Add to Found in your resume"
@@ -63,7 +68,7 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
             <button type="button" className="ats-chip-remove"
               aria-label={`Remove ${keyword} from found keywords`}
               onClick={() => { onRemoveKeyword(keyword); setFeedback(`“${keyword}” removed from the ATS keyword display.`) }}>×</button>
-          )}
+          ))}
         </span>
       ))}
     </div>
@@ -88,17 +93,17 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
       </div>
       <div className="ats-keywords">
         <div className="ats-keyword-group">
-          <span className="ats-keyword-label">Found in your resume</span>
+          <span className="ats-keyword-label">{readOnly ? 'Supported requirements in AI suggestions' : 'Found in your resume'}</span>
           {displayedFound.length ? chips(displayedFound, 'matched') :
             <p className="ats-no-keywords">No matching keywords displayed.</p>}
-          <form className="ats-skill-add-form" onSubmit={submitSkill}>
+          {!readOnly && <form className="ats-skill-add-form" onSubmit={submitSkill}>
             <label htmlFor="ats-add-missed-skill">Add a keyword that was not parsed</label>
             <div className="ats-skill-add-row">
               <input id="ats-add-missed-skill" type="text" value={skill} maxLength={100}
                 placeholder="e.g., Linux" onChange={(event) => setSkill(event.target.value)} />
               <button type="submit">Add keyword</button>
             </div>
-          </form>
+          </form>}
         </div>
         <div className="ats-keyword-group">
           <span className="ats-keyword-label">Missing from your resume</span>
