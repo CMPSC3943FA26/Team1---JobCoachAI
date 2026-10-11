@@ -8,6 +8,7 @@ type LayoutProps = {
   isGuest: boolean
   accountName?: string | null
   onHomeClick: () => void
+  onBuildResumeClick: () => void
   onOpenProfile?: () => void
   onOpenSavedResumes?: () => void
   onLogout?: () => void
@@ -22,6 +23,7 @@ export function Layout({
   isGuest,
   accountName,
   onHomeClick,
+  onBuildResumeClick,
   onOpenProfile,
   onOpenSavedResumes,
   onLogout,
@@ -229,6 +231,17 @@ export function Layout({
                 className={`step ${isActive ? 'active' : ''}`}
                 aria-current={isActive ? 'page' : undefined}
                 onClick={(event) => {
+                  // Page 2 -> Page 3 is allowed only through ResumePage's Continue button.
+                  // Ignore the sidebar click silently without changing the URL hash.
+                  if (step.key === 'tailor' && currentScreen === 'parsed') {
+                    event.preventDefault()
+                    return
+                  }
+                  if (step.key === 'parsed' && currentScreen === 'tailor') {
+                    event.preventDefault()
+                    onBuildResumeClick()
+                    return
+                  }
                   if (step.key === 'welcome') {
                     event.preventDefault()
                     event.stopPropagation()

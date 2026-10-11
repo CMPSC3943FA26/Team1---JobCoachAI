@@ -1,3 +1,5 @@
-# Run this if you get a "Failed to fetch" error on Page #2. Backend startup script.
+# JobCoachAI Flask Backend Startup
+# Start your backend in a separate PowerShell terminal.
+# Run this command from the project root folder.
 
 python -m backend.app

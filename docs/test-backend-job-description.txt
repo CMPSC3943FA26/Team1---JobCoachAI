@@ -1,0 +1,35 @@
+Company: NorthStar Campus Tools (fictional)
+Job title: Backend Software Engineering Intern
+
+Job description:
+NorthStar Campus Tools is seeking a Backend Software Engineering Intern to help build internal tools for university operations. You will work with engineers to maintain Python services, improve API reliability, and document how our tools work.
+
+Responsibilities:
+- Implement and maintain REST API endpoints using Python and Flask.
+- Write SQL queries and validate incoming data.
+- Return clear HTTP error responses and document API behavior.
+- Collaborate with teammates using Git and review changes together.
+- Help connect browser dashboards to backend APIs.
+
+Required qualifications:
+- Currently pursuing a bachelor's degree in Computer Science or a related field.
+- Experience programming in Python.
+- Experience with Flask and REST APIs.
+- Ability to write SQL queries.
+- Experience with Git version control.
+- Clear written communication and experience working with teammates.
+
+Preferred qualifications:
+- PostgreSQL experience.
+- Experience deploying applications on AWS.
+- Experience writing automated tests with pytest.
+- JavaScript experience, particularly fetching data from APIs.
+
+This is a learning-focused internship. Academic and campus projects count as experience. We value clear, factual descriptions of what you personally implemented.
+
+TEST NOTES (do not paste this section into the job description):
+- Python, Flask, REST APIs, SQL, Git, communication, and teamwork have direct resume evidence.
+- The dashboard's programming language is unspecified. JavaScript is listed as a skill, but that does not prove this dashboard used JavaScript. Clarification may be appropriate.
+- PostgreSQL, AWS, and pytest have no resume evidence. The AI should not invent them.
+- Rewrites should preserve that the candidate built CRUD endpoints and performed validation without inventing deployment, security, scalability, or performance claims.
+- Exact suggestions and classifications can vary between AI runs.

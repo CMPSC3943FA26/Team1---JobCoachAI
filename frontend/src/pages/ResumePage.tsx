@@ -7,6 +7,7 @@
 import { useEffect, useState, type DragEvent, type KeyboardEvent } from "react";
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from "docx";
 import { Button } from "../components/Button";
+import { ResumePreview, type PreviewSection } from "../components/ResumePreview";
 import {
   deleteResumeFromDatabase,
   saveResumeToDatabase,
@@ -657,10 +658,9 @@ export function ResumePage({
       return false;
     }
 
-    // Guests do not own a persistent database resume. Their draft is already
-    // maintained in sessionStorage by the effect above; write it once more
-    // here so "Save and continue" is guaranteed to persist the latest edits
-    // before Page 3 opens.
+    // Retain the latest local draft for both account and guest sessions.
+    // Anonymous Supabase guests also require a database resume ID because
+    // /ai/tailor_resume loads the resume from the database by ID.
     if (isGuest) {
       sessionStorage.setItem(
         resumeDraftStorageKey,
@@ -671,10 +671,6 @@ export function ResumePage({
           csvSourceFilename: importedCsvFilename ?? undefined,
         }),
       );
-      sessionStorage.removeItem(resumeIdStorageKey);
-      setResumeID(null);
-      setStatus("Resume saved to your guest session.");
-      return true;
     }
 
       setSavingResume(true);
@@ -717,7 +713,7 @@ export function ResumePage({
               kind: "original",
             });
 
-            setStatus("Resume updated in your account.");
+            setStatus(isGuest ? "Resume updated for your guest session." : "Resume updated in your account.");
           } catch (updateError) {
             // sessionStorage can outlive a saved resume (for example after a
             // logout, deletion, failed earlier save, or switching accounts).
@@ -733,14 +729,14 @@ export function ResumePage({
 
               await createAndRememberResume();
 
-              setStatus("Resume saved to your account.");
+              setStatus(isGuest ? "Resume saved for your guest session." : "Resume saved to your account.");
             } else {
               throw updateError;
             }
           }
         } else {
         await createAndRememberResume();
-        setStatus("Resume saved to your account. You can open it from Profile → Saved Resumes.");
+        setStatus(isGuest ? "Resume saved for your guest session." : "Resume saved to your account. You can open it from Profile → Saved Resumes.");
       }
       return true;
     } catch (error) {
@@ -1265,135 +1261,13 @@ const hasExportableData = Boolean(
           )}
         </div>
         <div className="resume-preview-background">
-          <div className="resume-preview-page-frame">
-            {(profile.first_name ||
-              profile.last_name ||
-              profile.email ||
-              profile.phone ||
-              profile.location ||
-              sections.some((section) => section.entries.some(hasEntryContent))) ? (
-              <>
-                <div className="preview-header">
-                  <h1>
-                    {[profile.first_name, profile.last_name]
-                      .filter(Boolean)
-                      .join(" ") || "Your name"}
-                  </h1>
-                  {(profile.email || profile.phone || profile.location) && (
-                    <p>
-                      {[profile.email, profile.phone, profile.location]
-                        .filter(Boolean)
-                        .join(" • ")}
-                    </p>
-                  )}
-                </div>
-                {sections
-                  .filter((section) => section.entries.some(hasEntryContent))
-                  .map((section) => (
-                    <div className="preview-section" key={section.key}>
-                      <h2>{section.title}</h2>
-                      {section.entries
-                        .filter(hasEntryContent)
-                        .map((entry, index) => {
-                          // Clean professional layout for work experience
-                          if (
-                            section.key === "work_experience" &&
-                            typeof entry !== "string"
-                          ) {
-                            const experience = entry as WorkExperience;
-                            return (
-                              <div
-                                className="preview-experience"
-                                key={`${section.key}-${index}`}
-                              >
-                                <div className="preview-experience-header">
-                                  <div className="preview-experience-title-group">
-                                    {experience.job_title && (
-                                      <h3>{experience.job_title}</h3>
-                                    )}
-                                    {(experience.company || experience.location) && (
-                                      <p className="preview-company">
-                                        {experience.company}
-                                        {experience.company && experience.location
-                                          ? " | "
-                                          : ""}
-                                        {experience.location}
-                                      </p>
-                                    )}
-                                  </div>
-                                  {(experience.start_date || experience.end_date) && (
-                                    <span className="preview-experience-date">
-                                      {experience.start_date}
-                                      {experience.start_date && experience.end_date
-                                        ? " – "
-                                        : ""}
-                                      {experience.end_date}
-                                    </span>
-                                  )}
-                                </div>
-                                {experience.description && (
-                                  <p className="preview-experience-description">
-                                    {experience.description}
-                                  </p>
-                                )}
-                              </div>
-                            );
-                          }
-                          // Clean professional layout for education
-                          if (
-                            section.key === "education" &&
-                            typeof entry !== "string"
-                          ) {
-                            const education = entry as Education;
-                            return (
-                              <div
-                                className="preview-education"
-                                key={`${section.key}-${index}`}
-                              >
-                                <div className="preview-education-header">
-                                  <div className="preview-education-title-group">
-                                    {education.school && (
-                                      <h3>{education.school}</h3>
-                                    )}
-                                    {(education.degree || education.field_of_study) && (
-                                      <p className="preview-education-degree">
-                                        {education.degree}
-                                        {education.degree && education.field_of_study
-                                          ? " in "
-                                          : ""}
-                                        {education.field_of_study}
-                                      </p>
-                                    )}
-                                  </div>
-                                  {(education.start_date || education.end_date) && (
-                                    <span className="preview-education-date">
-                                      {education.start_date}
-                                      {education.start_date && education.end_date
-                                        ? " – "
-                                        : ""}
-                                      {education.end_date}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          }
-                          // Other resume sections continue using existing formatting
-                          return (
-                            <p key={`${section.key}-${index}`}>
-                              {formatEntryPreview(entry)}
-                            </p>
-                          );
-                        })}
-                    </div>
-                  ))}
-              </>
-            ) : (
-              <p className="resume-empty-message">
-                Your resume preview will appear here as you add information.
-              </p>
-            )}
-          </div>
+          {(profile.first_name || profile.last_name || profile.email || profile.phone || profile.location || sections.some((section) => section.entries.some(hasEntryContent))) ? (
+            <ResumePreview profile={profile} sections={sections as unknown as PreviewSection[]} />
+          ) : (
+            <div className="resume-preview-page-frame">
+              <p className="resume-empty-message">Your resume preview will appear here as you add information.</p>
+            </div>
+          )}
         </div>
       </section>
       <section

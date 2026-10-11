@@ -53,3 +53,9 @@ export type SummaryOption = {
   description: string
   text: string
 }
+
+export type TailoringResponse = AIResponse & {
+  total_time_seconds?: number
+  removals: { relevant_text: string; reason: string }[]
+  missing_requirements: { requirement: string }[]
+}
