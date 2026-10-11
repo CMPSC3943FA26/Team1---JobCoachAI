@@ -2,7 +2,8 @@ from flask import Flask
 from flask_cors import CORS
 
 from backend.routes.resume import resume_bp
-
+from backend.routes.ai import ai_bp
+from backend.routes.job import job_bp
 
 def create_app():
     app = Flask(__name__)
@@ -16,6 +17,8 @@ def create_app():
     supports_credentials=True,
     )
     app.register_blueprint(resume_bp)
+    app.register_blueprint(ai_bp)
+    app.register_blueprint(job_bp)
     return app 
 
 

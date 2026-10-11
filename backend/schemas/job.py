@@ -8,13 +8,13 @@ class JobCreateRequest(BaseModel):
     company: str
     source: str
 
-    class JobUpdateRequest(BaseModel):
-        title: str | None = None
-        description: str | None = None
-        company: str | None = None
-        source: str | None = None
+class JobUpdateRequest(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    company: str | None = None
+    source: str | None = None
 
-        class JobResponse(BaseModel):
+class JobResponse(BaseModel):
             id: UUID
             user_id: UUID
             title: str
