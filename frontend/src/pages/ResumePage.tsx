@@ -658,9 +658,8 @@ export function ResumePage({
       return false;
     }
 
-    // Retain the latest local draft for both account and guest sessions.
-    // Anonymous Supabase guests also require a database resume ID because
-    // /ai/tailor_resume loads the resume from the database by ID.
+    // Keep the guest draft current, then save using the existing anonymous
+    // Supabase session so tailoring can load the resume by its database ID.
     if (isGuest) {
       sessionStorage.setItem(
         resumeDraftStorageKey,
@@ -1379,7 +1378,7 @@ const hasExportableData = Boolean(
             <span className="panel-icon">GUEST RESUME</span>
             <h3 id="guest-export-title">Save and continue?</h3>
             <p id="guest-export-description">
-              Your resume will be saved to this guest session. It may not be available if you lose access to the session.
+               Your resume will be saved to the database for this guest session. It may not be available if you lose access to the session.
             </p>
             {status && <p role="status" aria-live="polite">{status}</p>}
             <div className="dialog-actions guest-export-dialog-actions">

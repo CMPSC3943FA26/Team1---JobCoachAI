@@ -7,7 +7,7 @@
  * this component NEVER calls your database or overwrites the base resume draft.
  *
  * ATS score is local keyword matching, NOT an official ATS score.
- * Live AI suggestions are fetched from the backend; optional local demo tools remain available.
+ * Suggestions are returned by the backend AI tailoring service.
  */
 import { useEffect, useMemo, useState, type ComponentProps } from 'react'
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx'
@@ -23,7 +23,8 @@ import { tailor_resume } from '../services/resumeService'
 import type { TailoringResponse } from '../types/ai'
 import type { ResumeProfile, ResumeSaveRequest } from '../features/resume/resumeData'
 import type { ResumeRecommendation, SuggestionChange } from '../features/resume/resumeSuggestions'
-import type { SummaryOption, SummaryTone } from '../types/ai'
+import type { SummaryOption, SummaryTone, TailoringResponse } from '../types/ai'
+import {tailor_resume} from '../services/resumeService'
 
 // Matches the exact prop type expected by the existing Kiran component.
 type Sections = ComponentProps<typeof ResumeSuggestions>['sections']
@@ -94,17 +95,16 @@ function entryText(entry: Sections[number]['entries'][number]): string {
 }
 
 function sectionNameFromPath(path: string): string {
-  const key = path.replace(/^resume\./, '').split(/[.\[]/)[0]
-  const names: Record<string, string> = {
+  const section = path.replace(/^resume\./, '').split(/[.\[]/)[0]
+  const labels: Record<string, string> = {
     professional_summary: 'Professional Summary',
-    summary: 'Professional Summary',
     work_experience: 'Work Experience',
     education: 'Education',
     skills: 'Skills',
     projects: 'Projects',
     certifications: 'Certifications',
   }
-  return names[key] ?? 'Other'
+  return labels[section] ?? 'Other'
 }
 
 export interface TailorResumeInsightsProps {
@@ -115,12 +115,11 @@ export interface TailorResumeInsightsProps {
   onTailoredReadyChange?: (ready: boolean) => void
 }
 
-export function TailorResumeInsights({ jobDescription, title, company, resume_id, onTailoredReadyChange }: TailorResumeInsightsProps) {
+export function TailorResumeInsights({ jobDescription,title,company,resume_id, onTailoredReadyChange }: TailorResumeInsightsProps) {
   const [tailored, setTailored] = useState<Draft | null>(readDraft)
   const [baseDraft, setBaseDraft] = useState<Draft | null>(readDraft)
   const [changedFields, setChangedFields] = useState<Set<string>>(() => new Set())
   const [summaryGeneration, setSummaryGeneration] = useState(0)
-  const [suggestionGeneration, setSuggestionGeneration] = useState(0)
   const [summaryOptions, setSummaryOptions] = useState<SummaryOption[]>([])
   const [appliedTone, setAppliedTone] = useState<SummaryTone | null>(null)
   const [recommendations, setRecommendations] = useState<ResumeRecommendation[]>([])
@@ -132,10 +131,9 @@ export function TailorResumeInsights({ jobDescription, title, company, resume_id
   const [showResetConfirmation, setShowResetConfirmation] = useState(false)
   const [hiddenAtsKeywords, setHiddenAtsKeywords] = useState<Set<string>>(() => new Set())
   const [manuallyFoundSkills, setManuallyFoundSkills] = useState<string[]>([])
-  const [aiLoading, setAiLoading] = useState(false)
-  const [aiError, setAiError] = useState('')
-  const [aiResult, setAiResult] = useState<TailoringResponse | null>(null)
-  const [aiRetry, setAiRetry] = useState(0)
+  const [loading,setLoading]=useState(false)
+  const [error,setError]=useState<string>('')
+  const [result, setResult] = useState<TailoringResponse | null>(null)
 
   // Keep the latest live tailored copy available to TailorPage's Save button.
   // This stores a save-ready payload, not the original base resume draft.
@@ -189,6 +187,42 @@ export function TailorResumeInsights({ jobDescription, title, company, resume_id
   // Page 3 is considered save-ready only after an AI recommendation or
   // generated summary has actually been applied to the tailored copy.
   useEffect(() => {
+    let cancelled = false
+
+    async function tailoring_resume() {
+      setLoading(true)
+      setError('')
+      setResult(null)
+      setRecommendations([])
+      setSuggestionsOpen(true)
+      try {
+        const response = await tailor_resume(resume_id, {
+          title, company, description: jobDescription,
+        })
+        if (cancelled) return
+        if (!Array.isArray(response.suggestions)) {
+          throw new Error('Invalid tailoring response.')
+        }
+        setResult(response)
+        setRecommendations(response.suggestions.map((item) => ({
+          section_name: sectionNameFromPath(item.resume_id),
+          original_text: item.before,
+          suggested_change: item.suggestion,
+          reasoning: item.reason,
+        })))
+      } catch (error) {
+        if (!cancelled) {
+          setError(error instanceof Error ? error.message : 'Tailoring failed.')
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    void tailoring_resume()
+    return () => { cancelled = true }
+  }, [resume_id, title, company, jobDescription])
+
+  useEffect(() => {
     onTailoredReadyChange?.(changedFields.size > 0)
   }, [changedFields, onTailoredReadyChange])
   // Keyword dismissals are display-only and reset for a new job description.
@@ -232,7 +266,6 @@ export function TailorResumeInsights({ jobDescription, title, company, resume_id
     setChangedFields(new Set())
     setHiddenAtsKeywords(new Set())
     setManuallyFoundSkills([])
-    setSuggestionGeneration(0)
     setSummaryGeneration(0)
     setSummaryOptions([])
     setAppliedTone(null)
@@ -411,46 +444,6 @@ export function TailorResumeInsights({ jobDescription, title, company, resume_id
     setMessage('Suggestion applied to the tailored copy only. Resume match updates automatically.')
   }
 
-  const regenerateSuggestions = (group?: string, source: Draft | null = tailored) => {
-    if (!source) return
-    const generation = suggestionGeneration + 1
-    const generated: ResumeRecommendation[] = []
-    const label = (key: string) => ({ summary: 'Professional Summary',
-      work_experience: 'Work Experience', education: 'Education', skills: 'Skills',
-      projects: 'Projects', certifications: 'Certifications' }[key] ?? key)
-    for (const section of source.sections) {
-      if (group && label(section.key) !== group) continue
-      for (const entry of section.entries) {
-        const fields = typeof entry === 'string' ? [['value', entry]] : Object.entries(entry)
-        for (const [field, raw] of fields) {
-          if (typeof raw !== 'string' || !raw.trim() ||
-              !['value', 'description', 'skill_name', 'field_of_study', 'name'].includes(field)) continue
-          // Local wording variations preserve the user's original claims and metrics.
-          const original = raw.trim()
-          const lead = generation % 3 === 0 ? 'Relevant background: '
-            : generation % 3 === 1 ? 'Experience with ' : 'Strengths include '
-          const suggested = `${lead}${original.charAt(0).toLowerCase()}${original.slice(1)}`
-          generated.push({ section_name: label(section.key), original_text: original,
-            suggested_change: suggested,
-            reasoning: 'Optional locally drafted wording variation. Review for accuracy and fit before applying; no achievements or qualifications were invented.' })
-        }
-      }
-    }
-    setRecommendations((current) => {
-      if (!group) return generated
-      // Keep the regenerated section where it was, preserving the user's
-      // position and the identity of other suggestion sections.
-      const firstIndex = current.findIndex((item) => item.section_name === group)
-      if (firstIndex === -1) return [...current, ...generated]
-      const next = current.filter((item) => item.section_name !== group)
-      next.splice(firstIndex, 0, ...generated)
-      return next
-    })
-    setSuggestionGeneration(generation)
-    setMessage(generated.length ? 'Local wording suggestions refreshed. Review before applying.'
-      : 'No editable text found in this section for wording suggestions.')
-  }
-
   // Export the live tailored state, never the original sessionStorage draft.
   const tailoredFilename = () => {
     const base = (tailored?.filename || 'resume').replace(/\.docx?$/i, '')
@@ -557,31 +550,32 @@ export function TailorResumeInsights({ jobDescription, title, company, resume_id
 
   return (
     <section className="resume-suggestions-region tailor-results" aria-label="Tailor resume analysis">
+      {loading && <TailoringLoading />}
+      {!loading && !error && result && typeof result.total_time_seconds === 'number' && (
+        <p role="status">Total backend tailoring time: {result.total_time_seconds.toFixed(2)} seconds.</p>
+      )}
       {!tailored ? (
         <p role="status">No locally saved resume draft found. Build your resume first, then return to Tailor.</p>
       ) : (
         <>
+          {!loading && !error && result && (
           <section aria-label="ATS compatibility analysis" className="tailor-match-section">
             <div className="resume-suggestions-toolbar-copy">
               <span className="panel-icon">RESUME ANALYSIS</span>
               <h3>ATS Compatibility Score</h3>
-              <p>Local keyword match preview — not an official ATS assessment.</p>
+              <p>Compatibility estimate based on AI requirement classifications for your submitted resume.</p>
             </div>
-            {atsResponse && <AtsScorePanel response={atsResponse}
-              hiddenKeywords={hiddenAtsKeywords}
+            <AtsScorePanel response={result}
+              missingRequirements={result.missing_requirements}
+              readOnly
+              hiddenKeywords={new Set<string>()}
               onRemoveKeyword={removeAtsKeyword}
               onAddSkill={addMissedSkill}
-              manuallyFoundSkills={manuallyFoundSkills} />}
+              manuallyFoundSkills={[]} />
           </section>
-
-          {/* Show AI progress and processing time after the ATS compatibility score. */}
-          {aiLoading && <TailoringLoading />}
-          {aiError && <p role="alert">AI suggestions could not load: {aiError}</p>}
-          {aiResult && typeof aiResult.total_time_seconds === 'number' && (
-            <p role="status">AI processing time: {aiResult.total_time_seconds.toFixed(2)} seconds.</p>
           )}
 
-          <section className="tailor-dropdown" aria-label="AI Professional Summary">
+          <section hidden className="tailor-dropdown" aria-label="AI Professional Summary">
             <button type="button" className="tailor-dropdown-trigger" aria-expanded={summaryOpen}
               aria-controls="tailor-summary-content" onClick={() => setSummaryOpen((open) => !open)}>
               <span className="tailor-dropdown-label">
@@ -608,25 +602,19 @@ export function TailorResumeInsights({ jobDescription, title, company, resume_id
               <span className="tailor-dropdown-label">
                 <span className="panel-icon">AI SUGGESTIONS</span>
                 <strong>AI Suggestions</strong>
-                <small>Review and apply suggested improvements to your tailored copy.</small>
+                <small>AI may add embellishments or inaccurate experience. Review suggestions before adding them to your resume.</small>
               </span>
               <span className={`tailor-dropdown-chevron${suggestionsOpen ? ' open' : ''}`} aria-hidden="true">⌄</span>
             </button>
             {suggestionsOpen && (
               <div id="tailor-suggestions-content" className="tailor-dropdown-body">
-                <p className="tailor-demo-note">
-                  {aiResult ? 'These recommendations were generated by AI. Verify all claims before applying.'
-                    : 'AI suggestions will appear here once the analysis is complete.'}
-                </p>
-                <div className="tailor-suggestions-toolbar" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', gap: 10, margin: '12px 0 18px' }}>
-                  <button className="button button-secondary" type="button"
-                    disabled={aiLoading} onClick={() => setAiRetry((value) => value + 1)}>
-                    {aiLoading ? 'Generating AI suggestions…' : 'Regenerate AI suggestions'}
-                  </button>
-                </div>
-                <ResumeSuggestions
-                  recommendations={recommendations} sections={tailored.sections}
-                  onApplySuggestion={applySuggestion} onRegenerateSection={regenerateSuggestions} />
+                {error && <p role="alert">{error}</p>}
+                {!loading && !error && result && (
+                  recommendations.length > 0 ? (
+                    <ResumeSuggestions recommendations={recommendations}
+                      sections={tailored.sections} onApplySuggestion={applySuggestion} />
+                  ) : <p>No wording changes were recommended.</p>
+                )}
               </div>
             )}
           </section>
