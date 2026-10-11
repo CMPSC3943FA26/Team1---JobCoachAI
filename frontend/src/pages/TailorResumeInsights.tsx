@@ -12,12 +12,15 @@
 import { useEffect, useMemo, useState, type ComponentProps } from 'react'
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx'
 import { AtsScorePanel } from '../components/AtsScorePanel'
+import { ResumePreview, type PreviewSection } from '../components/ResumePreview'
 import { SummaryOptions } from '../components/SummaryOptions'
 import { ResumeSuggestions } from '../components/ResumeSuggestions'
 import { TailoringLoading } from '../components/TailoringLoading'
 import { analyzeResumeForJob, generateSummaryOptions } from '../features/resume/resumeInsights'
 import { replaceTextInField } from '../features/resume/resumeSuggestions'
 import { addedWordMask } from '../features/resume/addedWords'
+import { tailor_resume } from '../services/resumeService'
+import type { TailoringResponse } from '../types/ai'
 import type { ResumeProfile, ResumeSaveRequest } from '../features/resume/resumeData'
 import type { ResumeRecommendation, SuggestionChange } from '../features/resume/resumeSuggestions'
 import type { SummaryOption, SummaryTone, TailoringResponse } from '../types/ai'
@@ -141,6 +144,45 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     }
     sessionStorage.setItem(TAILORED_PAYLOAD_KEY, JSON.stringify(payloadFromDraft(tailored)))
   }, [tailored])
+
+  // Generate live AI suggestions for the submitted resume and job.
+  // Keep the existing ATS controls, summary tools, and local demo fallback intact.
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchAiSuggestions() {
+      if (!resume_id || !jobDescription.trim()) return
+      setAiLoading(true)
+      setAiError('')
+      setAiResult(null)
+      setSuggestionsOpen(true)
+      try {
+        const response = await tailor_resume(resume_id, {
+          title, company, description: jobDescription,
+        })
+        if (cancelled) return
+        if (!Array.isArray(response.suggestions)) {
+          throw new Error('The AI service returned an invalid suggestions response.')
+        }
+        setAiResult(response)
+        setRecommendations(response.suggestions.map((item) => ({
+          section_name: sectionNameFromPath(item.resume_id),
+          original_text: item.before,
+          suggested_change: item.suggestion,
+          reasoning: item.reason,
+        })))
+      } catch (cause) {
+        if (!cancelled) {
+          setAiError(cause instanceof Error ? cause.message : 'Unable to load AI suggestions.')
+        }
+      } finally {
+        if (!cancelled) setAiLoading(false)
+      }
+    }
+
+    void fetchAiSuggestions()
+    return () => { cancelled = true }
+  }, [resume_id, title, company, jobDescription, aiRetry])
 
   // Page 3 is considered save-ready only after an AI recommendation or
   // generated summary has actually been applied to the tailored copy.
@@ -588,43 +630,20 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
               <p>Your original resume remains unchanged. Highlighted words were added in applied summary or suggestion edits; highlights are preview-only and do not appear in exports.</p>
             </div>
             <div className="resume-preview-background">
-              <div className="resume-preview-page-frame">
-                <h3>{[tailored.profile.first_name, tailored.profile.last_name].filter(Boolean).join(' ') || 'Your name'}</h3>
-                <p>{[tailored.profile.email, tailored.profile.phone, tailored.profile.location].filter(Boolean).join(' · ')}</p>
-                {tailored.sections.map((section) => {
-                  const content = section.entries.map(entryText).filter(Boolean)
-                  if (!content.length) return null
-                  return (
-                    <section key={section.key} className="preview-section">
-                      <h4>{section.title ?? section.key.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())}</h4>
-                      {section.entries.map((entry, index) => {
-                        if (!entryText(entry)) return null
-                        const before = section.key === 'skills' && typeof entry !== 'string' && 'skill_name' in entry
-                          ? baseDraft?.sections.find((original) => original.key === 'skills')?.entries.find((original) =>
-                            typeof original !== 'string' && 'skill_name' in original &&
-                            skillKey(original.skill_name) === skillKey(entry.skill_name))
-                          : baseDraft?.sections.find((original) => original.key === section.key)?.entries[index]
-                        if (typeof entry === 'string') return (
-                          <p key={`${section.key}-${index}`}>
-                            {renderPreviewField(typeof before === 'string' ? before : '', entry,
-                              `${section.key}:${index}:value`)}
-                          </p>)
-                        return <p key={`${section.key}-${index}`}>
-                          {Object.entries(entry)
-                            .filter(([key, value]) => key !== 'id' && key !== 'sort_order' &&
-                              typeof value === 'string' && value.trim())
-                            .map(([key, value], fieldIndex) => <span key={key}>
-                              {fieldIndex > 0 ? ' · ' : ''}
-                              {renderPreviewField(typeof before === 'object' && before !== null
-                                ? String((before as unknown as Record<string, unknown>)[key] ?? '') : '',
-                                String(value), `${section.key}:${index}:${key}`)}
-                            </span>)}
-                        </p>
-                      })}
-                    </section>
-                  )
-                })}
-              </div>
+              <ResumePreview
+                profile={tailored.profile}
+                sections={tailored.sections as unknown as PreviewSection[]}
+                renderField={(sectionKey, index, fieldKey, value) => {
+                  const originalSection = baseDraft?.sections.find((section) => section.key === sectionKey)
+                  const originalEntry = originalSection?.entries[index]
+                  const originalValue = typeof originalEntry === 'string'
+                    ? (fieldKey === 'value' ? originalEntry : '')
+                    : originalEntry && typeof originalEntry === 'object'
+                      ? String((originalEntry as unknown as Record<string, unknown>)[fieldKey] ?? '')
+                      : ''
+                  return renderPreviewField(originalValue, value, `${sectionKey}:${index}:${fieldKey}`)
+                }}
+              />
             </div>
           </section>
           <div className="resume-bottom-action-buttons">

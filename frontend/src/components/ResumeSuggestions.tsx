@@ -269,6 +269,7 @@ export function ResumeSuggestions({
                                   }`}
                                 >
                                   {word}
+                                  {wordIndex < diff.original.length - 1 ? ' ' : ''}
                                 </span>
                               ))}
                             </p>
@@ -306,6 +307,7 @@ export function ResumeSuggestions({
                                     }`}
                                   >
                                     {word}
+                                    {wordIndex < diff.suggested.length - 1 ? ' ' : ''}
                                   </span>
                                 ))}
                               </p>

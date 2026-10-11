@@ -3696,3 +3696,22 @@ textarea::placeholder {
 .saved-resume-confirm-delete:hover:not(:disabled) {
   background: #912018;
 }
+
+/* Shared Page 2 and Page 3 resume preview typography and spacing */
+.preview-entry-block { margin: 0 0 18px; break-inside: avoid; }
+.preview-entry-block:last-child { margin-bottom: 0; }
+.preview-entry-heading-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.preview-entry-heading-row .preview-entry-title { margin: 0; min-width: 0; flex: 1; }
+.preview-entry-heading-row .preview-entry-dates { margin: 0; flex-shrink: 0; text-align: right; white-space: nowrap; }
+@media (max-width: 540px) {
+  .preview-entry-heading-row { flex-wrap: wrap; gap: 2px 8px; }
+  .preview-entry-heading-row .preview-entry-dates { margin-left: auto; }
+}
+.preview-entry-title { margin: 0 0 4px; color: #182c4e; font-size: 0.98rem; line-height: 1.35; font-weight: 700; }
+.preview-entry-subtitle { margin: 0 0 4px; font-size: 0.88rem; line-height: 1.5; }
+.preview-entry-dates { margin: 0 0 9px; color: #475569; font-size: 0.83rem; line-height: 1.5; }
+.preview-entry-description { margin: 8px 0 0; font-size: 0.88rem; line-height: 1.65; white-space: pre-line; }
+.preview-entry-details { margin: 6px 0 0; font-size: 0.85rem; line-height: 1.5; }
+.preview-body-text { white-space: pre-line; line-height: 1.65 !important; }
+.preview-skills-line { line-height: 1.7 !important; }
+@media print { .preview-entry-block { break-inside: avoid-page; } }

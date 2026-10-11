@@ -25,6 +25,8 @@ function getCurrentScreen(): ScreenName {
     : 'welcome'
 }
 
+const tailoredPayloadStorageKey = 'jobcoachai.tailoredResumePayload'
+
 const leaveWorkspaceMessage =
   'Going to Welcome clears the current resume and starts a new workspace. Continue?'
 
@@ -44,6 +46,8 @@ function App() {
   const [logoutError, setLogoutError] = useState('')
   const [logoutPending, setLogoutPending] = useState(false)
   const [showHomeWarning, setShowHomeWarning] = useState(false)
+  const [showBuildResumeWarning, setShowBuildResumeWarning] = useState(false)
+  const bypassBuildResumeWarningRef = useRef(false)
   const [sidebarResumePreview, setSidebarResumePreview] = useState<Record<string, any> | null>(null)
   const bypassWelcomeWarningRef = useRef(false)
 
@@ -60,14 +64,32 @@ function App() {
         return
       }
 
+      // Saved Resumes is an edit/review entry point, not a shortcut to tailoring.
+      // Ignore direct hash navigation to Page 3 from this view as well.
+      if (nextScreen === 'tailor' && currentScreen === 'profile' && profileSection === 'resumes') {
+        window.location.hash = '#profile'
+        return
+      }
+
       // Page 3 also requires a resume.
       if (nextScreen === 'tailor' && !resumeReady) {
         window.location.hash = '#parsed'
         return
       }
+      // Confirm before leaving Page 3 for Page 2, including browser/hash navigation.
+      if (nextScreen === 'parsed' && currentScreen === 'tailor') {
+        if (!bypassBuildResumeWarningRef.current) {
+          setShowBuildResumeWarning(true)
+          window.location.hash = '#tailor'
+          return
+        }
+        bypassBuildResumeWarningRef.current = false
+      }
+
       if (nextScreen === 'welcome') {
         const leavingResumeWorkspace =
-          currentScreen === 'parsed' || currentScreen === 'tailor'
+          currentScreen === 'parsed' || currentScreen === 'tailor' ||
+          (currentScreen === 'profile' && profileSection === 'resumes')
 
         if (
           accountType !== null &&
@@ -100,7 +122,7 @@ function App() {
 
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
-  }, [resumeReady, accountType, currentScreen])
+  }, [resumeReady, accountType, currentScreen, profileSection])
 
   // Start a guest session and open the Resume page
   const handleContinueAsGuest = () => {
@@ -153,7 +175,8 @@ function App() {
     const activeScreen = getCurrentScreen()
     const onResumeOrTailor =
       activeScreen === 'parsed' || activeScreen === 'tailor' ||
-      currentScreen === 'parsed' || currentScreen === 'tailor'
+      currentScreen === 'parsed' || currentScreen === 'tailor' ||
+      (currentScreen === 'profile' && profileSection === 'resumes')
 
     if (accountType !== null && onResumeOrTailor) {
       setShowHomeWarning(true)
@@ -163,6 +186,22 @@ function App() {
     goHome()
   }
 
+
+  const handleBuildResumeClick = () => {
+    if (currentScreen === 'tailor') {
+      setShowBuildResumeWarning(true)
+      return
+    }
+    window.location.hash = '#parsed'
+  }
+
+  const confirmBuildResumeNavigation = () => {
+    setShowBuildResumeWarning(false)
+    // Discard only the current tailored copy. Preserve the Page 2 base resume.
+    sessionStorage.removeItem(tailoredPayloadStorageKey)
+    bypassBuildResumeWarningRef.current = true
+    window.location.hash = '#parsed'
+  }
 
   const handleOpenProfile = (section: 'profile' | 'resumes' = 'profile') => {
     if (accountType !== 'user') return
@@ -317,8 +356,10 @@ function App() {
       currentScreen={currentScreen}
       profileInitials={profileInitials}
       isGuest={accountType === 'guest'}
+      hasEnteredWorkspace={accountType !== null}
       accountName={accountName}
       onHomeClick={handleHomeClick}
+      onBuildResumeClick={handleBuildResumeClick}
       onOpenProfile={() => handleOpenProfile('profile')}
       onOpenSavedResumes={() => handleOpenProfile('resumes')}
       onLogout={() => {
@@ -387,6 +428,33 @@ function App() {
               >
                 Go to Home →
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBuildResumeWarning && (
+        <div
+          className="dialog-backdrop"
+          role="presentation"
+          style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'grid', placeItems: 'center', padding: 20, background: 'rgba(23, 32, 51, 0.55)' }}
+        >
+          <div
+            className="confirm-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="build-resume-warning-title"
+            aria-describedby="build-resume-warning-description"
+            style={{ width: 'min(460px, 100%)', padding: 28, background: '#fff', color: '#172033', boxShadow: '0 24px 60px rgba(23, 32, 51, 0.24)' }}
+          >
+            <span className="panel-icon">LEAVE WORKSPACE</span>
+            <h3 id="build-resume-warning-title">Leave this page?</h3>
+            <p id="build-resume-warning-description">
+              Going to Build Your Resume page clears the current tailored resume and starts a new workspace. Please save the tailored resume before continuing.
+            </p>
+            <div className="dialog-actions" style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 10, marginTop: 24 }}>
+              <button className="button button-secondary" type="button" onClick={() => setShowBuildResumeWarning(false)}>Stay on page</button>
+              <button className="button button-primary" type="button" onClick={confirmBuildResumeNavigation}>Continue</button>
             </div>
           </div>
         </div>
