@@ -40,7 +40,8 @@ def get(user_id, resume_id):
     else:
         return jsonify({'error': 'no resume found'}), 404
 
-    # list all resumes for a user_id
+
+# list all resumes for a user_id
 
 
 @resume_bp.route('/list_resumes/<uuid:user_id>', methods=['GET'])
