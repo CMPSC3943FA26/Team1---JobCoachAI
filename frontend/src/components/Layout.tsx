@@ -6,6 +6,7 @@ type LayoutProps = {
   currentScreen: 'welcome' | 'parsed' | 'tailor' | 'profile'
   profileInitials: string | null
   isGuest: boolean
+  hasEnteredWorkspace: boolean
   accountName?: string | null
   onHomeClick: () => void
   onBuildResumeClick: () => void
@@ -21,6 +22,7 @@ export function Layout({
   currentScreen,
   profileInitials,
   isGuest,
+  hasEnteredWorkspace,
   accountName,
   onHomeClick,
   onBuildResumeClick,
@@ -231,6 +233,21 @@ export function Layout({
                 className={`step ${isActive ? 'active' : ''}`}
                 aria-current={isActive ? 'page' : undefined}
                 onClick={(event) => {
+                  // Guests must explicitly continue, and users must log in,
+                  // before using the Page 2 / Page 3 sidebar links.
+                  // Ignore unauthorized clicks silently without changing the hash.
+                  if (!hasEnteredWorkspace && (step.key === 'parsed' || step.key === 'tailor')) {
+                    event.preventDefault()
+                    return
+                  }
+
+                  // The Saved Resumes view may open Page 2 but never Page 3
+                  // directly from the sidebar. Ignore clicks without a message.
+                  if (step.key === 'tailor' && currentScreen === 'profile') {
+                    event.preventDefault()
+                    return
+                  }
+
                   // Page 2 -> Page 3 is allowed only through ResumePage's Continue button.
                   // Ignore the sidebar click silently without changing the URL hash.
                   if (step.key === 'tailor' && currentScreen === 'parsed') {

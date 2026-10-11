@@ -64,6 +64,13 @@ function App() {
         return
       }
 
+      // Saved Resumes is an edit/review entry point, not a shortcut to tailoring.
+      // Ignore direct hash navigation to Page 3 from this view as well.
+      if (nextScreen === 'tailor' && currentScreen === 'profile' && profileSection === 'resumes') {
+        window.location.hash = '#profile'
+        return
+      }
+
       // Page 3 also requires a resume.
       if (nextScreen === 'tailor' && !resumeReady) {
         window.location.hash = '#parsed'
@@ -81,7 +88,8 @@ function App() {
 
       if (nextScreen === 'welcome') {
         const leavingResumeWorkspace =
-          currentScreen === 'parsed' || currentScreen === 'tailor'
+          currentScreen === 'parsed' || currentScreen === 'tailor' ||
+          (currentScreen === 'profile' && profileSection === 'resumes')
 
         if (
           accountType !== null &&
@@ -114,7 +122,7 @@ function App() {
 
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
-  }, [resumeReady, accountType, currentScreen])
+  }, [resumeReady, accountType, currentScreen, profileSection])
 
   // Start a guest session and open the Resume page
   const handleContinueAsGuest = () => {
@@ -167,7 +175,8 @@ function App() {
     const activeScreen = getCurrentScreen()
     const onResumeOrTailor =
       activeScreen === 'parsed' || activeScreen === 'tailor' ||
-      currentScreen === 'parsed' || currentScreen === 'tailor'
+      currentScreen === 'parsed' || currentScreen === 'tailor' ||
+      (currentScreen === 'profile' && profileSection === 'resumes')
 
     if (accountType !== null && onResumeOrTailor) {
       setShowHomeWarning(true)
@@ -347,6 +356,7 @@ function App() {
       currentScreen={currentScreen}
       profileInitials={profileInitials}
       isGuest={accountType === 'guest'}
+      hasEnteredWorkspace={accountType !== null}
       accountName={accountName}
       onHomeClick={handleHomeClick}
       onBuildResumeClick={handleBuildResumeClick}
