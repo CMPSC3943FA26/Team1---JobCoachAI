@@ -9,7 +9,7 @@
  * ATS score is local keyword matching, NOT an official ATS score.
  * Suggestions are returned by the backend AI tailoring service.
  */
-import { useEffect, useMemo, useState, type ComponentProps } from 'react'
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx'
 import { AtsScorePanel } from '../components/AtsScorePanel'
 import { ResumePreview, type PreviewSection } from '../components/ResumePreview'
@@ -20,11 +20,9 @@ import { analyzeResumeForJob, generateSummaryOptions } from '../features/resume/
 import { replaceTextInField } from '../features/resume/resumeSuggestions'
 import { addedWordMask } from '../features/resume/addedWords'
 import { tailor_resume } from '../services/resumeService'
-import type { TailoringResponse } from '../types/ai'
 import type { ResumeProfile, ResumeSaveRequest } from '../features/resume/resumeData'
 import type { ResumeRecommendation, SuggestionChange } from '../features/resume/resumeSuggestions'
-import type { SummaryOption, SummaryTone, TailoringResponse } from '../types/ai'
-import {tailor_resume} from '../services/resumeService'
+import type { AIResponse, SummaryOption, SummaryTone, TailoringResponse } from '../types/ai'
 
 // Matches the exact prop type expected by the existing Kiran component.
 type Sections = ComponentProps<typeof ResumeSuggestions>['sections']
@@ -134,6 +132,14 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
   const [loading,setLoading]=useState(false)
   const [error,setError]=useState<string>('')
   const [result, setResult] = useState<TailoringResponse | null>(null)
+  const [aiRetry, setAiRetry] = useState(0)
+  // Keyword changes affect the local ATS estimate immediately. The AI request
+  // is rerun only when the user explicitly clicks Regenerate AI suggestions.
+  const keywordContextRef = useRef({ confirmed: [] as string[], removed: [] as string[] })
+  keywordContextRef.current = {
+    confirmed: manuallyFoundSkills,
+    removed: [...hiddenAtsKeywords],
+  }
 
   // Keep the latest live tailored copy available to TailorPage's Save button.
   // This stores a save-ready payload, not the original base resume draft.
@@ -144,45 +150,6 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     }
     sessionStorage.setItem(TAILORED_PAYLOAD_KEY, JSON.stringify(payloadFromDraft(tailored)))
   }, [tailored])
-
-  // Generate live AI suggestions for the submitted resume and job.
-  // Keep the existing ATS controls, summary tools, and local demo fallback intact.
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchAiSuggestions() {
-      if (!resume_id || !jobDescription.trim()) return
-      setAiLoading(true)
-      setAiError('')
-      setAiResult(null)
-      setSuggestionsOpen(true)
-      try {
-        const response = await tailor_resume(resume_id, {
-          title, company, description: jobDescription,
-        })
-        if (cancelled) return
-        if (!Array.isArray(response.suggestions)) {
-          throw new Error('The AI service returned an invalid suggestions response.')
-        }
-        setAiResult(response)
-        setRecommendations(response.suggestions.map((item) => ({
-          section_name: sectionNameFromPath(item.resume_id),
-          original_text: item.before,
-          suggested_change: item.suggestion,
-          reasoning: item.reason,
-        })))
-      } catch (cause) {
-        if (!cancelled) {
-          setAiError(cause instanceof Error ? cause.message : 'Unable to load AI suggestions.')
-        }
-      } finally {
-        if (!cancelled) setAiLoading(false)
-      }
-    }
-
-    void fetchAiSuggestions()
-    return () => { cancelled = true }
-  }, [resume_id, title, company, jobDescription, aiRetry])
 
   // Page 3 is considered save-ready only after an AI recommendation or
   // generated summary has actually been applied to the tailored copy.
@@ -196,8 +163,17 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       setRecommendations([])
       setSuggestionsOpen(true)
       try {
+        const { confirmed, removed } = keywordContextRef.current
+        // Keep user-confirmed ATS selections separate from the underlying resume.
+        // They are unverified context, NOT permission to invent qualifications.
+        const context = aiRetry > 0 && (confirmed.length || removed.length)
+          ? `\n\nCandidate ATS review notes (unverified UI selections, not job requirements):` +
+            (confirmed.length ? `\nUser marked as found: ${confirmed.join(', ')}.` : '') +
+            (removed.length ? `\nUser removed from found: ${removed.join(', ')}.` : '') +
+            `\nOnly suggest experience supported by the actual resume. Do not invent skills.`
+          : ''
         const response = await tailor_resume(resume_id, {
-          title, company, description: jobDescription,
+          title, company, description: jobDescription + context,
         })
         if (cancelled) return
         if (!Array.isArray(response.suggestions)) {
@@ -220,7 +196,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     }
     void tailoring_resume()
     return () => { cancelled = true }
-  }, [resume_id, title, company, jobDescription])
+  }, [resume_id, title, company, jobDescription, aiRetry])
 
   useEffect(() => {
     onTailoredReadyChange?.(changedFields.size > 0)
@@ -244,6 +220,70 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     return analyzeResumeForJob({ ...payload, skills: [...payload.skills, ...extraSkills] },
       jobDescription, manuallyFoundSkills)
   }, [tailored, jobDescription, manuallyFoundSkills, hiddenAtsKeywords])
+
+  // Interactive ATS display: a moved/added keyword appears under Found, while
+  // clicking X moves it out of Found and into Missing. Recompute the local
+  // compatibility estimate from the currently visible keyword classifications.
+  // The score is a user-adjusted estimate, not a new backend AI assessment.
+  const interactiveAtsResponse = useMemo((): AIResponse | null => {
+    if (!atsResponse) return null
+
+    const found = new Map<string, AIResponse['suggestions'][number]>()
+    const missing = new Map<string, AIResponse['improvements'][number]>()
+
+    for (const item of atsResponse.suggestions) {
+      const key = skillKey(item.requirement)
+      if (key && !hiddenAtsKeywords.has(key)) found.set(key, item)
+    }
+    for (const item of atsResponse.improvements) {
+      const key = skillKey(item.requirement)
+      if (key) missing.set(key, item)
+    }
+
+    for (const keyword of manuallyFoundSkills) {
+      const key = skillKey(keyword)
+      if (!key || hiddenAtsKeywords.has(key)) continue
+      if (!found.has(key)) found.set(key, {
+        suggestion: `Manually confirmed keyword: ${keyword}`,
+        type: 'matched',
+        requirement: keyword,
+        importance: 2,
+        before: '',
+        reason: 'Marked as found by the user. Verify that the resume supports this keyword.',
+        resume_id: '',
+      })
+      missing.delete(key)
+    }
+
+    for (const keyword of hiddenAtsKeywords) {
+      const original = atsResponse.suggestions.find(
+        (item) => skillKey(item.requirement) === keyword,
+      )
+      if (original) {
+        missing.set(keyword, {
+          improvement: `Verify or add ${original.requirement} in the resume.`,
+          type: 'missing',
+          requirement: original.requirement,
+          reason: 'Removed from the Found list by the user.',
+          resume_id: null,
+        })
+      }
+      found.delete(keyword)
+    }
+
+    // Treat each visible keyword once, even when the raw analyzer overlaps.
+    for (const keyword of found.keys()) missing.delete(keyword)
+    const requirements_met = found.size
+    const requirements_missing = missing.size
+    const total = requirements_met + requirements_missing
+    return {
+      suggestions: [...found.values()],
+      improvements: [...missing.values()],
+      requirements_met,
+      requirements_missing,
+      ATS_score: total ? Math.round(requirements_met / total * 100) : 0,
+    }
+  }, [atsResponse, hiddenAtsKeywords, manuallyFoundSkills])
 
   // Mounted only after Submit: prepare the professional summary options.
   useEffect(() => {
@@ -550,32 +590,33 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
 
   return (
     <section className="resume-suggestions-region tailor-results" aria-label="Tailor resume analysis">
-      {loading && <TailoringLoading />}
-      {!loading && !error && result && typeof result.total_time_seconds === 'number' && (
-        <p role="status">Total backend tailoring time: {result.total_time_seconds.toFixed(2)} seconds.</p>
-      )}
       {!tailored ? (
         <p role="status">No locally saved resume draft found. Build your resume first, then return to Tailor.</p>
       ) : (
         <>
-          {!loading && !error && result && (
-          <section aria-label="ATS compatibility analysis" className="tailor-match-section">
-            <div className="resume-suggestions-toolbar-copy">
-              <span className="panel-icon">RESUME ANALYSIS</span>
-              <h3>ATS Compatibility Score</h3>
-              <p>Compatibility estimate based on AI requirement classifications for your submitted resume.</p>
-            </div>
-            <AtsScorePanel response={result}
-              missingRequirements={result.missing_requirements}
-              readOnly
-              hiddenKeywords={new Set<string>()}
-              onRemoveKeyword={removeAtsKeyword}
-              onAddSkill={addMissedSkill}
-              manuallyFoundSkills={[]} />
-          </section>
+          {interactiveAtsResponse && (
+            <section aria-label="ATS compatibility analysis" className="tailor-match-section">
+              <div className="resume-suggestions-toolbar-copy">
+                <span className="panel-icon">RESUME ANALYSIS</span>
+                <h3>ATS Compatibility Score</h3>
+                <p>Interactive local keyword match estimate. Confirmed keywords change the estimate without editing your saved resume.</p>
+              </div>
+              <AtsScorePanel
+                response={interactiveAtsResponse}
+                hiddenKeywords={new Set<string>()}
+                onRemoveKeyword={removeAtsKeyword}
+                onAddSkill={addMissedSkill}
+                manuallyFoundSkills={[]}
+              />
+            </section>
           )}
 
-          <section hidden className="tailor-dropdown" aria-label="AI Professional Summary">
+          {loading && <TailoringLoading />}
+          {!loading && !error && result && typeof result.total_time_seconds === 'number' && (
+            <p role="status">AI processing time: {result.total_time_seconds.toFixed(2)} seconds.</p>
+          )}
+
+          <section className="tailor-dropdown" aria-label="AI Professional Summary">
             <button type="button" className="tailor-dropdown-trigger" aria-expanded={summaryOpen}
               aria-controls="tailor-summary-content" onClick={() => setSummaryOpen((open) => !open)}>
               <span className="tailor-dropdown-label">
@@ -608,6 +649,16 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
             </button>
             {suggestionsOpen && (
               <div id="tailor-suggestions-content" className="tailor-dropdown-body">
+                <div className="tailor-suggestions-toolbar" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    disabled={loading}
+                    onClick={() => setAiRetry((previous) => previous + 1)}
+                  >
+                    {loading ? 'Generating AI suggestions…' : 'Regenerate AI suggestions'}
+                  </button>
+                </div>
                 {error && <p role="alert">{error}</p>}
                 {!loading && !error && result && (
                   recommendations.length > 0 ? (
