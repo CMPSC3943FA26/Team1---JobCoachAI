@@ -269,6 +269,7 @@ export function ResumeSuggestions({
                                   }`}
                                 >
                                   {word}
+                                  {wordIndex < diff.original.length - 1 ? ' ' : ''}
                                 </span>
                               )).reduce<ReactNode[]>((nodes, node, index) => {
                                 if (index > 0) nodes.push(' ')
@@ -310,6 +311,7 @@ export function ResumeSuggestions({
                                     }`}
                                   >
                                     {word}
+                                    {wordIndex < diff.suggested.length - 1 ? ' ' : ''}
                                   </span>
                                 )).reduce<ReactNode[]>((nodes, node, index) => {
                                   if (index > 0) nodes.push(' ')
