@@ -19,6 +19,7 @@ import { TailoringLoading } from '../components/TailoringLoading'
 import { analyzeResumeForJob, generateSummaryOptions } from '../features/resume/resumeInsights'
 import { replaceTextInField } from '../features/resume/resumeSuggestions'
 import { addedWordMask } from '../features/resume/addedWords'
+import { tailor_resume } from '../services/resumeService'
 import type { ResumeProfile, ResumeSaveRequest } from '../features/resume/resumeData'
 import type { ResumeRecommendation, SuggestionChange } from '../features/resume/resumeSuggestions'
 import type { AIResponse, SummaryOption, SummaryTone, TailoringResponse } from '../types/ai'
@@ -132,6 +133,9 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
   const [error,setError]=useState<string>('')
   const [result, setResult] = useState<TailoringResponse | null>(null)
   const [aiRetry, setAiRetry] = useState(0)
+  const [, setAiLoading] = useState(false)
+  const [, setAiError] = useState<string | null>(null)
+  const [, setAiResult] = useState<TailoringResponse | null>(null)
   // Keyword changes affect the local ATS estimate immediately. The AI request
   // is rerun only when the user explicitly clicks Regenerate AI suggestions.
   const keywordContextRef = useRef({ confirmed: [] as string[], removed: [] as string[] })
