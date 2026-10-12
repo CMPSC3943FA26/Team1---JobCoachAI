@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type {
   ResumeRecommendation,
   ResumeSectionLike,
@@ -17,7 +17,7 @@ interface ResumeSuggestionsProps {
 type DiffKept = Record<number, boolean>
 
 function splitWords(text: string): string[] {
-  return text.match(/\s+|\S+/g) ?? []
+  return text.split(/\s+/).filter(Boolean)
 }
 
 function computeDiff(original: string, suggested: string): {
@@ -271,7 +271,11 @@ export function ResumeSuggestions({
                                   {word}
                                   {wordIndex < diff.original.length - 1 ? ' ' : ''}
                                 </span>
-                              ))}
+                              )).reduce<ReactNode[]>((nodes, node, index) => {
+                                if (index > 0) nodes.push(' ')
+                                nodes.push(node)
+                                return nodes
+                              }, [])}
                             </p>
                           </div>
 
@@ -309,7 +313,11 @@ export function ResumeSuggestions({
                                     {word}
                                     {wordIndex < diff.suggested.length - 1 ? ' ' : ''}
                                   </span>
-                                ))}
+                                )).reduce<ReactNode[]>((nodes, node, index) => {
+                                  if (index > 0) nodes.push(' ')
+                                  nodes.push(node)
+                                  return nodes
+                                }, [])}
                               </p>
                             </div>
                           )}

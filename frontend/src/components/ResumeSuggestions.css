@@ -236,7 +236,7 @@
   }
   
   .diff-token-removed {
-    padding: 0 1px;
+    padding: 0;
   
     color: #a8463a;
     background: #f7ddd9;
@@ -250,7 +250,7 @@
   }
   
   .diff-token-added {
-    padding: 0 2px;
+    padding: 0;
   
     color: #0f7a4d;
     background: #d9f0e3;
@@ -574,10 +574,6 @@
 }
 
 /* Ensure editable suggestions remain inside their boxes */
-
-.tailor-results section[hidden] {
-  display: none !important;
-}
 
 .resume-suggestions-region textarea {
   display: block;
