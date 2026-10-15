@@ -594,7 +594,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
         <p role="status">No locally saved resume draft found. Build your resume first, then return to Tailor.</p>
       ) : (
         <>
-          {interactiveAtsResponse && (
+          {result?.missing_requirements && (
             <section aria-label="ATS compatibility analysis" className="tailor-match-section">
               <div className="resume-suggestions-toolbar-copy">
                 <span className="panel-icon">RESUME ANALYSIS</span>
@@ -602,7 +602,8 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
                 <p>Interactive local keyword match estimate. Confirmed keywords change the estimate without editing your saved resume.</p>
               </div>
               <AtsScorePanel
-                response={interactiveAtsResponse}
+                response={result}
+                missingRequirements={result.missing_requirements}
                 hiddenKeywords={new Set<string>()}
                 onRemoveKeyword={removeAtsKeyword}
                 onAddSkill={addMissedSkill}
