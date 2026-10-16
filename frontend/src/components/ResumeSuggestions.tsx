@@ -3,6 +3,7 @@ import type {
   ResumeRecommendation,
   ResumeSectionLike,
   SuggestionChange,
+  SuggestionTarget,
 } from '../features/resume/resumeSuggestions'
 import { resolveSuggestionTarget } from '../features/resume/resumeSuggestions'
 import './ResumeSuggestions.css'
@@ -10,7 +11,7 @@ import './ResumeSuggestions.css'
 interface ResumeSuggestionsProps {
   recommendations: ResumeRecommendation[]
   sections: ResumeSectionLike[]
-  onApplySuggestion: (change: SuggestionChange) => void
+  onApplySuggestion: (change: SuggestionChange) => string | null
   onRegenerateSection?: (sectionName: string) => void
 }
 
@@ -94,13 +95,17 @@ export function ResumeSuggestions({
   )
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editValue, setEditValue] = useState<string>('')
-  const [appliedKeys, setAppliedKeys] = useState<Set<string>>(new Set())
+  const [appliedChanges, setAppliedChanges] = useState<Record<string, {
+    target: SuggestionTarget
+    text: string
+  }>>({})
   const [applyError, setApplyError] = useState<string | null>(null)
 
   // New recommendations invalidate the prior cards' applied indicators without
   // remounting the list or collapsing the section the user is viewing.
   useEffect(() => {
-    setAppliedKeys(new Set())
+    setAppliedChanges({})
+    setEditingKey(null)
     setApplyError(null)
   }, [recommendations])
 
@@ -177,7 +182,8 @@ export function ResumeSuggestions({
     newText: string,
     key: string,
   ) => {
-    const target = resolveSuggestionTarget(suggestion, sections)
+    // Keep the field location after applying: its original wording is now gone.
+    const target = appliedChanges[key]?.target ?? resolveSuggestionTarget(suggestion, sections)
 
     if (!target) {
       setApplyError(
@@ -186,8 +192,17 @@ export function ResumeSuggestions({
       return
     }
 
-    onApplySuggestion({ suggestion, target, newText })
-    setAppliedKeys((prev) => new Set(prev).add(key))
+    const error = onApplySuggestion({
+      suggestion,
+      target,
+      previousText: appliedChanges[key]?.text ?? suggestion.original_text,
+      newText,
+    })
+    if (error) {
+      setApplyError(error)
+      return
+    }
+    setAppliedChanges((prev) => ({ ...prev, [key]: { target, text: newText.trim() } }))
     setEditingKey(null)
     setApplyError(null)
   }
@@ -238,11 +253,13 @@ export function ResumeSuggestions({
                   {group.items.map((suggestion, index) => {
                     const key = `${group.name}::${index}`
                     const isEditing = editingKey === key
-                    const isApplied = appliedKeys.has(key)
+                    const appliedChange = appliedChanges[key]
+                    const isApplied = Boolean(appliedChange)
+                    const suggestedText = appliedChange?.text ?? suggestion.suggested_change
 
                     const diff = computeDiff(
                       suggestion.original_text,
-                      suggestion.suggested_change,
+                      suggestedText,
                     )
 
                     return (
@@ -384,7 +401,7 @@ export function ResumeSuggestions({
                                 className="suggestion-btn suggestion-btn-edit"
                                 onClick={() => {
                                   setEditingKey(key)
-                                  setEditValue(suggestion.suggested_change)
+                                  setEditValue(suggestedText)
                                   setApplyError(null)
                                 }}
                               >
@@ -411,7 +428,7 @@ export function ResumeSuggestions({
                                 onClick={() =>
                                   applyChange(
                                     suggestion,
-                                    suggestion.suggested_change,
+                                    suggestedText,
                                     key,
                                   )
                                 }

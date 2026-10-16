@@ -46,6 +46,7 @@ export type SuggestionTarget = {
 export type SuggestionChange = {
   suggestion: ResumeRecommendation
   target: SuggestionTarget
+  previousText: string
   newText: string
 }
 
@@ -130,11 +131,14 @@ export function replaceTextInField(
   const original = originalText.trim()
   const replacement = newText.trim()
 
-  if (original && currentValue.includes(original)) {
-    return currentValue.replace(original, replacement)
+  const start = original ? currentValue.indexOf(original) : -1
+  if (start < 0 || currentValue.indexOf(original, start + 1) !== -1) {
+    throw new Error(
+      'The original text changed or appears more than once. Review this field before applying.',
+    )
   }
 
-  return replacement
+  return currentValue.slice(0, start) + replacement + currentValue.slice(start + original.length)
 }
 
 // Curated suggestions that match the built-in sample resume (Jordan Lee),

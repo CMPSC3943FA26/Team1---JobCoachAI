@@ -499,12 +499,20 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     setMessage('Original parsed professional summary restored to the tailored preview.')
   }
 
-  const applySuggestion = (change: SuggestionChange) => {
+  const applySuggestion = (change: SuggestionChange): string | null => {
     const section = tailored?.sections.find((item) => item.key === change.target.sectionKey)
     const entry = section?.entries[change.target.entryIndex]
     if (entry === undefined || (typeof entry !== 'string' && !(change.target.fieldKey in entry))) {
-      setMessage('This suggestion targets a field not present in the tailored resume.')
-      return
+      return 'This suggestion targets a field not present in the tailored resume.'
+    }
+    let updatedText: string
+    try {
+      const currentText = typeof entry === 'string'
+        ? entry
+        : String(entry[change.target.fieldKey as keyof typeof entry] ?? '')
+      updatedText = replaceTextInField(currentText, change.previousText, change.newText)
+    } catch (cause) {
+      return cause instanceof Error ? cause.message : 'Unable to safely apply this suggestion.'
     }
     markChanged(change.target.sectionKey, change.target.entryIndex, change.target.fieldKey)
     setTailored((current) => current && ({
@@ -516,14 +524,13 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
           entries: item.entries.map((oldEntry, index) => index !== change.target.entryIndex
             ? oldEntry
             : typeof oldEntry === 'string'
-              ? replaceTextInField(oldEntry, change.suggestion.original_text, change.newText)
-              : { ...oldEntry, [change.target.fieldKey]: replaceTextInField(
-                String(oldEntry[change.target.fieldKey as keyof typeof oldEntry] ?? ''),
-                change.suggestion.original_text, change.newText) }),
+              ? updatedText
+              : { ...oldEntry, [change.target.fieldKey]: updatedText }),
         }),
     }))
     setAppliedTone(null)
     setMessage('Suggestion applied to the tailored copy only. Resume match updates automatically.')
+    return null
   }
 
   // Export the live tailored state, never the original sessionStorage draft.
