@@ -154,6 +154,7 @@ export function ProfilePage({
   const [deletingResume, setDeletingResume] = useState(false)
   const [message, setMessage] = useState('')
   const [search, setSearch] = useState('')
+  const [selectedJobTitles, setSelectedJobTitles] = useState<string[]>([])
 
   useEffect(() => {
     const loadPage = async () => {
@@ -211,15 +212,32 @@ export function ProfilePage({
     )
     target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [focusSection])
+  const availableJobTitles = useMemo(() => {
+    return [...new Set(
+      resumes.map((resume) => resume.title?.trim() || 'Untitled')
+    )].sort()
+  }, [resumes])
 
   const filteredResumes = useMemo(() => {
     const query = search.trim().toLowerCase()
-    if (!query) return resumes
 
-    return resumes.filter((resume) =>
-      `${getSavedResumeDisplayMeta(resume.id)?.filename ?? ''} ${getSavedResumeDisplayMeta(resume.id)?.kind ?? ''} ${resume.full_name ?? ''} ${resume.email ?? ''}`.toLowerCase().includes(query),
-    )
-  }, [resumes, search])
+    return resumes.filter((resume) => {
+      const jobTitle = resume.title?.trim() || 'Untitled'
+
+      const matchesJobTitle =
+  selectedJobTitles.length === 0 ||
+  (selectedJobTitles[0] !== '__none__' &&
+    selectedJobTitles.includes(jobTitle))
+
+      const matchesSearch =
+        !query ||
+        `${getSavedResumeDisplayMeta(resume.id)?.filename ?? ''} ${getSavedResumeDisplayMeta(resume.id)?.kind ?? ''} ${resume.full_name ?? ''} ${resume.email ?? ''} ${jobTitle}`
+          .toLowerCase()
+          .includes(query)
+
+      return matchesJobTitle && matchesSearch
+    })
+  }, [resumes, search, selectedJobTitles])
 
   const updateField = (key: keyof ProfileForm, value: string) => {
     setForm((current) => ({ ...current, [key]: value }))
@@ -439,6 +457,54 @@ export function ProfilePage({
             onChange={(event) => setSearch(event.target.value)}
             aria-label="Search saved resumes"
           />
+          <details className="saved-resume-job-filter">
+  <summary>Filter by Job Title</summary>
+
+  <div className="saved-resume-filter-options">
+    <button
+      type="button"
+      onClick={() => setSelectedJobTitles([])}
+    >
+      Select All
+    </button>
+
+    <button
+      type="button"
+      onClick={() => setSelectedJobTitles(['__none__'])}
+    >
+      Deselect All
+    </button>
+
+    {availableJobTitles.map((title) => (
+      <label key={title}>
+        <input
+          type="checkbox"
+          checked={
+            selectedJobTitles.length === 0 ||
+            selectedJobTitles.includes(title)
+          }
+          onChange={(event) => {
+            if (event.target.checked) {
+              setSelectedJobTitles((current) =>
+                current.includes('__none__')
+                  ? [title]
+                  : [...current, title]
+              )
+            } else {
+              setSelectedJobTitles((current) =>
+                (current.length === 0
+                  ? availableJobTitles
+                  : current
+                ).filter((item) => item !== title)
+              )
+            }
+          }}
+        />
+        {title}
+      </label>
+    ))}
+  </div>
+</details>
         </div>
 
         {loading ? (
@@ -451,6 +517,7 @@ export function ProfilePage({
           <div className="saved-resume-list">
               <div className="saved-resume-row saved-resume-row-header" aria-hidden="true">
                 <span>Resume</span>
+                <span>Job Title</span>
                 <span>Last Updated</span>
                 <span>Actions</span>
               </div>
@@ -480,6 +547,10 @@ export function ProfilePage({
                       </small>
                     </span>
                   </div>
+
+                  <span className="saved-resume-job-title">
+                    {resume.title?.trim() || 'Untitled'}
+                  </span>
 
                   <span className="saved-resume-date">
                     {formatDateTime(resume.updated_at ?? resume.created_at)}
