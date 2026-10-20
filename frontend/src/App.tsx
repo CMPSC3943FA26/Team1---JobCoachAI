@@ -48,8 +48,8 @@ function App() {
   const [logoutError, setLogoutError] = useState('')
   const [logoutPending, setLogoutPending] = useState(false)
   const [showHomeWarning, setShowHomeWarning] = useState(false)
-  const [showBuildResumeWarning, setShowBuildResumeWarning] = useState(false)
-  const bypassBuildResumeWarningRef = useRef(false)
+  // Keep Page 3 mounted after the first visit to preserve in-memory AI edits.
+  const [tailorMounted, setTailorMounted] = useState(false)
   const [sidebarResumePreview, setSidebarResumePreview] = useState<Record<string, any> | null>(null)
   const bypassWelcomeWarningRef = useRef(false)
 
@@ -78,15 +78,7 @@ function App() {
         window.location.hash = '#parsed'
         return
       }
-      // Confirm before leaving Page 3 for Page 2, including browser/hash navigation.
-      if (nextScreen === 'parsed' && currentScreen === 'tailor') {
-        if (!bypassBuildResumeWarningRef.current) {
-          setShowBuildResumeWarning(true)
-          window.location.hash = '#tailor'
-          return
-        }
-        bypassBuildResumeWarningRef.current = false
-      }
+      if (nextScreen === 'tailor') setTailorMounted(true)
 
       if (nextScreen === 'welcome') {
         const leavingResumeWorkspace =
@@ -144,6 +136,7 @@ function App() {
       console.error('Unable to restore guest workspace:', error)
     }
     setSidebarResumePreview(null)
+    setTailorMounted(false)
     accountTypeRef.current = 'guest'
     setAccountType('guest')
     setResumeReady(false)
@@ -166,6 +159,7 @@ function App() {
     const initials = `${firstInitial}${lastInitial}`.toUpperCase() || 'U'
 
     setSidebarResumePreview(null)
+    setTailorMounted(false)
     setProfileInitials(initials)
     setAccountName(`${firstName.trim()} ${lastName.trim()}`.trim() || 'User')
     accountTypeRef.current = 'user'
@@ -210,19 +204,8 @@ function App() {
   }
 
 
+  // Page 2 and Page 3 navigation never clears either workspace.
   const handleBuildResumeClick = () => {
-    if (currentScreen === 'tailor') {
-      setShowBuildResumeWarning(true)
-      return
-    }
-    window.location.hash = '#parsed'
-  }
-
-  const confirmBuildResumeNavigation = () => {
-    setShowBuildResumeWarning(false)
-    // Discard only the current tailored copy. Preserve the Page 2 base resume.
-    sessionStorage.removeItem(tailoredPayloadStorageKey)
-    bypassBuildResumeWarningRef.current = true
     window.location.hash = '#parsed'
   }
 
@@ -263,6 +246,7 @@ function App() {
       accountTypeRef.current = null
 
       setSidebarResumePreview(null)
+      setTailorMounted(false)
       setAccountType(null)
       setProfileInitials(null)
       setAccountName(null)
@@ -401,7 +385,31 @@ function App() {
       resumePreview={sidebarResumePreview}
       onCloseResumePreview={() => setSidebarResumePreview(null)}
     >
-      {renderCurrentPage()}
+      {accountType !== null ? (
+        <>
+          {/* Keep Page 2 mounted so form edits survive navigation. */}
+          <div style={{ display: currentScreen === 'parsed' ? 'contents' : 'none' }}>
+            <ResumePage
+              key={resumeSession}
+              isGuest={accountType !== 'user'}
+              onResumeReadyChange={setResumeReady}
+            />
+          </div>
+          {/* Page 3 stays mounted after first visit, retaining AI results and keyword edits. */}
+          {tailorMounted && (
+            <div style={{ display: currentScreen === 'tailor' ? 'contents' : 'none' }}>
+              <TailorPage
+                onOpenResume={handleOpenResume}
+                onSubmit={handleTailorSubmit}
+                onBack={handleHomeClick}
+                isGuest={accountType !== 'user'}
+                onResumePreviewed={setSidebarResumePreview}
+              />
+            </div>
+          )}
+          {currentScreen !== 'parsed' && currentScreen !== 'tailor' && renderCurrentPage()}
+        </>
+      ) : renderCurrentPage()}
 
       {showHomeWarning && (
         <div
@@ -460,33 +468,6 @@ function App() {
               >
                 Go to Home →
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showBuildResumeWarning && (
-        <div
-          className="dialog-backdrop"
-          role="presentation"
-          style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'grid', placeItems: 'center', padding: 20, background: 'rgba(23, 32, 51, 0.55)' }}
-        >
-          <div
-            className="confirm-dialog"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="build-resume-warning-title"
-            aria-describedby="build-resume-warning-description"
-            style={{ width: 'min(460px, 100%)', padding: 28, background: '#fff', color: '#172033', boxShadow: '0 24px 60px rgba(23, 32, 51, 0.24)' }}
-          >
-            <span className="panel-icon">LEAVE WORKSPACE</span>
-            <h3 id="build-resume-warning-title">Warning</h3>
-            <p id="build-resume-warning-description">
-              Going back will clear any data from this screen. Do you want to continue?
-            </p>
-            <div className="dialog-actions" style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 10, marginTop: 24 }}>
-              <button className="button button-secondary" type="button" onClick={() => setShowBuildResumeWarning(false)}>Stay on page</button>
-              <button className="button button-primary" type="button" onClick={confirmBuildResumeNavigation}>Continue</button>
             </div>
           </div>
         </div>

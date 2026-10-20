@@ -248,12 +248,7 @@ export function Layout({
                     return
                   }
 
-                  // Page 2 -> Page 3 is allowed only through ResumePage's Continue button.
-                  // Ignore the sidebar click silently without changing the URL hash.
-                  if (step.key === 'tailor' && currentScreen === 'parsed') {
-                    event.preventDefault()
-                    return
-                  }
+                  
                   if (step.key === 'parsed' && currentScreen === 'tailor') {
                     event.preventDefault()
                     onBuildResumeClick()
