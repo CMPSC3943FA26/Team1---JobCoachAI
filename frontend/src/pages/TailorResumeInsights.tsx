@@ -133,9 +133,6 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
   const [error,setError]=useState<string>('')
   const [result, setResult] = useState<TailoringResponse | null>(null)
   const [aiRetry, setAiRetry] = useState(0)
-  const [, setAiLoading] = useState(false)
-  const [, setAiError] = useState<string | null>(null)
-  const [, setAiResult] = useState<TailoringResponse | null>(null)
   // Keyword changes affect the local ATS estimate immediately. The AI request
   // is rerun only when the user explicitly clicks Regenerate AI suggestions.
   const keywordContextRef = useRef({ confirmed: [] as string[], removed: [] as string[] })
@@ -156,43 +153,6 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
 
   // Generate live AI suggestions for the submitted resume and job.
   // Keep the existing ATS controls, summary tools, and local demo fallback intact.
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchAiSuggestions() {
-      if (!resume_id || !jobDescription.trim()) return
-      setAiLoading(true)
-      setAiError('')
-      setAiResult(null)
-      setSuggestionsOpen(true)
-      try {
-        const response = await tailor_resume(resume_id, {
-          title, company, description: jobDescription,
-        })
-        if (cancelled) return
-        if (!Array.isArray(response.suggestions)) {
-          throw new Error('The AI service returned an invalid suggestions response.')
-        }
-        setAiResult(response)
-        setRecommendations(response.suggestions.map((item) => ({
-          section_name: sectionNameFromPath(item.resume_id),
-          original_text: item.before,
-          suggested_change: item.suggestion,
-          reasoning: item.reason,
-        })))
-      } catch (cause) {
-        if (!cancelled) {
-          setAiError(cause instanceof Error ? cause.message : 'Unable to load AI suggestions.')
-        }
-      } finally {
-        if (!cancelled) setAiLoading(false)
-      }
-    }
-
-    void fetchAiSuggestions()
-    return () => { cancelled = true }
-  }, [resume_id, title, company, jobDescription, aiRetry])
-
   // Page 3 is considered save-ready only after an AI recommendation or
   // generated summary has actually been applied to the tailored copy.
   useEffect(() => {
@@ -222,6 +182,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
           throw new Error('Invalid tailoring response.')
         }
         setResult(response)
+
         setRecommendations(response.suggestions.map((item) => ({
           section_name: sectionNameFromPath(item.resume_id),
           original_text: item.before,
@@ -271,7 +232,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     if (!atsResponse) return null
 
     const found = new Map<string, AIResponse['suggestions'][number]>()
-    const missing = new Map<string, AIResponse['improvements'][number]>()
+    const missing = new Map<string, AIResponse['requirements_missing'][number]>()
 
     for (const item of atsResponse.suggestions) {
       const key = skillKey(item.requirement)
