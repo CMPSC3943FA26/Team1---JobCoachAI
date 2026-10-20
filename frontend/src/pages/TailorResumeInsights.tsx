@@ -182,6 +182,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
           throw new Error('Invalid tailoring response.')
         }
         setResult(response)
+
         setRecommendations(response.suggestions.map((item) => ({
           section_name: sectionNameFromPath(item.resume_id),
           original_text: item.before,
@@ -231,7 +232,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     if (!atsResponse) return null
 
     const found = new Map<string, AIResponse['suggestions'][number]>()
-    const missing = new Map<string, AIResponse['improvements'][number]>()
+    const missing = new Map<string, AIResponse['requirements_missing'][number]>()
 
     for (const item of atsResponse.suggestions) {
       const key = skillKey(item.requirement)
