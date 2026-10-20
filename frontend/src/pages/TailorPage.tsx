@@ -33,14 +33,56 @@ export interface TailorPageProps {
   onResumePreviewed?: (resume: Record<string, any>) => void
 }
 
+const PAGE3_DRAFT_KEY = 'jobcoachai.page3Draft'
+
+type SubmittedJob = {
+  resumeId: string
+  company: string
+  jobTitle: string
+  jobDescription: string
+  version: number
+}
+
+type Page3Draft = {
+  company: string
+  jobTitle: string
+  jobDescription: string
+  submitted: SubmittedJob | null
+}
+
+function readPage3Draft(): Partial<Page3Draft> {
+  try {
+    const raw = sessionStorage.getItem(PAGE3_DRAFT_KEY)
+    if (!raw) return {}
+    const saved: unknown = JSON.parse(raw)
+    if (!saved || typeof saved !== 'object') return {}
+    const value = saved as Record<string, unknown>
+    const submitted = value.submitted
+    const validSubmitted = submitted && typeof submitted === 'object' &&
+      typeof (submitted as SubmittedJob).resumeId === 'string' &&
+      typeof (submitted as SubmittedJob).company === 'string' &&
+      typeof (submitted as SubmittedJob).jobTitle === 'string' &&
+      typeof (submitted as SubmittedJob).jobDescription === 'string' &&
+      typeof (submitted as SubmittedJob).version === 'number'
+    return {
+      company: typeof value.company === 'string' ? value.company : '',
+      jobTitle: typeof value.jobTitle === 'string' ? value.jobTitle : '',
+      jobDescription: typeof value.jobDescription === 'string' ? value.jobDescription : '',
+      submitted: validSubmitted ? submitted as SubmittedJob : null,
+    }
+  } catch {
+    return {}
+  }
+}
+
 export default function TailorPage({
   onSubmit,
   isGuest = true,
   onResumePreviewed,
 }: TailorPageProps) {
-  const [company, setCompany] = useState('')
-  const [jobTitle, setJobTitle] = useState('')
-  const [jobDescription, setJobDescription] = useState('')
+  const [company, setCompany] = useState(() => readPage3Draft().company ?? '')
+  const [jobTitle, setJobTitle] = useState(() => readPage3Draft().jobTitle ?? '')
+  const [jobDescription, setJobDescription] = useState(() => readPage3Draft().jobDescription ?? '')
   const [error, setError] = useState('')
   const [tailoredSaveMessage, setTailoredSaveMessage] = useState('')
   const [savingTailoredResume, setSavingTailoredResume] = useState(false)
@@ -51,13 +93,14 @@ export default function TailorPage({
 
   const cancelConfirmationRef = useRef<HTMLButtonElement>(null)
 
-  const [submitted, setSubmitted] = useState<{
-    resumeId: string
-    company: string
-    jobTitle: string
-    jobDescription: string
-    version: number
-  } | null>(null)
+  const [submitted, setSubmitted] = useState<SubmittedJob | null>(
+    () => readPage3Draft().submitted ?? null,
+  )
+
+  useEffect(() => {
+    const draft: Page3Draft = { company, jobTitle, jobDescription, submitted }
+    sessionStorage.setItem(PAGE3_DRAFT_KEY, JSON.stringify(draft))
+  }, [company, jobTitle, jobDescription, submitted])
 
   useEffect(() => {
     if (!showNewCopyConfirmation) return

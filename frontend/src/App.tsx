@@ -9,7 +9,8 @@ import TailorPage, {
 } from './pages/TailorPage'
 import { ResumePage, resumeDraftStorageKey, resumeIdStorageKey } from './pages/ResumePage'
 import { ProfilePage } from './pages/ProfilePage'
-import { signOutUser } from './lib/supabase'
+import { signOutUser, supabase } from './lib/supabase'
+import { saveWorkspace, restoreWorkspace } from './services/workspaceStorage'
 
 // Available screens in the application
 const screenNames = ['welcome', 'parsed', 'tailor', 'profile'] as const
@@ -41,7 +42,7 @@ function App() {
   const [profileInitials, setProfileInitials] = useState<string | null>(null)
   const [accountName, setAccountName] = useState<string | null>(null)
   const [profileSection, setProfileSection] = useState<'profile' | 'resumes'>('profile')
-  const [accountType, setAccountType] =useState<'guest' | 'user' | null>(null)
+  const [accountType, setAccountType] = useState<'guest' | 'user' | null>(null)
   const accountTypeRef = useRef<'guest' | 'user' | null>(null)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [logoutError, setLogoutError] = useState('')
@@ -60,7 +61,7 @@ function App() {
       // Users must log in or explicitly continue as guest
       // before accessing Page 2, Page 3, or Profile.
       if (accountTypeRef.current === null && nextScreen !== 'welcome') {
-      window.location.hash = '#welcome'
+        window.location.hash = '#welcome'
         setCurrentScreen('welcome')
         return
       }
@@ -103,7 +104,7 @@ function App() {
         }
 
         bypassWelcomeWarningRef.current = false
-        sessionStorage.removeItem(resumeDraftStorageKey)
+        // Do not erase resume data merely because the user visits Welcome.
         setResumeReady(false)
         setResumeSession(current => current + 1)
         window.dispatchEvent(new Event('resetWelcomeForm'))
@@ -114,7 +115,7 @@ function App() {
 
     const initialScreen = getCurrentScreen()
 
-    if (accountType === null && initialScreen !== 'welcome') {
+    if (accountTypeRef.current === null && initialScreen !== 'welcome') {
       window.location.hash = '#welcome'
       setCurrentScreen('welcome')
     } else if (initialScreen === 'tailor' && !resumeReady) {
@@ -125,10 +126,23 @@ function App() {
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [resumeReady, accountType, currentScreen, profileSection])
 
-  // Start a guest session and open the Resume page
-  const handleContinueAsGuest = () => {
-    sessionStorage.removeItem(resumeDraftStorageKey)
-    sessionStorage.removeItem(resumeIdStorageKey)
+  // Restore only the currently authenticated account's workspace.
+  const restoreForCurrentAccount = async () => {
+    const { data: { user }, error } = await supabase.auth.getUser()
+    if (error || !user) {
+      console.warn('Workspace restoration skipped: no authenticated user.', error)
+      return
+    }
+    restoreWorkspace(user.id)
+  }
+
+  // Start a guest session and open the Resume page.
+  const handleContinueAsGuest = async () => {
+    try {
+      await restoreForCurrentAccount()
+    } catch (error) {
+      console.error('Unable to restore guest workspace:', error)
+    }
     setSidebarResumePreview(null)
     accountTypeRef.current = 'guest'
     setAccountType('guest')
@@ -137,11 +151,16 @@ function App() {
     setAccountName(null)
     setResumeSession(current => current + 1)
     window.location.hash = '#parsed'
+    setCurrentScreen('parsed')
   }
 
-  // Set up the user profile after login
-  const handleAccountLogin = (firstName: string, lastName: string) => {
-    sessionStorage.removeItem(resumeIdStorageKey)
+  // Set up the user profile after login and restore the user's own draft.
+  const handleAccountLogin = async (firstName: string, lastName: string) => {
+    try {
+      await restoreForCurrentAccount()
+    } catch (error) {
+      console.error('Unable to restore user workspace:', error)
+    }
     const firstInitial = firstName.trim().charAt(0)
     const lastInitial = lastName.trim().charAt(0)
     const initials = `${firstInitial}${lastInitial}`.toUpperCase() || 'U'
@@ -154,6 +173,7 @@ function App() {
     setResumeReady(false)
     setResumeSession(current => current + 1)
     window.location.hash = '#parsed'
+    setCurrentScreen('parsed')
   }
 
   // Complete the requested Home navigation after the user confirms.
@@ -224,6 +244,12 @@ function App() {
     setLogoutError('')
 
     try {
+      // Save before signing out and before any cleanup/remount occurs.
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        throw userError ?? new Error('Unable to identify the current user to save the draft.')
+      }
+      saveWorkspace(user.id)
       await signOutUser()
 
       // Bypass the normal Leave Workspace warning during logout
@@ -232,6 +258,9 @@ function App() {
 
       sessionStorage.removeItem(resumeDraftStorageKey)
       sessionStorage.removeItem(resumeIdStorageKey)
+      sessionStorage.removeItem('jobcoachai.page3Draft')
+      sessionStorage.removeItem(tailoredPayloadStorageKey)
+      accountTypeRef.current = null
 
       setSidebarResumePreview(null)
       setAccountType(null)
@@ -451,9 +480,9 @@ function App() {
             style={{ width: 'min(460px, 100%)', padding: 28, background: '#fff', color: '#172033', boxShadow: '0 24px 60px rgba(23, 32, 51, 0.24)' }}
           >
             <span className="panel-icon">LEAVE WORKSPACE</span>
-            <h3 id="build-resume-warning-title">Leave this page?</h3>
+            <h3 id="build-resume-warning-title">Warning</h3>
             <p id="build-resume-warning-description">
-               Going back will clear any data from this screen. Do you want to continue?
+              Going back will clear any data from this screen. Do you want to continue?
             </p>
             <div className="dialog-actions" style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 10, marginTop: 24 }}>
               <button className="button button-secondary" type="button" onClick={() => setShowBuildResumeWarning(false)}>Stay on page</button>
