@@ -129,6 +129,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
   const [showResetConfirmation, setShowResetConfirmation] = useState(false)
   const [hiddenAtsKeywords, setHiddenAtsKeywords] = useState<Set<string>>(() => new Set())
   const [manuallyFoundSkills, setManuallyFoundSkills] = useState<string[]>([])
+  const [keywordAssignments, setKeywordAssignments] = useState<{ keyword: string; section: string }[]>([])
   const [loading,setLoading]=useState(false)
   const [error,setError]=useState<string>('')
   const [result, setResult] = useState<TailoringResponse | null>(null)
@@ -247,6 +248,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
   useEffect(() => {
     setHiddenAtsKeywords(new Set())
     setManuallyFoundSkills([])
+    setKeywordAssignments([])
   }, [jobDescription])
 
   // Update the compatibility score automatically on Submit and after every tailored edit.
@@ -348,6 +350,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     setChangedFields(new Set())
     setHiddenAtsKeywords(new Set())
     setManuallyFoundSkills([])
+    setKeywordAssignments([])
     setSummaryGeneration(0)
     setSummaryOptions([])
     setAppliedTone(null)
@@ -366,7 +369,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
 
   // Manually confirmed keywords are context for locally generated summaries, NOT resume edits.
   // The original and tailored resume data remain unchanged when these chips are edited.
-  const addMissedSkill = (name: string): string | null => {
+  const addMissedSkill = (name: string, section: string): string | null => {
     if (!tailored) return 'No tailored resume is available.'
     const normalized = skillKey(name)
     if (!normalized) return 'Enter a keyword before adding it.'
@@ -377,6 +380,11 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       return 'That keyword is already displayed under Found in your resume.'
     }
     setManuallyFoundSkills((current) => [...current.filter((item) => skillKey(item) !== normalized), name])
+    setKeywordAssignments((current) => [
+      ...current.filter((item) => skillKey(item.keyword) !== normalized),
+      { keyword: name, section },
+    ])
+    setSuggestionsOpen(true)
     setHiddenAtsKeywords((current) => {
       const updated = new Set(current)
       updated.delete(normalized)
@@ -388,6 +396,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
   const removeAtsKeyword = (keyword: string) => {
     const key = skillKey(keyword)
     setManuallyFoundSkills((current) => current.filter((item) => skillKey(item) !== key))
+    setKeywordAssignments((current) => current.filter((item) => skillKey(item.keyword) !== key))
     setHiddenAtsKeywords((current) => new Set(current).add(key))
   }
 
@@ -652,11 +661,11 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
               </div>
               <AtsScorePanel
                 response={interactiveAtsResponse ?? result}
-                missingRequirements={result.missing_requirements}
-                hiddenKeywords={new Set<string>()}
+                missingRequirements={interactiveAtsResponse?.improvements ?? result.missing_requirements}
+                hiddenKeywords={hiddenAtsKeywords}
                 onRemoveKeyword={removeAtsKeyword}
                 onAddSkill={addMissedSkill}
-                manuallyFoundSkills={[]}
+                manuallyFoundSkills={manuallyFoundSkills}
               />
             </section>
           )}
@@ -708,8 +717,8 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
                 </div>
                 {error && <p role="alert">{error}</p>}
                 {!loading && !error && result && (
-                  recommendations.length > 0 ? (
-                    <ResumeSuggestions recommendations={recommendations}
+                  recommendations.length > 0 || keywordAssignments.length > 0 ? (
+                    <ResumeSuggestions recommendations={recommendations} keywordAssignments={keywordAssignments}
                       sections={tailored.sections} onApplySuggestion={applySuggestion} />
                   ) : <p>No wording changes were recommended.</p>
                 )}

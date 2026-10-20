@@ -133,6 +133,7 @@ function saveDatabaseResumeAsDraft(databaseResume: Record<string, any>) {
       filename:
         savedMeta?.filename ||
         `${databaseResume.full_name || 'saved-resume'}-resume`,
+      jobTitle: databaseResume.title ?? savedMeta?.jobTitle ?? "",
     }),
   )
 }
@@ -217,7 +218,7 @@ export function ProfilePage({
     if (!query) return resumes
 
     return resumes.filter((resume) =>
-      `${getSavedResumeDisplayMeta(resume.id)?.filename ?? ''} ${getSavedResumeDisplayMeta(resume.id)?.kind ?? ''} ${resume.full_name ?? ''} ${resume.email ?? ''}`.toLowerCase().includes(query),
+      `${getSavedResumeDisplayMeta(resume.id)?.filename ?? ''} ${getSavedResumeDisplayMeta(resume.id)?.kind ?? ''} ${resume.title ?? getSavedResumeDisplayMeta(resume.id)?.jobTitle ?? ''} ${resume.full_name ?? ''} ${resume.email ?? ''}`.toLowerCase().includes(query),
     )
   }, [resumes, search])
 
@@ -473,9 +474,11 @@ export function ProfilePage({
                         {(() => {
                           const meta = getSavedResumeDisplayMeta(resume.id)
                           const accountText = resume.email || 'Saved to your account'
-                          return meta
+                          const title = resume.title ?? meta?.jobTitle
+                          const summary = meta
                             ? `${meta.kind === 'original' ? 'Original resume' : 'Tailored resume'} • ${accountText}`
                             : accountText
+                          return title ? `Job Title: ${title} • ${summary}` : summary
                         })()}
                       </small>
                     </span>

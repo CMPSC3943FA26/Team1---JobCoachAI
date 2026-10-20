@@ -60,6 +60,7 @@ type ResumeDraft = {
   profile: ResumeProfile;
   sections: ResumeSection[];
   filename: string;
+  jobTitle?: string;
   csvSourceFilename?: string;
 };
 // JobCoachAI resume profile CSV: one row for each field of each resume entry.
@@ -327,6 +328,7 @@ export function ResumePage({
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [importedCsvFilename, setImportedCsvFilename] = useState<string | null>(storedDraft?.csvSourceFilename ?? null);
   const [resumeFilename, setResumeFilename] = useState(storedDraft?.filename ?? "");
+  const [jobTitle, setJobTitle] = useState(storedDraft?.jobTitle ?? "");
   const [status, setStatus] = useState("");
   const [savingResume, setSavingResume] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -360,6 +362,7 @@ export function ResumePage({
     setProfile({ ...emptyProfile });
     setSections(createSections(true));
     setResumeFilename("");
+    setJobTitle("");
     setResumeFile(null);
     setImportedCsvFilename(null);
     setResumeDeleted(false);
@@ -389,13 +392,13 @@ export function ResumePage({
     if (hasDraftContent) {
       sessionStorage.setItem(
         resumeDraftStorageKey,
-        JSON.stringify({ profile, sections, filename: resumeFilename, csvSourceFilename: importedCsvFilename ?? undefined }),
+        JSON.stringify({ profile, sections, filename: resumeFilename, jobTitle, csvSourceFilename: importedCsvFilename ?? undefined }),
       );
     } else {
       // Do not revive a draft once every field has been cleared.
       sessionStorage.removeItem(resumeDraftStorageKey);
     }
-  }, [profile, sections, resumeFilename, importedCsvFilename]);
+  }, [profile, sections, resumeFilename, jobTitle, importedCsvFilename]);
   useEffect(() => {
     const hasDraftContent =
       Object.values(profile).some((value) => value.trim() !== "") ||
@@ -554,7 +557,7 @@ export function ResumePage({
   );
   const resumeReady = Boolean(resumeFile) || hasResumeContent;
   // Only an export of the current editor content clears the guest checkpoint.
-  const currentResumeSnapshot = JSON.stringify({ profile, sections, resumeFilename });
+  const currentResumeSnapshot = JSON.stringify({ profile, sections, resumeFilename, jobTitle });
   const guestExportIsCurrent = exportedGuestSnapshot === currentResumeSnapshot;
   const personalInfoComplete = personalFields.every(({ key }) => profile[key].trim() !== "");
   const summaryComplete = Boolean(
@@ -667,6 +670,7 @@ export function ResumePage({
           profile,
           sections,
           filename: resumeFilename,
+          jobTitle,
           csvSourceFilename: importedCsvFilename ?? undefined,
         }),
       );
@@ -694,6 +698,7 @@ export function ResumePage({
 
           setSavedResumeDisplayMeta(savedId, {
             filename: currentSavedFilename,
+            jobTitle: jobTitle.trim(),
             kind: "original",
           });
 
@@ -709,6 +714,7 @@ export function ResumePage({
 
             setSavedResumeDisplayMeta(resumeId, {
               filename: currentSavedFilename,
+              jobTitle: jobTitle.trim(),
               kind: "original",
             });
 
@@ -756,6 +762,7 @@ const hasExportableData = Boolean(
       setProfile(draft.profile);
       setSections(lockProfessionalSummaryFirst(draft.sections));
       setResumeFilename(draft.filename);
+      setJobTitle(draft.jobTitle ?? "");
       setResumeFile(null);
       setImportedCsvFilename(file.name);
       setResumeDeleted(false);
@@ -893,6 +900,7 @@ const hasExportableData = Boolean(
               setSections(createSections(true));
               setProfile({ ...emptyProfile });
               setResumeFilename("resume");
+              setJobTitle("");
               setStatus("");
             }}
           >
@@ -934,7 +942,8 @@ const hasExportableData = Boolean(
       >
         {/* Resume file upload */}
         <div className="resume-upload-row" style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
-          <div className="resume-filename-field" style={{ flex: "0 1 300px", minWidth: "180px", maxWidth: "100%" }}>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "16px", flex: "1 1 440px", flexWrap: "wrap" }}>
+          <div className="resume-filename-field" style={{ flex: "1 1 200px", minWidth: "180px" }}>
             <label htmlFor="resume-filename">Resume filename</label>
             <input
               id="resume-filename"
@@ -944,7 +953,18 @@ const hasExportableData = Boolean(
               placeholder="Filename for export"
             />
           </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px", flex: "0 1 auto" }}>
+          <div className="resume-filename-field" style={{ flex: "1 1 200px", minWidth: "180px" }}>
+            <label htmlFor="resume-job-title">Job Title</label>
+            <input
+              id="resume-job-title"
+              type="text"
+              value={jobTitle}
+              onChange={(event) => setJobTitle(event.target.value)}
+              placeholder="e.g., Backend Developer"
+            />
+          </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px", flex: "0 0 auto", marginLeft: "auto",}}>
             <div className="resume-upload-file" style={{ marginRight: 0 }}>
               <span className="panel-icon">RESUME FILE</span>
               <span className="resume-upload-file-name">

@@ -450,7 +450,7 @@ function App() {
             <span className="panel-icon">LEAVE WORKSPACE</span>
             <h3 id="build-resume-warning-title">Leave this page?</h3>
             <p id="build-resume-warning-description">
-              Going to Build Your Resume page clears the current tailored resume and starts a new workspace. Please save the tailored resume before continuing.
+               Going back will clear any data from this screen. Do you want to continue?
             </p>
             <div className="dialog-actions" style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 10, marginTop: 24 }}>
               <button className="button button-secondary" type="button" onClick={() => setShowBuildResumeWarning(false)}>Stay on page</button>

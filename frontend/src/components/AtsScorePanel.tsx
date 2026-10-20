@@ -1,4 +1,4 @@
-import { useState, type CSSProperties} from 'react'
+import { useState, type CSSProperties } from 'react'
 import type { AIResponse } from '../types/ai'
 import './AtsScorePanel.css'
 
@@ -6,7 +6,7 @@ export interface AtsScorePanelProps {
   response: AIResponse | null
   hiddenKeywords: ReadonlySet<string>
   onRemoveKeyword: (keyword: string) => void
-  onAddSkill: (skill: string) => string | null
+  onAddSkill: (skill: string, section: string) => string | null
   manuallyFoundSkills: readonly string[]
   missingRequirements?: readonly { requirement: string }[]
   readOnly?: boolean
@@ -22,6 +22,8 @@ const scoreBand = (score: number): { label: string; className: string } => {
 const keywordKey = (keyword: string) => keyword.trim().replace(/\s+/g, ' ').toLocaleLowerCase()
 
 export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAddSkill, manuallyFoundSkills, missingRequirements, readOnly = false }: AtsScorePanelProps) {
+  const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null)
+  const [selectedSection, setSelectedSection] = useState('Skills')
   const [feedback, setFeedback] = useState('')
   if (!response) return null
 
@@ -45,12 +47,9 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
           <span>{keyword}</span>
           {!readOnly && (kind === 'missing' ? (
             <button type="button" className="ats-chip-add"
-              aria-label={`Add ${keyword} to found keywords`}
-              title="Add to Found in your resume"
-              onClick={() => {
-                const error = onAddSkill(keyword)
-                setFeedback(error ?? `“${keyword}” moved to Found in your resume.`)
-              }}>+</button>
+              aria-label={`Choose a section for ${keyword}`}
+              title="Choose an AI Suggestions section"
+              onClick={() => { setSelectedKeyword(keyword); setSelectedSection('Skills') }}>+</button>
           ) : (
             <button type="button" className="ats-chip-remove"
               aria-label={`Remove ${keyword} from found keywords`}
@@ -83,6 +82,7 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
           <span className="ats-keyword-label">{readOnly ? 'Supported requirements in AI suggestions' : 'Found in your resume'}</span>
           {displayedFound.length ? chips(displayedFound, 'matched') :
             <p className="ats-no-keywords">No matching keywords displayed.</p>}
+
         </div>
         <div className="ats-keyword-group">
           <span className="ats-keyword-label">Missing from your resume</span>
@@ -91,6 +91,35 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
         </div>
         {feedback && <p className="ats-keyword-feedback" role="status">{feedback}</p>}
       </div>
+      {selectedKeyword && (
+        <div role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setSelectedKeyword(null)
+        }} style={{ position: 'fixed', inset: 0, background: 'rgba(10, 18, 30, .62)', zIndex: 1100,
+          display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="keyword-section-dialog-title"
+            style={{ width: 'min(100%, 440px)', background: 'var(--card-bg, #fff)', color: 'var(--text-primary, #172033)',
+              borderRadius: 14, padding: 24, boxShadow: '0 16px 48px rgba(0,0,0,.25)' }}>
+            <h3 id="keyword-section-dialog-title" style={{ marginTop: 0 }}>Add keyword to AI suggestions</h3>
+            <p>Keyword: <strong>{selectedKeyword}</strong></p>
+            <label htmlFor="keyword-section-choice" style={{ display: 'block', marginBottom: 8 }}>Choose resume section</label>
+            <select id="keyword-section-choice" value={selectedSection}
+              onChange={(event) => setSelectedSection(event.target.value)}
+              style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #adb5bd', marginBottom: 18 }}>
+              {['Work Experience', 'Skills', 'Education', 'Projects', 'Certifications', 'Professional Summary']
+                .map((section) => <option key={section} value={section}>{section}</option>)}
+            </select>
+            <p style={{ fontSize: 13, opacity: .8 }}>This adds a suggestion only. Review the wording before applying it to your resume.</p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button type="button" className="button button-secondary" onClick={() => setSelectedKeyword(null)}>Cancel</button>
+              <button type="button" className="button button-primary" onClick={() => {
+                const error = onAddSkill(selectedKeyword, selectedSection)
+                setFeedback(error ?? `“${selectedKeyword}” added to ${selectedSection} in AI Suggestions.`)
+                if (!error) setSelectedKeyword(null)
+              }}>Add to suggestions</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
