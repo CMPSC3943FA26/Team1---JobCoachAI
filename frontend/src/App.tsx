@@ -42,6 +42,7 @@ function App() {
   const [accountName, setAccountName] = useState<string | null>(null)
   const [profileSection, setProfileSection] = useState<'profile' | 'resumes'>('profile')
   const [accountType, setAccountType] =useState<'guest' | 'user' | null>(null)
+  const accountTypeRef = useRef<'guest' | 'user' | null>(null)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [logoutError, setLogoutError] = useState('')
   const [logoutPending, setLogoutPending] = useState(false)
@@ -58,8 +59,8 @@ function App() {
 
       // Users must log in or explicitly continue as guest
       // before accessing Page 2, Page 3, or Profile.
-      if (accountType === null && nextScreen !== 'welcome') {
-        window.location.hash = '#welcome'
+      if (accountTypeRef.current === null && nextScreen !== 'welcome') {
+      window.location.hash = '#welcome'
         setCurrentScreen('welcome')
         return
       }
@@ -129,6 +130,7 @@ function App() {
     sessionStorage.removeItem(resumeDraftStorageKey)
     sessionStorage.removeItem(resumeIdStorageKey)
     setSidebarResumePreview(null)
+    accountTypeRef.current = 'guest'
     setAccountType('guest')
     setResumeReady(false)
     setProfileInitials('G')
@@ -147,6 +149,7 @@ function App() {
     setSidebarResumePreview(null)
     setProfileInitials(initials)
     setAccountName(`${firstName.trim()} ${lastName.trim()}`.trim() || 'User')
+    accountTypeRef.current = 'user'
     setAccountType('user')
     setResumeReady(false)
     setResumeSession(current => current + 1)
