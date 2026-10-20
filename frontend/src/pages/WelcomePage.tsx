@@ -3,7 +3,6 @@ import {
   signIn,
   signUp,
   signInAsGuest,
-  supabase,
 } from '../lib/supabase'
 type WelcomePageProps = {
   onContinueAsGuest: () => void
