@@ -193,7 +193,7 @@ export default function TailorPage({
   async function handleSaveTailoredResume() {
     if (isGuest || savingTailoredResume) return
 
-    const title = jobTitle.trim()
+    const title = submitted?.jobTitle.trim() || jobTitle.trim()
     if (!title) {
       setTailoredSaveMessage('Add the job title below before saving a tailored resume.')
       return
@@ -239,6 +239,7 @@ export default function TailorPage({
         setTailoredResumeId(savedId)
         setSavedResumeDisplayMeta(savedId, {
           filename: tailoredDisplayFilename,
+          jobTitle: title,
           kind: 'tailored',
         })
       }
@@ -248,6 +249,7 @@ export default function TailorPage({
           await updateResumeToDatabase(tailoredResumeId, payload)
           setSavedResumeDisplayMeta(tailoredResumeId, {
             filename: tailoredDisplayFilename,
+            jobTitle: title,
             kind: 'tailored',
           })
         } catch (error) {
