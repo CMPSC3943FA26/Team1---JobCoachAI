@@ -651,7 +651,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
                 <p>Interactive local keyword match estimate. Confirmed keywords change the estimate without editing your saved resume.</p>
               </div>
               <AtsScorePanel
-                response={result}
+                response={interactiveAtsResponse ?? result}
                 missingRequirements={result.missing_requirements}
                 hiddenKeywords={new Set<string>()}
                 onRemoveKeyword={removeAtsKeyword}
@@ -662,9 +662,6 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
           )}
 
           {loading && <TailoringLoading />}
-          {!loading && !error && result && typeof result.total_time_seconds === 'number' && (
-            <p role="status">AI processing time: {result.total_time_seconds.toFixed(2)} seconds.</p>
-          )}
 
           <section className="tailor-dropdown" aria-label="AI Professional Summary">
             <button type="button" className="tailor-dropdown-trigger" aria-expanded={summaryOpen}

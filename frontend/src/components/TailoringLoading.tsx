@@ -23,7 +23,7 @@ export function TailoringLoading() {
       </div>
       <div className="tailoring-loading-footer">
         <span>Job requirements · Resume evidence · Suggested changes</span>
-        <span aria-live="off">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')} elapsed</span>
+        <span aria-live="off"> {Math.floor((300 - (elapsed % 300)) / 60)}:{String((300 - (elapsed % 300)) % 60).padStart(2, '0')} remaining </span>
       </div>
       <p className="tailoring-loading-note">Keep this page open. Your recommendations will appear when the analysis finishes.</p>
     </section>

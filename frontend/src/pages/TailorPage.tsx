@@ -266,7 +266,7 @@ export default function TailorPage({
   return (
     <section className="screen" data-screen="tailor">
       <div className="screen-intro">
-        <h2>Tailor smarter.<br /><em>Apply stronger.</em></h2>
+        <h2>Tailor your <br /><em>resume</em></h2>
       </div>
 
       <form className="job-form" noValidate onSubmit={handleSubmit}>

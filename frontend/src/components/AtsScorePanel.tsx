@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type FormEvent } from 'react'
+import { useState, type CSSProperties} from 'react'
 import type { AIResponse } from '../types/ai'
 import './AtsScorePanel.css'
 
@@ -22,7 +22,6 @@ const scoreBand = (score: number): { label: string; className: string } => {
 const keywordKey = (keyword: string) => keyword.trim().replace(/\s+/g, ' ').toLocaleLowerCase()
 
 export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAddSkill, manuallyFoundSkills, missingRequirements, readOnly = false }: AtsScorePanelProps) {
-  const [skill, setSkill] = useState('')
   const [feedback, setFeedback] = useState('')
   if (!response) return null
 
@@ -38,18 +37,6 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
     .map((item) => item.requirement).filter(Boolean))]
     .filter((keyword) => !hiddenKeywords.has(keywordKey(keyword))
       && !manuallyFoundSkills.some((skill) => keywordKey(skill) === keywordKey(keyword)))
-
-  const submitSkill = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const trimmed = skill.trim().replace(/\s+/g, ' ')
-    if (!trimmed) {
-      setFeedback('Enter a skill before adding it.')
-      return
-    }
-    const error = onAddSkill(trimmed)
-    setFeedback(error ?? '')
-    if (!error) setSkill('')
-  }
 
   const chips = (keywords: string[], kind: 'matched' | 'missing') => (
     <div className="ats-chip-list">
@@ -96,14 +83,6 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
           <span className="ats-keyword-label">{readOnly ? 'Supported requirements in AI suggestions' : 'Found in your resume'}</span>
           {displayedFound.length ? chips(displayedFound, 'matched') :
             <p className="ats-no-keywords">No matching keywords displayed.</p>}
-          {!readOnly && <form className="ats-skill-add-form" onSubmit={submitSkill}>
-            <label htmlFor="ats-add-missed-skill">Add a keyword that was not parsed</label>
-            <div className="ats-skill-add-row">
-              <input id="ats-add-missed-skill" type="text" value={skill} maxLength={100}
-                placeholder="e.g., Linux" onChange={(event) => setSkill(event.target.value)} />
-              <button type="submit">Add keyword</button>
-            </div>
-          </form>}
         </div>
         <div className="ats-keyword-group">
           <span className="ats-keyword-label">Missing from your resume</span>
