@@ -965,7 +965,11 @@ def build_frontend_response(stage_3, stage_2):
         ],
         # Compatibility estimate: partial requirements count only in the total.
         "ATS_score": round(requirements_met / total * 100) if total else 0,
-        "requirements_met": requirements_met,
+        "requirements_met": [
+            {"requirement": item["requirement"]}
+            for item in requirements.values()
+            if item["classification"] == "supported"
+        ],
         "requirements_missing": requirements_missing,
     }
 

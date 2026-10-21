@@ -124,6 +124,13 @@ function App() {
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [resumeReady, accountType, currentScreen, profileSection])
 
+  // Navigate only after the account state and navigation guard have updated.
+  useEffect(() => {
+    if (accountType !== null) {
+      window.location.hash = '#parsed'
+    }
+  }, [accountType])
+
   // Start a guest session and open the Resume page
   const handleContinueAsGuest = () => {
     sessionStorage.removeItem(resumeDraftStorageKey)
@@ -134,7 +141,6 @@ function App() {
     setProfileInitials('G')
     setAccountName(null)
     setResumeSession(current => current + 1)
-    window.location.hash = '#parsed'
   }
 
   // Set up the user profile after login
@@ -150,7 +156,6 @@ function App() {
     setAccountType('user')
     setResumeReady(false)
     setResumeSession(current => current + 1)
-    window.location.hash = '#parsed'
   }
 
   // Complete the requested Home navigation after the user confirms.

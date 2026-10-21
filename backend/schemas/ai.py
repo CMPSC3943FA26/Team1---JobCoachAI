@@ -30,6 +30,6 @@ class FrontendResponse(BaseModel):
     removals: list[Removal]
     missing_requirements: list[MissingRequirements]
     ATS_score: int
-    requirements_met: int
+    requirements_met: list[MissingRequirements]
     requirements_missing: int
     total_time_seconds: float | None = None

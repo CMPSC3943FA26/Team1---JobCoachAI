@@ -36,7 +36,7 @@ export type AIResponse = {
   suggestions: Suggestion[]
   improvements: Improvement[]
   ATS_score: number
-  requirements_met: number
+  requirements_met: { requirement: string }[]
   requirements_missing: number
 }
 
