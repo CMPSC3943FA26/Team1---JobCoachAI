@@ -3449,14 +3449,61 @@ textarea::placeholder {
   background: var(--white);
   color: var(--ink);
 }
+.saved-resume-job-filter {
+  position: relative;
+  min-width: 180px;
+}
 
+.saved-resume-job-filter summary {
+  min-height: 40px;
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.saved-resume-filter-options {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 200px;
+  max-height: 250px;
+  overflow-y: auto;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+
+.saved-resume-filter-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.saved-resume-filter-options button {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--white);
+  color: var(--ink);
+  cursor: pointer;
+}
 .saved-resume-list {
   margin-top: 4px;
 }
 
 .saved-resume-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px 210px;
+  grid-template-columns: minmax(0, 1fr) 160px 150px 210px;
   gap: 18px;
   align-items: center;
   min-height: 74px;
@@ -3553,6 +3600,14 @@ textarea::placeholder {
 
   .saved-resume-row {
     grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .saved-resume-row > .saved-resume-job-title {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    font-size: 13px;
+    color: var(--muted);
+    overflow-wrap: anywhere;
   }
 
   .saved-resume-row > .saved-resume-date {
