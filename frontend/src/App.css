@@ -3450,13 +3450,108 @@ textarea::placeholder {
   color: var(--ink);
 }
 
+/* Sprint 3: Saved Resumes search and multi-select job-title filter */
+.saved-resume-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.saved-resume-job-filter {
+  position: relative;
+}
+
+.saved-resume-job-filter > summary {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.saved-resume-job-filter > summary::-webkit-details-marker {
+  display: none;
+}
+
+.saved-resume-job-filter > summary:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.saved-resume-filter-options {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 230px;
+  max-width: min(320px, 90vw);
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--ink);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 12%);
+}
+
+.saved-resume-filter-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.saved-resume-filter-actions button {
+  padding: 5px;
+  border: 0;
+  background: transparent;
+  color: var(--blue-deep);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.saved-resume-filter-options label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.saved-resume-filter-options input[type="checkbox"] {
+  width: auto;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--blue);
+}
+
+.saved-resume-job-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  color: var(--ink);
+}
+
 .saved-resume-list {
   margin-top: 4px;
 }
 
 .saved-resume-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px 210px;
+  grid-template-columns: minmax(155px, 2fr) minmax(110px, 1fr) minmax(125px, 1fr) minmax(245px, auto);
   gap: 18px;
   align-items: center;
   min-height: 74px;
@@ -3551,16 +3646,28 @@ textarea::placeholder {
     flex-direction: column;
   }
 
-  .saved-resume-row {
-    grid-template-columns: minmax(0, 1fr) auto;
+  .saved-resume-controls {
+    justify-content: flex-start;
   }
 
-  .saved-resume-row > .saved-resume-date {
-    display: none;
+  .saved-resume-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 16px 4px;
   }
 
   .saved-resume-row-header {
     display: none;
+  }
+
+  .saved-resume-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .saved-resume-filter-options {
+    right: auto;
+    left: 0;
   }
 }
 
@@ -3715,3 +3822,26 @@ textarea::placeholder {
 .preview-body-text { white-space: pre-line; line-height: 1.65 !important; }
 .preview-skills-line { line-height: 1.7 !important; }
 @media print { .preview-entry-block { break-inside: avoid-page; } }
+
+/* Sprint 3: consistent Saved Resumes column alignment.
+   Header and data rows share the same grid tracks. */
+@media (min-width: 901px) {
+  .saved-resume-list { overflow-x: auto; }
+  .saved-resume-row {
+    grid-template-columns: minmax(155px, 2fr) minmax(110px, 1fr) minmax(125px, 1fr) minmax(245px, auto);
+    column-gap: 14px;
+    min-width: 690px;
+  }
+  .saved-resume-row > :nth-child(1),
+  .saved-resume-row > :nth-child(2),
+  .saved-resume-row > :nth-child(3),
+  .saved-resume-row > :nth-child(4) { min-width: 0; }
+  .saved-resume-row-header > :last-child { text-align: right; }
+  .saved-resume-actions { justify-content: flex-end; gap: 6px; white-space: nowrap; }
+  .saved-resume-actions .button { min-height: 38px; padding: 0 10px; gap: 6px; }
+}
+@media (max-width: 900px) {
+  .saved-resume-row { grid-template-columns: minmax(0, 1fr); }
+  .saved-resume-row-header { display: none; }
+  .saved-resume-actions { justify-content: flex-start; }
+}

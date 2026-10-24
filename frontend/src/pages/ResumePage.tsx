@@ -60,6 +60,8 @@ type ResumeDraft = {
   profile: ResumeProfile;
   sections: ResumeSection[];
   filename: string;
+  jobTitle?: string;
+  targetJobTitle?: string;
   csvSourceFilename?: string;
 };
 // JobCoachAI resume profile CSV: one row for each field of each resume entry.
@@ -107,9 +109,12 @@ const parseResumeProfileCsv = (csv: string, uploadedFilename: string): ResumeDra
   const entryMaps = new Map<SectionKey, Map<number, Record<string, string> | string>>();
   let filename = uploadedFilename.replace(/\.csv$/i, "");
   let importedOrder: SectionKey[] | null = null;
+  let importedJobTitle = "";
   for (const [kind, sectionName, entryValue, field, value = ""] of rows) {
     if (kind === "meta" && field === "filename") {
       filename = value;
+    } else if (kind === "meta" && (field === "jobTitle" || field === "targetJobTitle")) {
+      importedJobTitle = value;
     } else if (kind === "meta" && field === "section_order") {
       try {
         const order: unknown = JSON.parse(value);
@@ -149,11 +154,12 @@ const parseResumeProfileCsv = (csv: string, uploadedFilename: string): ResumeDra
   if (!sections.some((section) => section.key === "summary")) {
     sections.unshift({ key: "summary", title: sectionLabels.summary, entries: [profile.professional_summary || ""] });
   }
-  return { profile, sections, filename, csvSourceFilename: uploadedFilename };
+  return { profile, sections, filename, jobTitle: importedJobTitle, targetJobTitle: importedJobTitle, csvSourceFilename: uploadedFilename };
 };
 const downloadResumeProfileCsv = (draft: ResumeDraft): void => {
   const rows: string[][] = [resumeCsvHeader];
   rows.push(["meta", "profile", "0", "filename", draft.filename]);
+  rows.push(["meta", "profile", "0", "jobTitle", draft.jobTitle ?? draft.targetJobTitle ?? ""]);
   rows.push(["meta", "profile", "0", "section_order", JSON.stringify(draft.sections.map((section) => section.key))]);
   Object.entries(draft.profile).forEach(([field, value]) => {
     rows.push(["profile", "profile", "0", field, value]);
@@ -209,7 +215,7 @@ const toDateInputValue = (value: string) => {
   return "";
 };
 const getSafeFilename = (value: string) =>
-  (value.trim() || "resume").replace(/[<>:"\/\\|?*]+/g, "-");
+  (value.trim() || "resume").replace(/[<>:"/\\|?*]+/g, "-");
 // Personal information fields displayed in the form
 const personalFields: Array<{ key: keyof ResumeProfile; label: string; type?: string }> = [
   { key: "first_name", label: "First name" },
@@ -327,6 +333,7 @@ export function ResumePage({
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [importedCsvFilename, setImportedCsvFilename] = useState<string | null>(storedDraft?.csvSourceFilename ?? null);
   const [resumeFilename, setResumeFilename] = useState(storedDraft?.filename ?? "");
+  const [jobTitle, setJobTitle] = useState(storedDraft?.jobTitle ?? storedDraft?.targetJobTitle ?? "");
   const [status, setStatus] = useState("");
   const [savingResume, setSavingResume] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -360,6 +367,7 @@ export function ResumePage({
     setProfile({ ...emptyProfile });
     setSections(createSections(true));
     setResumeFilename("");
+    setJobTitle("");
     setResumeFile(null);
     setImportedCsvFilename(null);
     setResumeDeleted(false);
@@ -385,17 +393,18 @@ export function ResumePage({
   useEffect(() => {
     const hasDraftContent =
       Object.values(profile).some((value) => value.trim() !== "") ||
-      sections.some((section) => section.entries.some(hasEntryContent));
+      sections.some((section) => section.entries.some(hasEntryContent)) ||
+      jobTitle.trim() !== "" || resumeFilename.trim() !== "";
     if (hasDraftContent) {
       sessionStorage.setItem(
         resumeDraftStorageKey,
-        JSON.stringify({ profile, sections, filename: resumeFilename, csvSourceFilename: importedCsvFilename ?? undefined }),
+        JSON.stringify({ profile, sections, filename: resumeFilename, jobTitle, targetJobTitle: jobTitle, csvSourceFilename: importedCsvFilename ?? undefined }),
       );
     } else {
       // Do not revive a draft once every field has been cleared.
       sessionStorage.removeItem(resumeDraftStorageKey);
     }
-  }, [profile, sections, resumeFilename, importedCsvFilename]);
+  }, [profile, sections, resumeFilename, jobTitle, importedCsvFilename]);
   useEffect(() => {
     const hasDraftContent =
       Object.values(profile).some((value) => value.trim() !== "") ||
@@ -554,7 +563,7 @@ export function ResumePage({
   );
   const resumeReady = Boolean(resumeFile) || hasResumeContent;
   // Only an export of the current editor content clears the guest checkpoint.
-  const currentResumeSnapshot = JSON.stringify({ profile, sections, resumeFilename });
+  const currentResumeSnapshot = JSON.stringify({ profile, sections, resumeFilename, jobTitle });
   const guestExportIsCurrent = exportedGuestSnapshot === currentResumeSnapshot;
   const personalInfoComplete = personalFields.every(({ key }) => profile[key].trim() !== "");
   const summaryComplete = Boolean(
@@ -667,6 +676,8 @@ export function ResumePage({
           profile,
           sections,
           filename: resumeFilename,
+          jobTitle,
+          targetJobTitle: jobTitle,
           csvSourceFilename: importedCsvFilename ?? undefined,
         }),
       );
@@ -694,6 +705,7 @@ export function ResumePage({
 
           setSavedResumeDisplayMeta(savedId, {
             filename: currentSavedFilename,
+            jobTitle: jobTitle.trim(),
             kind: "original",
           });
 
@@ -709,6 +721,7 @@ export function ResumePage({
 
             setSavedResumeDisplayMeta(resumeId, {
               filename: currentSavedFilename,
+              jobTitle: jobTitle.trim(),
               kind: "original",
             });
 
@@ -746,7 +759,7 @@ export function ResumePage({
       setSavingResume(false);
     }
   };
-  
+
 const hasExportableData = Boolean(
     Object.values(profile).some((value) => value.trim() !== "") || hasResumeContent,
   );
@@ -756,6 +769,7 @@ const hasExportableData = Boolean(
       setProfile(draft.profile);
       setSections(lockProfessionalSummaryFirst(draft.sections));
       setResumeFilename(draft.filename);
+      setJobTitle(draft.jobTitle ?? draft.targetJobTitle ?? "");
       setResumeFile(null);
       setImportedCsvFilename(file.name);
       setResumeDeleted(false);
@@ -771,7 +785,7 @@ const hasExportableData = Boolean(
       setStatus("Add resume information before exporting a CSV.");
       return;
     }
-    downloadResumeProfileCsv({ profile, sections, filename: resumeFilename });
+    downloadResumeProfileCsv({ profile, sections, filename: resumeFilename, jobTitle, targetJobTitle: jobTitle });
     setExportedGuestSnapshot(currentResumeSnapshot);
     setStatus("Resume CSV download started.");
   };
@@ -893,6 +907,7 @@ const hasExportableData = Boolean(
               setSections(createSections(true));
               setProfile({ ...emptyProfile });
               setResumeFilename("resume");
+              setJobTitle("");
               setStatus("");
             }}
           >
@@ -934,7 +949,8 @@ const hasExportableData = Boolean(
       >
         {/* Resume file upload */}
         <div className="resume-upload-row" style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
-          <div className="resume-filename-field" style={{ flex: "0 1 300px", minWidth: "180px", maxWidth: "100%" }}>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "16px", flex: "1 1 440px", flexWrap: "wrap" }}>
+          <div className="resume-filename-field" style={{ flex: "1 1 200px", minWidth: "180px" }}>
             <label htmlFor="resume-filename">Resume filename</label>
             <input
               id="resume-filename"
@@ -944,7 +960,18 @@ const hasExportableData = Boolean(
               placeholder="Filename for export"
             />
           </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px", flex: "0 1 auto" }}>
+          <div className="resume-filename-field" style={{ flex: "1 1 200px", minWidth: "180px" }}>
+            <label htmlFor="resume-job-title">Target Job Title</label>
+            <input
+              id="resume-job-title"
+              type="text"
+              value={jobTitle}
+              onChange={(event) => setJobTitle(event.target.value)}
+              placeholder="e.g., Backend Developer"
+            />
+          </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px", flex: "0 0 auto", marginLeft: "auto",}}>
             <div className="resume-upload-file" style={{ marginRight: 0 }}>
               <span className="panel-icon">RESUME FILE</span>
               <span className="resume-upload-file-name">
@@ -1299,7 +1326,7 @@ const hasExportableData = Boolean(
             setShowBackWarning(true)
           }}
         >
-          <span aria-hidden="true">&larr;</span>{' '}
+          <span aria-hidden="true">←</span>{' '}
           Back
         </button>
         {/* Resume navigation, deletion, and export controls */}

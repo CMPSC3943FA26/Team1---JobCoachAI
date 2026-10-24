@@ -27,6 +27,7 @@ const api_url = getApiBaseUrl()
 
 export type SavedResumeDisplayMeta = {
   filename: string
+  jobTitle?: string
   kind: 'original' | 'tailored'
 }
 

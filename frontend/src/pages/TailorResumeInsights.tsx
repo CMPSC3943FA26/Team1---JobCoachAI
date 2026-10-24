@@ -19,7 +19,7 @@ import { TailoringLoading } from '../components/TailoringLoading'
 import { generateSummaryOptions } from '../features/resume/resumeInsights'
 import { replaceTextInField } from '../features/resume/resumeSuggestions'
 import { addedWordMask } from '../features/resume/addedWords'
-import { tailor_resume } from '../services/resumeService'
+import { tailor_resume, setSavedResumeDisplayMeta } from '../services/resumeService'
 import type { ResumeProfile, ResumeSaveRequest } from '../features/resume/resumeData'
 import type { ResumeRecommendation, SuggestionChange } from '../features/resume/resumeSuggestions'
 import type { SummaryOption, SummaryTone, TailoringResponse } from '../types/ai'
@@ -32,10 +32,24 @@ type TailorSection = Sections[number] & { title?: string }
 type Draft = { profile: ResumeProfile; sections: TailorSection[]; filename: string }
 const DRAFT_KEY = 'jobcoachai.resumeDraft'
 export const TAILORED_PAYLOAD_KEY = 'jobcoachai.tailoredResumePayload'
-
+export const TAILORED_DISPLAY_META_KEY = 'jobcoachai.tailoredResumeDisplayMeta'
+// TailorPage must call this helper AFTER its Save Tailored Resume request succeeds,
+// passing the returned tailored resume ID. Nothing here adds a 'title' DB column.
+export function rememberSavedTailoredResume(savedTailoredResumeId: string): void {
+  const raw = sessionStorage.getItem(TAILORED_DISPLAY_META_KEY)
+  if (!raw) return
+  try {
+    const meta = JSON.parse(raw) as { filename?: string; jobTitle?: string }
+    setSavedResumeDisplayMeta(savedTailoredResumeId, {
+      filename: (meta.filename ?? 'resume').trim().replace(/-(original|tailored)$/i, '') || 'resume',
+      jobTitle: (meta.jobTitle ?? '').trim(),
+      kind: 'tailored',
+    })
+  } catch (error) {
+    console.warn('Could not restore tailored resume display metadata:', error)
+  }
+}
 const skillKey = (name: string) => name.trim().replace(/\s+/g, ' ').toLocaleLowerCase()
-
-
 function readDraft(): Draft | null {
   try {
     const raw = sessionStorage.getItem(DRAFT_KEY)
@@ -50,7 +64,6 @@ function readDraft(): Draft | null {
     return null
   }
 }
-
 function asEntries<K extends 'work_experience' | 'education' | 'skills' | 'projects' | 'certifications'>(
   sections: Sections,
   key: K,
@@ -60,7 +73,6 @@ function asEntries<K extends 'work_experience' | 'education' | 'skills' | 'proje
   return entries.filter((entry) => typeof entry !== 'string' &&
     Object.values(entry).some((value) => typeof value === 'string' && value.trim() !== '')) as ResumeSaveRequest[K]
 }
-
 function payloadFromDraft(draft: Draft): ResumeSaveRequest {
   const summaryEntry = draft.sections.find((section) => section.key === 'summary')?.entries[0]
   return {
@@ -83,7 +95,6 @@ function payloadFromDraft(draft: Draft): ResumeSaveRequest {
     certifications: asEntries(draft.sections, 'certifications'),
   }
 }
-
 function entryText(entry: Sections[number]['entries'][number]): string {
   if (typeof entry === 'string') return entry
   return Object.entries(entry)
@@ -91,7 +102,6 @@ function entryText(entry: Sections[number]['entries'][number]): string {
     .map(([, value]) => String(value))
     .join(' · ')
 }
-
 function sectionNameFromPath(path: string): string {
   const section = path.replace(/^resume\./, '').split(/[.\[]/)[0]
   const labels: Record<string, string> = {
@@ -104,7 +114,6 @@ function sectionNameFromPath(path: string): string {
   }
   return labels[section] ?? 'Other'
 }
-
 export interface TailorResumeInsightsProps {
   jobDescription: string
   title: string
@@ -112,7 +121,6 @@ export interface TailorResumeInsightsProps {
   resume_id: string
   onTailoredReadyChange?: (ready: boolean) => void
 }
-
 export function TailorResumeInsights({ jobDescription,title,company,resume_id, onTailoredReadyChange }: TailorResumeInsightsProps) {
   const [tailored, setTailored] = useState<Draft | null>(readDraft)
   const [baseDraft, setBaseDraft] = useState<Draft | null>(readDraft)
@@ -129,6 +137,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
   const [showResetConfirmation, setShowResetConfirmation] = useState(false)
   const [hiddenAtsKeywords, setHiddenAtsKeywords] = useState<Set<string>>(() => new Set())
   const [manuallyFoundSkills, setManuallyFoundSkills] = useState<string[]>([])
+  const [keywordAssignments, setKeywordAssignments] = useState<{ keyword: string; section: string }[]>([])
   const [loading,setLoading]=useState(false)
   const [error,setError]=useState<string>('')
   const [result, setResult] = useState<TailoringResponse | null>(null)
@@ -140,24 +149,28 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     confirmed: manuallyFoundSkills,
     removed: [...hiddenAtsKeywords],
   }
-
   // Keep the latest live tailored copy available to TailorPage's Save button.
   // This stores a save-ready payload, not the original base resume draft.
   useEffect(() => {
     if (!tailored) {
       sessionStorage.removeItem(TAILORED_PAYLOAD_KEY)
+      sessionStorage.removeItem(TAILORED_DISPLAY_META_KEY)
       return
     }
     sessionStorage.setItem(TAILORED_PAYLOAD_KEY, JSON.stringify(payloadFromDraft(tailored)))
-  }, [tailored])
-
+    // The title prop comes from Page 3's submitted Job Title, not Page 2's.
+    // Keep this separate from the backend payload (Supabase has no title column).
+    sessionStorage.setItem(TAILORED_DISPLAY_META_KEY, JSON.stringify({
+      filename: tailored.filename,
+      jobTitle: title.trim(),
+    }))
+  }, [tailored, title])
   // Generate live AI suggestions for the submitted resume and job.
   // Keep the existing ATS controls, summary tools, and local demo fallback intact.
   // Page 3 is considered save-ready only after an AI recommendation or
   // generated summary has actually been applied to the tailored copy.
   useEffect(() => {
     let cancelled = false
-
     async function tailoring_resume() {
       setLoading(true)
       setError('')
@@ -202,7 +215,6 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     void tailoring_resume()
     return () => { cancelled = true }
   }, [resume_id, title, company, jobDescription, aiRetry])
-
   useEffect(() => {
     onTailoredReadyChange?.(changedFields.size > 0)
   }, [changedFields, onTailoredReadyChange])
@@ -210,6 +222,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
   useEffect(() => {
     setHiddenAtsKeywords(new Set())
     setManuallyFoundSkills([])
+    setKeywordAssignments([])
   }, [jobDescription])
 
   // Interactive ATS display: a moved/added keyword appears under Found, while
@@ -230,7 +243,6 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       const key = skillKey(item.requirement)
       if (key) missing.set(key, item)
     }
-
     for (const keyword of manuallyFoundSkills) {
       const key = skillKey(keyword)
       if (!key || hiddenAtsKeywords.has(key)) continue
@@ -239,7 +251,6 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       })
       missing.delete(key)
     }
-
     for (const keyword of hiddenAtsKeywords) {
       const original = result.requirements_met.find(
         (item) => skillKey(item.requirement) === keyword,
@@ -251,7 +262,6 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       }
       found.delete(keyword)
     }
-
     // Treat each visible keyword once, even when the raw analyzer overlaps.
     for (const keyword of found.keys()) missing.delete(keyword)
     const requirements_met = found.size
@@ -284,13 +294,13 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       highlights: payload.work_experience.map((entry) => entry.description).filter(Boolean),
     }, jobDescription))
   }, [jobDescription])
-
   const refreshBaseResume = () => {
     setTailored(readDraft())
     setBaseDraft(readDraft())
     setChangedFields(new Set())
     setHiddenAtsKeywords(new Set())
     setManuallyFoundSkills([])
+    setKeywordAssignments([])
     setSummaryGeneration(0)
     setSummaryOptions([])
     setAppliedTone(null)
@@ -306,10 +316,9 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       }, jobDescription))
     }
   }
-
   // Manually confirmed keywords are context for locally generated summaries, NOT resume edits.
   // The original and tailored resume data remain unchanged when these chips are edited.
-  const addMissedSkill = (name: string): string | null => {
+  const addMissedSkill = (name: string, section: string): string | null => {
     if (!tailored) return 'No tailored resume is available.'
     const normalized = skillKey(name)
     if (!normalized) return 'Enter a keyword before adding it.'
@@ -320,6 +329,11 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       return 'That keyword is already displayed under Found in your resume.'
     }
     setManuallyFoundSkills((current) => [...current.filter((item) => skillKey(item) !== normalized), name])
+    setKeywordAssignments((current) => [
+      ...current.filter((item) => skillKey(item.keyword) !== normalized),
+      { keyword: name, section },
+    ])
+    setSuggestionsOpen(true)
     setHiddenAtsKeywords((current) => {
       const updated = new Set(current)
       updated.delete(normalized)
@@ -327,13 +341,12 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     })
     return null
   }
-
   const removeAtsKeyword = (keyword: string) => {
     const key = skillKey(keyword)
     setManuallyFoundSkills((current) => current.filter((item) => skillKey(item) !== key))
+    setKeywordAssignments((current) => current.filter((item) => skillKey(item.keyword) !== key))
     setHiddenAtsKeywords((current) => new Set(current).add(key))
   }
-
   // Keep professional-summary suggestions in sync with manually added/removed keywords.
   // Do not apply a generated option to the preview without an explicit user click.
   useEffect(() => {
@@ -355,7 +368,6 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
   // Updates when ATS keyword additions/removals change, not on every preview edit.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manuallyFoundSkills, jobDescription])
-
   const regenerateSummaries = () => {
     if (!tailored) {
       setMessage('Build a resume first, then return to this page.')
@@ -376,18 +388,15 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     setAppliedTone(null)
     setMessage('Professional summary options refreshed for your tailored copy.')
   }
-
   const editSummaryOption = (option: SummaryOption) => {
     setSummaryOptions((current) => current.map((item) =>
       item.tone === option.tone ? option : item))
     setAppliedTone(null)
     setMessage('Edited summary saved. Select Use this summary to apply it to the tailored preview.')
   }
-
   const markChanged = (sectionKey: string, entryIndex: number, fieldKey: string) => {
     setChangedFields((current) => new Set(current).add(`${sectionKey}:${entryIndex}:${fieldKey}`))
   }
-
   const renderPreviewField = (before: string, after: string, fieldId: string) => {
     if (!changedFields.has(fieldId) || before === after) return after
     const words = after.match(/\S+\s*/g) ?? []
@@ -396,7 +405,6 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       ? <mark className="tailor-ai-added" key={index}>{word}</mark>
       : <span key={index}>{word}</span>)
   }
-
   const applySummary = (option: SummaryOption) => {
     markChanged('summary', 0, 'value')
     setTailored((current) => {
@@ -411,7 +419,6 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     setAppliedTone(option.tone)
     setMessage('Summary applied to the tailored copy only. Regenerate AI suggestions to reassess the edited resume.')
   }
-
   const deleteAppliedSummary = (_option: SummaryOption) => {
     if (!baseDraft) {
       setMessage('No original parsed resume was found to restore.')
@@ -441,7 +448,6 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     setAppliedTone(null)
     setMessage('Original parsed professional summary restored to the tailored preview.')
   }
-
   const applySuggestion = (change: SuggestionChange): string | null => {
     const section = tailored?.sections.find((item) => item.key === change.target.sectionKey)
     const entry = section?.entries[change.target.entryIndex]
@@ -475,14 +481,12 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     setMessage('Suggestion applied to the tailored copy only. Regenerate AI suggestions to reassess the edited resume.')
     return null
   }
-
   // Export the live tailored state, never the original sessionStorage draft.
   const tailoredFilename = () => {
     const base = (tailored?.filename || 'resume').replace(/\.docx?$/i, '')
       .replace(/[<>:"/\\|?*\x00-\x1F]+/g, '-').trim() || 'resume'
     return `${base}-tailored`
   }
-
   // Export the current tailored draft using Page 2's JobCoachAI profile CSV format.
   const exportTailoredAsCsv = () => {
     if (!tailored) return
@@ -522,7 +526,6 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
     setMessage('Tailored resume CSV download started.')
   }
-
   const exportTailoredAsDocx = async () => {
     if (!tailored || exportBusy) return
     setExportBusy(true)
@@ -564,7 +567,6 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       setExportBusy(false)
     }
   }
-
   const exportTailoredAsPdf = () => {
     if (!tailored) return
     const originalTitle = window.document.title
@@ -579,7 +581,6 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       window.setTimeout(restoreTitle, 1000)
     }
   }
-
   return (
     <section className="resume-suggestions-region tailor-results" aria-label="Tailor resume analysis">
       {!tailored ? (
@@ -603,12 +604,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
               />
             </section>
           )}
-
           {loading && <TailoringLoading />}
-          {!loading && !error && result && typeof result.total_time_seconds === 'number' && (
-            <p role="status">AI processing time: {result.total_time_seconds.toFixed(2)} seconds.</p>
-          )}
-
           <section className="tailor-dropdown" aria-label="AI Professional Summary">
             <button type="button" className="tailor-dropdown-trigger" aria-expanded={summaryOpen}
               aria-controls="tailor-summary-content" onClick={() => setSummaryOpen((open) => !open)}>
@@ -629,7 +625,6 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
               </div>
             )}
           </section>
-
           <section className="tailor-dropdown" aria-label="AI Suggestions">
             <button type="button" className="tailor-dropdown-trigger" aria-expanded={suggestionsOpen}
               aria-controls="tailor-suggestions-content" onClick={() => setSuggestionsOpen((open) => !open)}>
@@ -654,8 +649,8 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
                 </div>
                 {error && <p role="alert">{error}</p>}
                 {!loading && !error && result && (
-                  recommendations.length > 0 ? (
-                    <ResumeSuggestions recommendations={recommendations}
+                  recommendations.length > 0 || keywordAssignments.length > 0 ? (
+                    <ResumeSuggestions recommendations={recommendations} keywordAssignments={keywordAssignments}
                       sections={tailored.sections} onApplySuggestion={applySuggestion} />
                   ) : <p>No wording changes were recommended.</p>
                 )}
@@ -677,12 +672,10 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
               </div>
             )}
           </section>
-
           <div className="tailor-insight-actions" style={{ justifyContent: 'flex-end' }}>
             <button className="button button-primary" type="button"
               onClick={() => setShowResetConfirmation(true)}>Reset All Tailored Changes</button>
           </div>
-
           <section className="resume-preview-section" aria-label="Tailored resume preview">
             <div className="resume-preview-heading">
               <h3>Tailored copy preview</h3>
@@ -781,5 +774,4 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     </section>
   )
 }
-
 export default TailorResumeInsights

@@ -133,8 +133,13 @@ function saveDatabaseResumeAsDraft(databaseResume: Record<string, any>) {
       filename:
         savedMeta?.filename ||
         `${databaseResume.full_name || 'saved-resume'}-resume`,
+      jobTitle: savedMeta?.jobTitle?.trim() || databaseResume.title?.trim() || "",
     }),
   )
+}
+
+function getJobTitle(resume: SavedResumeSummary) {
+  return getSavedResumeDisplayMeta(resume.id)?.jobTitle?.trim() || resume.title?.trim() || 'Untitled'
 }
 
 export function ProfilePage({
@@ -154,6 +159,7 @@ export function ProfilePage({
   const [deletingResume, setDeletingResume] = useState(false)
   const [message, setMessage] = useState('')
   const [search, setSearch] = useState('')
+  const [selectedJobTitles, setSelectedJobTitles] = useState<string[]>([])
 
   useEffect(() => {
     const loadPage = async () => {
@@ -212,14 +218,54 @@ export function ProfilePage({
     target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [focusSection])
 
-  const filteredResumes = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    if (!query) return resumes
+  const availableJobTitles = useMemo(
+    () => [...new Set(resumes.map(getJobTitle))].sort((a, b) => a.localeCompare(b)),
+    [resumes],
+  )
 
-    return resumes.filter((resume) =>
-      `${getSavedResumeDisplayMeta(resume.id)?.filename ?? ''} ${getSavedResumeDisplayMeta(resume.id)?.kind ?? ''} ${resume.full_name ?? ''} ${resume.email ?? ''}`.toLowerCase().includes(query),
-    )
-  }, [resumes, search])
+  // Search by any part of the displayed resume filename or Job Title.
+  // Multiple space-separated words can match different parts of the same resume.
+  // An empty selection means "All"; the sentinel means "None".
+  const filteredResumes = useMemo(() => {
+    const keywords = search.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)
+
+    return resumes.filter((resume) => {
+      const meta = getSavedResumeDisplayMeta(resume.id)
+      const jobTitle = getJobTitle(resume)
+      const matchesJobTitle =
+        selectedJobTitles.length === 0 ||
+        (!selectedJobTitles.includes('__none__') && selectedJobTitles.includes(jobTitle))
+
+      const displayFilename = meta
+        ? `${meta.filename}-${meta.kind}`
+        : resume.full_name?.trim()
+          ? `${resume.full_name} Resume`
+          : 'Saved Resume'
+      const searchableText = [
+        displayFilename,
+        meta?.filename ?? '',
+        jobTitle,
+        resume.full_name ?? '',
+        resume.email ?? '',
+        meta?.kind ?? '',
+      ].join(' ').toLocaleLowerCase()
+      const matchesSearch = keywords.every((keyword) => searchableText.includes(keyword))
+
+      return matchesJobTitle && matchesSearch
+    })
+  }, [resumes, search, selectedJobTitles])
+
+  const toggleJobTitle = (title: string, checked: boolean) => {
+    setSelectedJobTitles((current) => {
+      const selected = current.length === 0 ? availableJobTitles : current.filter((item) => item !== '__none__')
+      const next = checked
+        ? [...new Set([...selected, title])]
+        : selected.filter((item) => item !== title)
+      if (next.length === 0) return ['__none__']
+      if (next.length === availableJobTitles.length) return []
+      return next
+    })
+  }
 
   const updateField = (key: keyof ProfileForm, value: string) => {
     setForm((current) => ({ ...current, [key]: value }))
@@ -431,26 +477,57 @@ export function ProfilePage({
             <p>Preview, open, or delete resumes saved to your account.</p>
           </div>
 
-          <input
-            className="saved-resume-search"
-            type="search"
-            placeholder="Search resumes…"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            aria-label="Search saved resumes"
-          />
+          <div className="saved-resume-controls">
+            <input
+              className="saved-resume-search"
+              type="search"
+              placeholder="Search by resume name or job title…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              aria-label="Search saved resumes"
+            />
+            <details className="saved-resume-job-filter">
+              <summary>Filter by Job Title</summary>
+              <div className="saved-resume-filter-options">
+                <div className="saved-resume-filter-actions">
+                  <button type="button" onClick={() => setSelectedJobTitles([])}>
+                    Select All
+                  </button>
+                  <button type="button" onClick={() => setSelectedJobTitles(['__none__'])}>
+                    Deselect All
+                  </button>
+                </div>
+                {availableJobTitles.map((title) => (
+                  <label key={title}>
+                    <input
+                      type="checkbox"
+                      checked={
+                        selectedJobTitles.length === 0 || selectedJobTitles.includes(title)
+                      }
+                      onChange={(event) => toggleJobTitle(title, event.target.checked)}
+                    />
+                    <span>{title}</span>
+                  </label>
+                ))}
+                {availableJobTitles.length === 0 && <p>No job titles available.</p>}
+              </div>
+            </details>
+          </div>
         </div>
 
         {loading ? (
           <p className="profile-empty-state">Loading saved resumes…</p>
         ) : filteredResumes.length === 0 ? (
           <p className="profile-empty-state">
-            {search ? 'No saved resumes match your search.' : 'No saved resumes yet.'}
+            {resumes.length === 0
+              ? 'No saved resumes yet.'
+              : 'No saved resumes match your search or selected job titles.'}
           </p>
         ) : (
           <div className="saved-resume-list">
               <div className="saved-resume-row saved-resume-row-header" aria-hidden="true">
                 <span>Resume</span>
+                <span>Job Title</span>
                 <span>Last Updated</span>
                 <span>Actions</span>
               </div>
@@ -473,13 +550,18 @@ export function ProfilePage({
                         {(() => {
                           const meta = getSavedResumeDisplayMeta(resume.id)
                           const accountText = resume.email || 'Saved to your account'
-                          return meta
+                          const summary = meta
                             ? `${meta.kind === 'original' ? 'Original resume' : 'Tailored resume'} • ${accountText}`
                             : accountText
+                          return summary
                         })()}
                       </small>
                     </span>
                   </div>
+
+                  <span className="saved-resume-job-title">
+                    {getJobTitle(resume)}
+                  </span>
 
                   <span className="saved-resume-date">
                     {formatDateTime(resume.updated_at ?? resume.created_at)}
@@ -528,8 +610,9 @@ export function ProfilePage({
             <span className="panel-icon">DELETE RESUME</span>
             <h3 id="delete-saved-resume-title">Delete saved resume?</h3>
             <p id="delete-saved-resume-description">
-              {resumePendingDelete.title?.trim() ||
-                (resumePendingDelete.full_name?.trim()
+              {getJobTitle(resumePendingDelete) !== 'Untitled'
+                ? getJobTitle(resumePendingDelete)
+                : (resumePendingDelete.full_name?.trim()
                   ? `${resumePendingDelete.full_name} Resume`
                   : 'This saved resume')} will be permanently deleted.
             </p>

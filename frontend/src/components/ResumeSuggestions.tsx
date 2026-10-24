@@ -10,6 +10,7 @@ import './ResumeSuggestions.css'
 
 interface ResumeSuggestionsProps {
   recommendations: ResumeRecommendation[]
+  keywordAssignments?: readonly { keyword: string; section: string }[]
   sections: ResumeSectionLike[]
   onApplySuggestion: (change: SuggestionChange) => string | null
   onRegenerateSection?: (sectionName: string) => void
@@ -67,6 +68,20 @@ function computeDiff(original: string, suggested: string): {
   return { original: a, originalKept, suggested: b, suggestedKept }
 }
 
+
+// This is a frontend-only wording suggestion, not another AI request. Avoid
+// inventing credentials or completed work when the keyword has not been verified.
+function withKeyword(text: string, keyword: string): string {
+  const base = text.trim()
+  if (base.toLocaleLowerCase().includes(keyword.trim().toLocaleLowerCase())) return base
+  const sentence = `Interested in developing relevant experience with ${keyword.trim()}.`
+  return base ? `${base}${/[.!?]$/.test(base) ? '' : '.'} ${sentence}` : sentence
+}
+
+function assignmentKey(section: string, keyword: string): string {
+  return `${section.toLocaleLowerCase()}::${keyword.trim().toLocaleLowerCase()}`
+}
+
 const chevronIcon = (
   <svg
     className="suggestion-chevron"
@@ -86,6 +101,7 @@ const chevronIcon = (
 
 export function ResumeSuggestions({
   recommendations,
+  keywordAssignments = [],
   sections,
   onApplySuggestion,
   onRegenerateSection,
@@ -100,6 +116,7 @@ export function ResumeSuggestions({
     text: string
   }>>({})
   const [applyError, setApplyError] = useState<string | null>(null)
+  const [incorporatedKeywords, setIncorporatedKeywords] = useState<Set<string>>(() => new Set())
 
   // New recommendations invalidate the prior cards' applied indicators without
   // remounting the list or collapsing the section the user is viewing.
@@ -107,6 +124,7 @@ export function ResumeSuggestions({
     setAppliedChanges({})
     setEditingKey(null)
     setApplyError(null)
+    setIncorporatedKeywords(new Set())
   }, [recommendations])
 
   const groups = useMemo(() => {
@@ -125,13 +143,20 @@ export function ResumeSuggestions({
       }
     }
 
+    for (const assignment of keywordAssignments) {
+      if (!bySection.has(assignment.section)) {
+        bySection.set(assignment.section, [])
+        order.push(assignment.section)
+      }
+    }
     return order.map((name) => ({
       name,
       items: bySection.get(name) ?? [],
+      keywords: keywordAssignments.filter((item) => item.section === name),
     }))
-  }, [recommendations])
+  }, [recommendations, keywordAssignments])
 
-  if (recommendations.length === 0) {
+  if (recommendations.length === 0 && keywordAssignments.length === 0) {
     return (
       <div className="resume-suggestions">
         <div className="suggestions-empty">
@@ -242,7 +267,7 @@ export function ResumeSuggestions({
                 </span>
 
                 <span className="suggestion-section-count">
-                  {group.items.length}
+                  {group.items.length + group.keywords.length}
                 </span>
 
                 {chevronIcon}
@@ -250,12 +275,51 @@ export function ResumeSuggestions({
 
               {!isCollapsed && (
                 <div className="suggestion-section-body">
+                  {group.keywords.map(({ keyword }) => {
+                    const key = assignmentKey(group.name, keyword)
+                    const incorporated = incorporatedKeywords.has(key)
+                    return (
+                      <div className="suggestion-card" key={`keyword:${group.name}:${keyword}`}>
+                        <span className="suggestion-diff-label">Keyword to incorporate</span>
+                        <p><strong>{keyword}</strong></p>
+                        <p>Incorporate this keyword only when your experience or qualifications support it. Review the wording before applying it to your resume.</p>
+                        <small>Added from Missing Keywords · Suggestion only (not applied to saved resume)</small>
+                        <div className="suggestion-actions">
+                          <button
+                            type="button"
+                            className="suggestion-btn suggestion-btn-apply"
+                            onClick={() => setIncorporatedKeywords((previous) => {
+                              const next = new Set(previous)
+                              if (next.has(key)) next.delete(key)
+                              else next.add(key)
+                              return next
+                            })}
+                          >
+                            {incorporated ? 'Remove from suggestion' : 'Add to section'}
+                          </button>
+                        </div>
+                        {incorporated && group.items.length === 0 && (
+                          <div className="suggestion-diff-block suggestion-diff-suggested">
+                            <span className="suggestion-diff-label">Suggested</span>
+                            <p className="suggestion-diff-text">{withKeyword('', keyword)}</p>
+                            <small>No existing AI description was available for this section. This draft is not applied to the resume.</small>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                   {group.items.map((suggestion, index) => {
                     const key = `${group.name}::${index}`
                     const isEditing = editingKey === key
                     const appliedChange = appliedChanges[key]
                     const isApplied = Boolean(appliedChange)
-                    const suggestedText = appliedChange?.text ?? suggestion.suggested_change
+                    const keywordsForDescription = index === 0
+                      ? group.keywords.filter(({ keyword }) => incorporatedKeywords.has(assignmentKey(group.name, keyword)))
+                      : []
+                    const suggestedText = keywordsForDescription.reduce(
+                      (text, { keyword }) => withKeyword(text, keyword),
+                      appliedChange?.text ?? suggestion.suggested_change,
+                    )
 
                     const diff = computeDiff(
                       suggestion.original_text,

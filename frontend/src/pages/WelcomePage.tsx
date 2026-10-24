@@ -3,7 +3,6 @@ import {
   signIn,
   signUp,
   signInAsGuest,
-  supabase,
 } from '../lib/supabase'
 type WelcomePageProps = {
   onContinueAsGuest: () => void
@@ -27,6 +26,8 @@ export function WelcomePage({
   const [showPassword, setShowPassword] = useState(false)
   // Authentication error message.
   const [error, setError] = useState('')
+  const [authLoading, setAuthLoading] = useState(false)
+  const [authMode, setAuthMode] = useState<'user' | 'guest' | null>(null)
   const isPasswordValid =
   password.length >= 8 &&
   !/\s/.test(password)
@@ -91,57 +92,60 @@ export function WelcomePage({
     event: React.FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault()
+    if (authLoading) return
+
+    setAuthLoading(true)
+    setAuthMode('user')
+    setError('')
+
     try {
-      setError('')
-      const data = await signIn(
-        email.trim(),
-        password
-      )
-      console.log('Login successful:', data)
+      const data = await signIn(email.trim(), password)
+
       const loggedInUser = data.user
+
       const savedFirstName =
         typeof loggedInUser?.user_metadata?.first_name === 'string'
           ? loggedInUser.user_metadata.first_name
           : ''
+
       const savedLastName =
         typeof loggedInUser?.user_metadata?.last_name === 'string'
           ? loggedInUser.user_metadata.last_name
           : ''
-      onLogin(
-        savedFirstName || 'User',
-        savedLastName
-      )
+
+      onLogin(savedFirstName || 'User', savedLastName)
     } catch (err) {
       console.error('Login error:', err)
+
       setError(
-        'Invalid email or password. Please try again.'
+        err instanceof Error
+          ? err.message
+          : 'Unable to log in. Please try again.'
       )
+    } finally {
+      setAuthLoading(false)
     }
   }
   // Continue without creating an account.
   const handleGuestLogin = async () => {
+    if (authLoading) return
+
+    setAuthLoading(true)
+    setAuthMode('guest')
+    setError('')
+
     try {
-      setError('')
-      const response = await signInAsGuest()
-      console.log(
-        'Guest sign-in successful:',
-        response
-      )
-      const { data } =
-        await supabase.auth.getSession()
-      console.log(
-        'Session after sign-in:',
-        data.session
-      )
+      await signInAsGuest()
       onContinueAsGuest()
     } catch (err) {
-      console.error(
-        'Guest sign-in error:',
-        err
-      )
+      console.error('Guest sign-in error:', err)
       setError(
-        'Unable to continue as guest. Please try again.'
+        err instanceof Error
+          ? err.message
+          : 'Unable to continue as guest. Please try again.'
       )
+    } finally {
+      setAuthLoading(false)
     }
   }
   return (
@@ -354,11 +358,10 @@ export function WelcomePage({
             <button
               className="button button-primary"
               type="submit"
+              disabled={authLoading}
             >
-              Log in
-              <span aria-hidden="true">
-                →
-              </span>
+              {authLoading && authMode === 'user' ? 'Signing in as a user...' : 'Log in'}
+              <span aria-hidden="true">→</span>
             </button>
           )}
           {/* Create account */}
@@ -396,8 +399,9 @@ export function WelcomePage({
               className="guest-link"
               type="button"
               onClick={handleGuestLogin}
+              disabled={authLoading}
             >
-              Continue as guest
+            {authLoading && authMode === 'guest' ? 'Signing in as a guest...' : 'Continue as guest'}
             </button>
           )}
         <p className="privacy-line">
