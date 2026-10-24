@@ -118,6 +118,14 @@ function App() {
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [resumeReady, accountType, currentScreen, profileSection])
 
+
+  // Navigate only after the account state and navigation guard have updated.
+  useEffect(() => {
+    if (accountType !== null) {
+      window.location.hash = '#parsed'
+    }
+  }, [accountType])
+
   // Restore only the currently authenticated account's workspace.
   const restoreForCurrentAccount = async () => {
     const { data: { user }, error } = await supabase.auth.getUser()
@@ -135,6 +143,7 @@ function App() {
     } catch (error) {
       console.error('Unable to restore guest workspace:', error)
     }
+    
     setSidebarResumePreview(null)
     setTailorMounted(false)
     accountTypeRef.current = 'guest'
@@ -143,8 +152,6 @@ function App() {
     setProfileInitials('G')
     setAccountName(null)
     setResumeSession(current => current + 1)
-    window.location.hash = '#parsed'
-    setCurrentScreen('parsed')
   }
 
   // Set up the user profile after login and restore the user's own draft.
@@ -166,8 +173,6 @@ function App() {
     setAccountType('user')
     setResumeReady(false)
     setResumeSession(current => current + 1)
-    window.location.hash = '#parsed'
-    setCurrentScreen('parsed')
   }
 
   // Complete the requested Home navigation after the user confirms.

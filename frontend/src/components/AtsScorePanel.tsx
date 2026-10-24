@@ -28,8 +28,7 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
   if (!response) return null
 
   const band = scoreBand(response.ATS_score)
-  const matchedKeywords = [...new Set(response.suggestions
-    .filter((item) => !readOnly || item.type === 'supported')
+  const matchedKeywords = [...new Set(response.requirements_met
     .map((item) => item.requirement).filter(Boolean))]
     .filter((keyword) => !hiddenKeywords.has(keywordKey(keyword)))
   const displayedFound = [...matchedKeywords,
@@ -37,8 +36,8 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
       && !hiddenKeywords.has(keywordKey(skill)))]
   const missingKeywords = [...new Set((missingRequirements ?? response.improvements)
     .map((item) => item.requirement).filter(Boolean))]
-    .filter((keyword) => !hiddenKeywords.has(keywordKey(keyword))
-      && !manuallyFoundSkills.some((skill) => keywordKey(skill) === keywordKey(keyword)))
+    .filter((keyword) =>
+      !manuallyFoundSkills.some((skill) => keywordKey(skill) === keywordKey(keyword)))
 
   const chips = (keywords: string[], kind: 'matched' | 'missing') => (
     <div className="ats-chip-list">
@@ -73,8 +72,8 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
           <div className="ats-score-ring-inner"><strong>{response.ATS_score}%</strong><span>{band.label}</span></div>
         </div>
         <div className="ats-score-stats">
-          <div className="ats-stat ats-stat-met"><strong>{response.requirements_met}</strong><span>requirements met</span></div>
-          <div className="ats-stat ats-stat-missing"><strong>{response.requirements_missing}</strong><span>requirements missing</span></div>
+          <div className="ats-stat ats-stat-met"><strong>{displayedFound.length}</strong><span>requirements met</span></div>
+          <div className="ats-stat ats-stat-missing"><strong>{missingKeywords.length}</strong><span>requirements missing</span></div>
         </div>
       </div>
       <div className="ats-keywords">

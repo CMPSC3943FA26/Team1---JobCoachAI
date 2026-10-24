@@ -16,13 +16,14 @@ import { ResumePreview, type PreviewSection } from '../components/ResumePreview'
 import { SummaryOptions } from '../components/SummaryOptions'
 import { ResumeSuggestions } from '../components/ResumeSuggestions'
 import { TailoringLoading } from '../components/TailoringLoading'
-import { analyzeResumeForJob, generateSummaryOptions } from '../features/resume/resumeInsights'
+import { generateSummaryOptions } from '../features/resume/resumeInsights'
 import { replaceTextInField } from '../features/resume/resumeSuggestions'
 import { addedWordMask } from '../features/resume/addedWords'
 import { tailor_resume, setSavedResumeDisplayMeta } from '../services/resumeService'
 import type { ResumeProfile, ResumeSaveRequest } from '../features/resume/resumeData'
 import type { ResumeRecommendation, SuggestionChange } from '../features/resume/resumeSuggestions'
-import type { AIResponse, SummaryOption, SummaryTone, TailoringResponse } from '../types/ai'
+import type { SummaryOption, SummaryTone, TailoringResponse } from '../types/ai'
+
 // Matches the exact prop type expected by the existing Kiran component.
 type Sections = ComponentProps<typeof ResumeSuggestions>['sections']
 // The saved ResumePage draft includes a display title; Kiran's component only
@@ -141,9 +142,6 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
   const [error,setError]=useState<string>('')
   const [result, setResult] = useState<TailoringResponse | null>(null)
   const [aiRetry, setAiRetry] = useState(0)
-  const [, setAiLoading] = useState(false)
-  const [, setAiError] = useState<string | null>(null)
-  const [, setAiResult] = useState<TailoringResponse | null>(null)
   // Keyword changes affect the local ATS estimate immediately. The AI request
   // is rerun only when the user explicitly clicks Regenerate AI suggestions.
   const keywordContextRef = useRef({ confirmed: [] as string[], removed: [] as string[] })
@@ -169,40 +167,6 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
   }, [tailored, title])
   // Generate live AI suggestions for the submitted resume and job.
   // Keep the existing ATS controls, summary tools, and local demo fallback intact.
-  useEffect(() => {
-    let cancelled = false
-    async function fetchAiSuggestions() {
-      if (!resume_id || !jobDescription.trim()) return
-      setAiLoading(true)
-      setAiError('')
-      setAiResult(null)
-      setSuggestionsOpen(true)
-      try {
-        const response = await tailor_resume(resume_id, {
-          title, company, description: jobDescription,
-        })
-        if (cancelled) return
-        if (!Array.isArray(response.suggestions)) {
-          throw new Error('The AI service returned an invalid suggestions response.')
-        }
-        setAiResult(response)
-        setRecommendations(response.suggestions.map((item) => ({
-          section_name: sectionNameFromPath(item.resume_id),
-          original_text: item.before,
-          suggested_change: item.suggestion,
-          reasoning: item.reason,
-        })))
-      } catch (cause) {
-        if (!cancelled) {
-          setAiError(cause instanceof Error ? cause.message : 'Unable to load AI suggestions.')
-        }
-      } finally {
-        if (!cancelled) setAiLoading(false)
-      }
-    }
-    void fetchAiSuggestions()
-    return () => { cancelled = true }
-  }, [resume_id, title, company, jobDescription, aiRetry])
   // Page 3 is considered save-ready only after an AI recommendation or
   // generated summary has actually been applied to the tailored copy.
   useEffect(() => {
@@ -231,6 +195,9 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
           throw new Error('Invalid tailoring response.')
         }
         setResult(response)
+        setManuallyFoundSkills([])
+        setHiddenAtsKeywords(new Set())
+
         setRecommendations(response.suggestions.map((item) => ({
           section_name: sectionNameFromPath(item.resume_id),
           original_text: item.before,
@@ -257,32 +224,22 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     setManuallyFoundSkills([])
     setKeywordAssignments([])
   }, [jobDescription])
-  // Update the compatibility score automatically on Submit and after every tailored edit.
-  const atsResponse = useMemo(() => {
-    if (!tailored || !jobDescription.trim()) return null
-    // Confirmed ATS keywords affect the local match calculation, not the resume itself.
-    // Only keywords present in the job description count as matching requirements.
-    const payload = payloadFromDraft(tailored)
-    const existing = new Set(payload.skills.map((item) => skillKey(item.skill_name)))
-    const extraSkills = manuallyFoundSkills
-      .filter((keyword) => !hiddenAtsKeywords.has(skillKey(keyword)) && !existing.has(skillKey(keyword)))
-      .map((skill_name) => ({ skill_name }))
-    return analyzeResumeForJob({ ...payload, skills: [...payload.skills, ...extraSkills] },
-      jobDescription, manuallyFoundSkills)
-  }, [tailored, jobDescription, manuallyFoundSkills, hiddenAtsKeywords])
+
   // Interactive ATS display: a moved/added keyword appears under Found, while
   // clicking X moves it out of Found and into Missing. Recompute the local
   // compatibility estimate from the currently visible keyword classifications.
   // The score is a user-adjusted estimate, not a new backend AI assessment.
-  const interactiveAtsResponse = useMemo((): AIResponse | null => {
-    if (!atsResponse) return null
-    const found = new Map<string, AIResponse['suggestions'][number]>()
-    const missing = new Map<string, AIResponse['improvements'][number]>()
-    for (const item of atsResponse.suggestions) {
+  const interactiveatsresponse = useMemo((): TailoringResponse | null => {
+    if (!result) return null
+
+    const found = new Map<string, TailoringResponse['requirements_met'][number]>()
+    const missing = new Map<string, TailoringResponse['missing_requirements'][number]>()
+
+    for (const item of result.requirements_met) {
       const key = skillKey(item.requirement)
       if (key && !hiddenAtsKeywords.has(key)) found.set(key, item)
     }
-    for (const item of atsResponse.improvements) {
+    for (const item of result.missing_requirements) {
       const key = skillKey(item.requirement)
       if (key) missing.set(key, item)
     }
@@ -290,27 +247,17 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       const key = skillKey(keyword)
       if (!key || hiddenAtsKeywords.has(key)) continue
       if (!found.has(key)) found.set(key, {
-        suggestion: `Manually confirmed keyword: ${keyword}`,
-        type: 'matched',
         requirement: keyword,
-        importance: 2,
-        before: '',
-        reason: 'Marked as found by the user. Verify that the resume supports this keyword.',
-        resume_id: '',
       })
       missing.delete(key)
     }
     for (const keyword of hiddenAtsKeywords) {
-      const original = atsResponse.suggestions.find(
+      const original = result.requirements_met.find(
         (item) => skillKey(item.requirement) === keyword,
       )
       if (original) {
         missing.set(keyword, {
-          improvement: `Verify or add ${original.requirement} in the resume.`,
-          type: 'missing',
           requirement: original.requirement,
-          reason: 'Removed from the Found list by the user.',
-          resume_id: null,
         })
       }
       found.delete(keyword)
@@ -320,14 +267,19 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     const requirements_met = found.size
     const requirements_missing = missing.size
     const total = requirements_met + requirements_missing
+    const hasKeywordChanges =
+      manuallyFoundSkills.length > 0 || hiddenAtsKeywords.size > 0
     return {
-      suggestions: [...found.values()],
-      improvements: [...missing.values()],
-      requirements_met,
+      ...result,
+      requirements_met: [...found.values()],
+      missing_requirements: [...missing.values()],
       requirements_missing,
-      ATS_score: total ? Math.round(requirements_met / total * 100) : 0,
+      ATS_score: hasKeywordChanges
+        ? (total ? Math.round(requirements_met / total * 100) : 0)
+        : result.ATS_score,
     }
-  }, [atsResponse, hiddenAtsKeywords, manuallyFoundSkills])
+  }, [result, hiddenAtsKeywords, manuallyFoundSkills])
+
   // Mounted only after Submit: prepare the professional summary options.
   useEffect(() => {
     const base = readDraft()
@@ -370,7 +322,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     if (!tailored) return 'No tailored resume is available.'
     const normalized = skillKey(name)
     if (!normalized) return 'Enter a keyword before adding it.'
-    const matchedKeywords = atsResponse?.suggestions.map((item) => item.requirement) ?? []
+    const matchedKeywords = result?.requirements_met.map((item) => item.requirement) ?? []
     if (manuallyFoundSkills.some((item) => skillKey(item) === normalized) ||
         (matchedKeywords.some((item) => skillKey(item) === normalized) &&
           !hiddenAtsKeywords.has(normalized))) {
@@ -465,7 +417,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       return { ...current, sections }
     })
     setAppliedTone(option.tone)
-    setMessage('Summary applied to the tailored copy only. Resume match updates automatically.')
+    setMessage('Summary applied to the tailored copy only. Regenerate AI suggestions to reassess the edited resume.')
   }
   const deleteAppliedSummary = (_option: SummaryOption) => {
     if (!baseDraft) {
@@ -526,7 +478,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
         }),
     }))
     setAppliedTone(null)
-    setMessage('Suggestion applied to the tailored copy only. Resume match updates automatically.')
+    setMessage('Suggestion applied to the tailored copy only. Regenerate AI suggestions to reassess the edited resume.')
     return null
   }
   // Export the live tailored state, never the original sessionStorage draft.
@@ -640,11 +592,11 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
               <div className="resume-suggestions-toolbar-copy">
                 <span className="panel-icon">RESUME ANALYSIS</span>
                 <h3>ATS Compatibility Score</h3>
-                <p>Interactive local keyword match estimate. Confirmed keywords change the estimate without editing your saved resume.</p>
+                <p>Initial score comes from the AI assessment. Changing Found or Missing keywords recalculates the estimate locally.</p>
               </div>
               <AtsScorePanel
-                response={interactiveAtsResponse ?? result}
-                missingRequirements={interactiveAtsResponse?.improvements ?? result.missing_requirements}
+                response={interactiveatsresponse}
+                missingRequirements={interactiveatsresponse?.missing_requirements}
                 hiddenKeywords={hiddenAtsKeywords}
                 onRemoveKeyword={removeAtsKeyword}
                 onAddSkill={addMissedSkill}
@@ -701,6 +653,21 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
                     <ResumeSuggestions recommendations={recommendations} keywordAssignments={keywordAssignments}
                       sections={tailored.sections} onApplySuggestion={applySuggestion} />
                   ) : <p>No wording changes were recommended.</p>
+                )}
+                {!loading && !error && result && (
+                  <section aria-label="AI improvements">
+                    <h3>Improvements and clarifications</h3>
+                    {result.improvements.map((item, index) => (
+                      <article className="suggestion-card" key={`${item.requirement}:${index}`}>
+                        <h4>{item.requirement}</h4>
+                        <p>{item.improvement}</p>
+                        <div className="suggestion-reasoning">
+                          <span className="suggestion-reasoning-title">Why this matters</span>
+                          <p>{item.reason}</p>
+                        </div>
+                      </article>
+                    ))}
+                  </section>
                 )}
               </div>
             )}

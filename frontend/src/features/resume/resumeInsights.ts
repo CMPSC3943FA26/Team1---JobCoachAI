@@ -128,7 +128,7 @@ export function analyzeResumeForJob(
     suggestions,
     improvements,
     ATS_score,
-    requirements_met: matched.length,
+    requirements_met: matched.map((requirement) => ({ requirement })),
     requirements_missing: missing.length,
   }
 }

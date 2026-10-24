@@ -182,14 +182,23 @@ export async function tailor_resume(
   const pending = pendingTailoringRequests.get(body)
   if (pending) return pending
 
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 300_000)
   const request: Promise<TailoringResponse> = authorizedRequest('/ai/tailor_resume', {
     method: 'POST',
     body,
+    signal: controller.signal,
+  }).catch((cause: unknown) => {
+    if (controller.signal.aborted) {
+      throw new Error('AI analysis timed out. Please regenerate.')
+    }
+    throw cause
   })
   pendingTailoringRequests.set(body, request)
   try {
     return await request
   } finally {
+    window.clearTimeout(timeout)
     pendingTailoringRequests.delete(body)
   }
 }
