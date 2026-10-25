@@ -39,6 +39,15 @@ function App() {
     )
 
   const [resumeReady, setResumeReady] = useState(false)
+  const [page2NeedsContinue, setPage2NeedsContinue] = useState(false)
+  const [showContinueWarning, setShowContinueWarning] = useState(false)
+  const allowSavedContinueRef = useRef(false)
+  const continueWarningMessage = 'You have unsaved resume changes. To save your draft and proceed to tailor your resume, click Continue on the Resume Editor.'
+  const handleContinueToTailor = () => {
+    allowSavedContinueRef.current = true
+    setPage2NeedsContinue(false)
+    window.location.hash = '#tailor'
+  }
   const [profileInitials, setProfileInitials] = useState<string | null>(null)
   const [accountName, setAccountName] = useState<string | null>(null)
   const [profileSection, setProfileSection] = useState<'profile' | 'resumes'>('profile')
@@ -52,7 +61,7 @@ function App() {
   const [tailorMounted, setTailorMounted] = useState(false)
   const [sidebarResumePreview, setSidebarResumePreview] = useState<Record<string, any> | null>(null)
   const bypassWelcomeWarningRef = useRef(false)
-
+ 
   // Handle page navigation and prevent access to Tailor without a resume
   useEffect(() => {
     const onHashChange = () => {
@@ -72,6 +81,15 @@ function App() {
         window.location.hash = '#profile'
         return
       }
+
+      // Prevent bypassing Page 2's Save + Continue workflow by clicking the
+      // sidebar, typing #tailor, or using browser forward navigation.
+      if (nextScreen === 'tailor' && currentScreen === 'parsed' && page2NeedsContinue && !allowSavedContinueRef.current) {
+        setShowContinueWarning(true)
+        window.location.hash = '#parsed'
+        return
+      }
+      if (nextScreen === 'tailor') allowSavedContinueRef.current = false
 
       // Page 3 also requires a resume.
       if (nextScreen === 'tailor' && !resumeReady) {
@@ -116,7 +134,7 @@ function App() {
 
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
-  }, [resumeReady, accountType, currentScreen, profileSection])
+  }, [resumeReady, accountType, currentScreen, profileSection, page2NeedsContinue])
 
 
   // Navigate only after the account state and navigation guard have updated.
@@ -176,7 +194,15 @@ function App() {
   }
 
   // Complete the requested Home navigation after the user confirms.
-  const goHome = () => {
+  const goHome = async () => {
+    // A signed-in user must log out only after confirming Leave Workspace.
+    // handleLogout saves the draft before signing out and performs cleanup
+    // only if sign-out succeeds.
+    if (accountType === 'user') {
+      await handleLogout()
+      return
+    }
+
     setShowHomeWarning(false)
     bypassWelcomeWarningRef.current = true
     sessionStorage.removeItem(resumeDraftStorageKey)
@@ -316,6 +342,8 @@ function App() {
             key={resumeSession}
             isGuest={accountType !== 'user'}
             onResumeReadyChange={setResumeReady}
+            onNeedsContinueChange={setPage2NeedsContinue}
+            onContinueToTailor={handleContinueToTailor}
           />
         )
 
@@ -381,6 +409,13 @@ function App() {
       accountName={accountName}
       onHomeClick={handleHomeClick}
       onBuildResumeClick={handleBuildResumeClick}
+      onTailorNavigationClick={() => {
+        if (currentScreen === 'parsed' && page2NeedsContinue) {
+          setShowContinueWarning(true)
+          return false
+        }
+        return true
+      }}
       onOpenProfile={() => handleOpenProfile('profile')}
       onOpenSavedResumes={() => handleOpenProfile('resumes')}
       onLogout={() => {
@@ -398,6 +433,8 @@ function App() {
               key={resumeSession}
               isGuest={accountType !== 'user'}
               onResumeReadyChange={setResumeReady}
+              onNeedsContinueChange={setPage2NeedsContinue}
+              onContinueToTailor={handleContinueToTailor}
             />
           </div>
           {/* Page 3 stays mounted after first visit, retaining AI results and keyword edits. */}
@@ -415,6 +452,59 @@ function App() {
           {currentScreen !== 'parsed' && currentScreen !== 'tailor' && renderCurrentPage()}
         </>
       ) : renderCurrentPage()}
+
+      {showContinueWarning && (
+        <div
+          className="dialog-backdrop"
+          role="presentation"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            display: 'grid',
+            placeItems: 'center',
+            padding: 20,
+            background: 'rgba(23, 32, 51, 0.55)',
+          }}
+        >
+          <div
+            className="confirm-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="continue-warning-title"
+            aria-describedby="continue-warning-description"
+            style={{
+              width: 'min(460px, 100%)',
+              padding: 28,
+              background: '#fff',
+              color: '#172033',
+              boxShadow: '0 24px 60px rgba(23, 32, 51, 0.24)',
+            }}
+          >
+            <span className="panel-icon">SAVE RESUME FIRST</span>
+            <h3 id="continue-warning-title">Save before continuing</h3>
+            <p id="continue-warning-description">{continueWarningMessage}</p>
+            <div
+              className="dialog-actions"
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                flexWrap: 'wrap',
+                gap: 10,
+                marginTop: 24,
+              }}
+            >
+              <button
+                type="button"
+                className="button button-primary"
+                onClick={() => setShowContinueWarning(false)}
+              >
+                Return to Resume Editor
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showHomeWarning && (
         <div
@@ -447,6 +537,11 @@ function App() {
             <span className="panel-icon">LEAVE WORKSPACE</span>
             <h3 id="home-warning-title">Leave this page?</h3>
             <p id="home-warning-description">{leaveWorkspaceMessage}</p>
+            {logoutError && (
+              <p role="alert" style={{ color: '#b42318', marginTop: 12 }}>
+                {logoutError}
+              </p>
+            )}
 
             <div
               className="dialog-actions"
@@ -461,7 +556,8 @@ function App() {
               <button
                 className="button button-secondary"
                 type="button"
-                onClick={() => setShowHomeWarning(false)}
+                disabled={logoutPending}
+                onClick={() => { setShowHomeWarning(false); setLogoutError('') }}
               >
                 Stay on page
               </button>
@@ -469,9 +565,10 @@ function App() {
               <button
                 className="button button-primary"
                 type="button"
-                onClick={goHome}
+                onClick={() => { void goHome() }}
+                disabled={logoutPending}
               >
-                Go to Home →
+                {logoutPending ? 'Logging out…' : 'Go to Home →'}
               </button>
             </div>
           </div>

@@ -10,6 +10,7 @@ type LayoutProps = {
   accountName?: string | null
   onHomeClick: () => void
   onBuildResumeClick: () => void
+  onTailorNavigationClick?: () => boolean
   onOpenProfile?: () => void
   onOpenSavedResumes?: () => void
   onLogout?: () => void
@@ -26,6 +27,7 @@ export function Layout({
   accountName,
   onHomeClick,
   onBuildResumeClick,
+  onTailorNavigationClick,
   onOpenProfile,
   onOpenSavedResumes,
   onLogout,
@@ -237,6 +239,11 @@ export function Layout({
                   // before using the Page 2 / Page 3 sidebar links.
                   // Ignore unauthorized clicks silently without changing the hash.
                   if (!hasEnteredWorkspace && (step.key === 'parsed' || step.key === 'tailor')) {
+                    event.preventDefault()
+                    return
+                  }
+
+                  if (step.key === 'tailor' && onTailorNavigationClick?.() === false) {
                     event.preventDefault()
                     return
                   }

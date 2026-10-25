@@ -4,7 +4,7 @@
  * Handles resume creation, editing, preview,
  * and export for guest and registered users.
  */
-import { useEffect, useState, type DragEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from "docx";
 import { Button } from "../components/Button";
 import { ResumePreview, type PreviewSection } from "../components/ResumePreview";
@@ -30,6 +30,8 @@ import {
 type ResumePageProps = {
   isGuest?: boolean;
   onResumeReadyChange?: (ready: boolean) => void;
+  onNeedsContinueChange?: (needsContinue: boolean) => void;
+  onContinueToTailor?: () => void;
   onLoadResumeProfile?: (file: File) => Promise<void>;
 };
 // Supported resume sections
@@ -319,6 +321,8 @@ function createSections(blankResume: boolean): ResumeSection[] {
 export function ResumePage({
   isGuest = true,
   onResumeReadyChange,
+  onNeedsContinueChange,
+  onContinueToTailor,
   onLoadResumeProfile,
 }: ResumePageProps) {
   const storedDraft = readResumeDraft();
@@ -564,6 +568,21 @@ export function ResumePage({
   const resumeReady = Boolean(resumeFile) || hasResumeContent;
   // Only an export of the current editor content clears the guest checkpoint.
   const currentResumeSnapshot = JSON.stringify({ profile, sections, resumeFilename, jobTitle });
+  // Only Continue establishes a new navigation checkpoint. Saving via the
+  // Save Resume button does not authorize bypassing Continue from the sidebar.
+  const lastContinuedSnapshotRef = useRef<string | null>(
+    sessionStorage.getItem(resumeIdStorageKey) ? currentResumeSnapshot : null,
+  );
+  const needsContinue = lastContinuedSnapshotRef.current !== currentResumeSnapshot || resumeDeleted;
+  useEffect(() => {
+    onNeedsContinueChange?.(needsContinue);
+  }, [needsContinue, onNeedsContinueChange]);
+  const goToTailorAfterSave = () => {
+    lastContinuedSnapshotRef.current = currentResumeSnapshot;
+    onNeedsContinueChange?.(false);
+    if (onContinueToTailor) onContinueToTailor();
+    else window.location.hash = '#tailor';
+  };
   const guestExportIsCurrent = exportedGuestSnapshot === currentResumeSnapshot;
   const personalInfoComplete = personalFields.every(({ key }) => profile[key].trim() !== "");
   const summaryComplete = Boolean(
@@ -961,7 +980,7 @@ const hasExportableData = Boolean(
             />
           </div>
           <div className="resume-filename-field" style={{ flex: "1 1 200px", minWidth: "180px" }}>
-            <label htmlFor="resume-job-title">Target Job Title</label>
+            <label htmlFor="resume-job-title">Job Title</label>
             <input
               id="resume-job-title"
               type="text"
@@ -1375,7 +1394,7 @@ const hasExportableData = Boolean(
                 return;
               }
               setStatus("");
-              window.location.hash = '#tailor';
+              goToTailorAfterSave();
             }}
           >
             Continue <span aria-hidden="true">→</span>
@@ -1422,7 +1441,7 @@ const hasExportableData = Boolean(
                   }
                   setShowGuestExportWarning(false);
                   setStatus("");
-                  window.location.hash = '#tailor';
+                  goToTailorAfterSave();
                 }}>
                   {savingResume ? "Saving…" : "Save and continue"} <span aria-hidden="true">→</span>
                 </Button>

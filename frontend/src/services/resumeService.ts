@@ -202,3 +202,34 @@ export async function tailor_resume(
     pendingTailoringRequests.delete(body)
   }
 }
+
+// Frontend-only preview. Replace with a backend AI call once that endpoint is implemented.
+export type KeywordRewriteResponse = { suggestions: Record<string, string>; note?: string }
+export async function rewriteKeywordExperience(_keyword: string, experience: string, sections: string[]): Promise<KeywordRewriteResponse> {
+  const cleaned = experience.trim().replace(/\s+/g, ' ')
+  if (cleaned.length < 15) return { suggestions: {}, note: 'Please provide more detail about what you actually did.' }
+  const description = cleaned.replace(/[.!?]+$/, '')
+  const suggestions: Record<string, string> = {}
+  for (const section of sections) {
+    if (section === 'Work Experience') suggestions[section] = `${description}.`
+    if (section === 'Professional Summary') suggestions[section] = `Familiar with the following through reported experience: ${description}.`
+  }
+  return { suggestions, note: 'Frontend-only preview, not AI-generated. Check accuracy and edit each draft before applying. The AI rewrite endpoint is not connected yet.' }
+}
+
+// Frontend-only wording examples. No AI assessment or verification is performed.
+export function previewKeywordWording(keyword: string, experience: string, sections: string[]): Record<string, string[]> {
+  const evidence = experience.trim().replace(/\s+/g, ' ').replace(/[.!?]+$/, '')
+  const result: Record<string, string[]> = {}
+  for (const section of sections) {
+    if (section === 'Work Experience') result[section] = [
+      `${evidence}.`,
+      `${evidence} (related to ${keyword}).`,
+    ]
+    if (section === 'Professional Summary') result[section] = [
+      `Familiar with ${keyword} through the following experience: ${evidence}.`,
+      `Experience or training involving ${keyword}: ${evidence}.`,
+    ]
+  }
+  return result
+}

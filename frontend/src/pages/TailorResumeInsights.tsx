@@ -137,7 +137,8 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
   const [showResetConfirmation, setShowResetConfirmation] = useState(false)
   const [hiddenAtsKeywords, setHiddenAtsKeywords] = useState<Set<string>>(() => new Set())
   const [manuallyFoundSkills, setManuallyFoundSkills] = useState<string[]>([])
-  const [keywordAssignments, setKeywordAssignments] = useState<{ keyword: string; section: string }[]>([])
+  const [sectionDrafts, setSectionDrafts] = useState<Record<string, string>>({})
+  const [keywordAssignments, setKeywordAssignments] = useState<{ keyword: string; section: string; options: string[] }[]>([])
   const [loading,setLoading]=useState(false)
   const [error,setError]=useState<string>('')
   const [result, setResult] = useState<TailoringResponse | null>(null)
@@ -223,6 +224,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     setHiddenAtsKeywords(new Set())
     setManuallyFoundSkills([])
     setKeywordAssignments([])
+    setSectionDrafts({})
   }, [jobDescription])
 
   // Interactive ATS display: a moved/added keyword appears under Found, while
@@ -301,6 +303,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     setHiddenAtsKeywords(new Set())
     setManuallyFoundSkills([])
     setKeywordAssignments([])
+    setSectionDrafts({})
     setSummaryGeneration(0)
     setSummaryOptions([])
     setAppliedTone(null)
@@ -318,7 +321,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
   }
   // Manually confirmed keywords are context for locally generated summaries, NOT resume edits.
   // The original and tailored resume data remain unchanged when these chips are edited.
-  const addMissedSkill = (name: string, section: string): string | null => {
+  const addMissedSkill = (name: string, sections: string[], experience: string, options: Record<string, string[]>): string | null => {
     if (!tailored) return 'No tailored resume is available.'
     const normalized = skillKey(name)
     if (!normalized) return 'Enter a keyword before adding it.'
@@ -328,10 +331,14 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
           !hiddenAtsKeywords.has(normalized))) {
       return 'That keyword is already displayed under Found in your resume.'
     }
-    setManuallyFoundSkills((current) => [...current.filter((item) => skillKey(item) !== normalized), name])
+    if (!sections.length || sections.some((section) => !['Work Experience', 'Professional Summary'].includes(section))) {
+      return 'Choose Work Experience, Professional Summary, or both.'
+    }
+    if (experience.trim().length < 15) return 'Describe real experience before proceeding.'
+    if (sections.some((section) => !(options[section] ?? []).length)) return 'No wording was prepared for one or more sections.'
     setKeywordAssignments((current) => [
       ...current.filter((item) => skillKey(item.keyword) !== normalized),
-      { keyword: name, section },
+      ...sections.map((section) => ({ keyword: name, section, options: options[section] })),
     ])
     setSuggestionsOpen(true)
     setHiddenAtsKeywords((current) => {
@@ -340,6 +347,11 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       return updated
     })
     return null
+  }
+  const removeKeywordSuggestion = (keyword: string, section: string) => {
+    setKeywordAssignments((current) => current.filter((item) =>
+      !(skillKey(item.keyword) === skillKey(keyword) && item.section === section)))
+    setMessage(`Removed the ${keyword} suggestion for ${section}. Any wording already applied to the tailored resume remains unchanged.`)
   }
   const removeAtsKeyword = (keyword: string) => {
     const key = skillKey(keyword)
@@ -479,6 +491,61 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     }))
     setAppliedTone(null)
     setMessage('Suggestion applied to the tailored copy only. Regenerate AI suggestions to reassess the edited resume.')
+    return null
+  }
+  // The per-keyword Apply buttons only stage text in the section-level editor.
+  // They intentionally do not mutate `tailored` or the save-ready resume payload.
+  const sectionSourceText = (sectionName: string): string | null => {
+    if (!tailored) return null
+    if (sectionName === 'Professional Summary') {
+      const summary = tailored.sections.find((section) => section.key === 'summary')
+      return typeof summary?.entries[0] === 'string' ? summary.entries[0] : null
+    }
+    if (sectionName === 'Work Experience') {
+      const work = tailored.sections.find((section) => section.key === 'work_experience')
+      if (!work || work.entries.length !== 1) return null
+      const entry = work.entries[0]
+      return typeof entry !== 'string' && 'description' in entry ? String(entry.description ?? '') : null
+    }
+    return null
+  }
+  const applyKeywordWording = (_keyword: string, sectionName: string, wording: string): string | null => {
+    if (!wording.trim()) return 'Select a non-empty wording option.'
+    const source = sectionSourceText(sectionName)
+    if (source === null) {
+      return sectionName === 'Work Experience'
+        ? 'To avoid assigning this experience to the wrong employer, this section draft requires exactly one Work Experience entry with a description.'
+        : 'Add a Professional Summary before staging this wording.'
+    }
+    setSectionDrafts((current) => {
+      const existing = current[sectionName] ?? source
+      return { ...current, [sectionName]: [existing.trim(), wording.trim()].filter(Boolean).join('\n') }
+    })
+    setMessage(`Added wording to the suggested ${sectionName} section. Review it in the existing Original / Suggested card before applying to your tailored resume.`)
+    return null
+  }
+  const applySectionDraft = (sectionName: string): string | null => {
+    if (!tailored) return 'No tailored resume is available.'
+    const draft = sectionDrafts[sectionName]?.trim()
+    if (!draft) return 'The section draft is empty.'
+    const previousText = sectionSourceText(sectionName)
+    if (previousText === null) return 'The resume section has changed. Review its contents before applying.'
+    const target = sectionName === 'Professional Summary'
+      ? { sectionKey: 'summary' as const, entryIndex: 0, fieldKey: 'value' }
+      : { sectionKey: 'work_experience' as const, entryIndex: 0, fieldKey: 'description' }
+    const error = applySuggestion({
+      suggestion: { section_name: sectionName, original_text: previousText, suggested_change: draft, reasoning: 'Reviewed section-level wording.' },
+      target,
+      previousText,
+      newText: draft,
+    })
+    if (error) return error
+    setSectionDrafts((current) => {
+      const next = { ...current }
+      delete next[sectionName]
+      return next
+    })
+    setMessage(`Applied the reviewed ${sectionName} section to the tailored resume preview.`)
     return null
   }
   // Export the live tailored state, never the original sessionStorage draft.
@@ -651,7 +718,14 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
                 {!loading && !error && result && (
                   recommendations.length > 0 || keywordAssignments.length > 0 ? (
                     <ResumeSuggestions recommendations={recommendations} keywordAssignments={keywordAssignments}
-                      sections={tailored.sections} onApplySuggestion={applySuggestion} />
+                      sections={tailored.sections} onApplySuggestion={applySuggestion} onApplyKeyword={applyKeywordWording}
+                      onRemoveKeyword={removeKeywordSuggestion} sectionDrafts={sectionDrafts}
+                      sectionOriginals={{
+                        'Professional Summary': sectionSourceText('Professional Summary') ?? '',
+                        'Work Experience': sectionSourceText('Work Experience') ?? '',
+                      }}
+                      onChangeSectionDraft={(section, text) => setSectionDrafts((current) => ({ ...current, [section]: text }))}
+                      onApplySectionDraft={applySectionDraft} />
                   ) : <p>No wording changes were recommended.</p>
                 )}
                 {!loading && !error && result && (

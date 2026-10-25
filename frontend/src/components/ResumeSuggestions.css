@@ -584,3 +584,81 @@
   white-space: pre-wrap;
   resize: vertical;
 }
+/* Compact, readable cards for user-approved missing-keyword drafts. */
+.keyword-draft-card {
+  gap: 10px;
+  padding: 15px 16px;
+}
+.keyword-draft-header { display: flex; flex-direction: column; gap: 3px; }
+.keyword-draft-header h4 { margin: 1px 0 3px; line-height: 1.3; }
+.keyword-draft-header p { margin: 0; line-height: 1.45; }
+.keyword-draft-caption { color: var(--muted, #586273); font-size: 12px; line-height: 1.45; margin: 0; }
+.keyword-draft-options { border: 0; margin: 0; padding: 0; min-width: 0; }
+.keyword-draft-options legend { padding: 0; margin-bottom: 6px; font-weight: 700; font-size: 13px; }
+.keyword-draft-option { display: flex; align-items: flex-start; gap: 9px; margin: 0 0 7px; line-height: 1.45; cursor: pointer; }
+.keyword-draft-option input { flex: none; margin: 3px 0 0; }
+.keyword-draft-option span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.keyword-draft-edit-label { font-weight: 700; font-size: 13px; }
+.keyword-draft-textarea { width: 100%; box-sizing: border-box; padding: 10px; line-height: 1.45; }
+.keyword-draft-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+
+
+/* FIX: Preserve readable, full-width wording in keyword selection cards. */
+.suggestion-section,
+.suggestion-section-body,
+.keyword-draft-card,
+.keyword-draft-options {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.keyword-draft-option {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  width: 100%;
+  gap: 10px;
+  box-sizing: border-box;
+}
+.keyword-draft-option input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  margin: 3px 0 0;
+}
+.resume-suggestions-region .keyword-draft-option span,
+.keyword-draft-option span {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  flex: none;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
+  line-height: 1.5;
+  text-align: left;
+}
+
+/* Section-level review remains separate from the tailored resume until approved. */
+.section-review-card { display: flex; flex-direction: column; gap: 10px; width: 100%; min-width: 0; }
+.section-review-card h4 { margin: 0; }
+.section-review-card textarea { width: 100%; min-width: 0; box-sizing: border-box; white-space: pre-wrap; word-break: normal; }
+.section-review-card .suggestion-btn { align-self: flex-start; }
+
+/* Section wording is edited inline in its existing AI Suggestions accordion,
+   rather than in a second review card. */
+.suggestion-inline-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--divider, #dce4ee);
+}
+.suggestion-inline-edit .keyword-draft-textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+.suggestion-inline-edit .suggestion-btn { align-self: flex-start; }
