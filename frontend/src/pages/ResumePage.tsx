@@ -1,9 +1,4 @@
-/*
- * JobCoachAI - Resume Builder
- *
- * Handles resume creation, editing, preview,
- * and export for guest and registered users.
- */
+
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from "docx";
 import { Button } from "../components/Button";
@@ -31,6 +26,7 @@ type ResumePageProps = {
   isGuest?: boolean;
   onResumeReadyChange?: (ready: boolean) => void;
   onNeedsContinueChange?: (needsContinue: boolean) => void;
+  onRequiredFieldsCompleteChange?: (complete: boolean) => void;
   onContinueToTailor?: () => void;
   onLoadResumeProfile?: (file: File) => Promise<void>;
 };
@@ -341,6 +337,7 @@ export function ResumePage({
   isGuest = true,
   onResumeReadyChange,
   onNeedsContinueChange,
+  onRequiredFieldsCompleteChange,
   onContinueToTailor,
   onLoadResumeProfile,
 }: ResumePageProps) {
@@ -607,6 +604,11 @@ export function ResumePage({
   const summaryComplete = Boolean(
     sections.find((section) => section.key === "summary")?.entries.some(hasEntryContent),
   );
+  // Mirror the same required-field checks used by the Continue button.
+  const page2RequiredFieldsComplete = personalInfoComplete && summaryComplete && resumeReady && !resumeDeleted;
+  useEffect(() => {
+    onRequiredFieldsCompleteChange?.(page2RequiredFieldsComplete);
+  }, [onRequiredFieldsCompleteChange, page2RequiredFieldsComplete]);
   // Update App.tsx when the resume becomes available or is deleted
   useEffect(() => {
     onResumeReadyChange?.(resumeReady && !resumeDeleted);
@@ -999,7 +1001,24 @@ const hasExportableData = Boolean(
             />
           </div>
           <div className="resume-filename-field" style={{ flex: "1 1 200px", minWidth: "180px" }}>
-            <label htmlFor="resume-job-title">Target Job Title</label>
+            <div className="job-title-label-row">
+              <label htmlFor="resume-job-title">Job Title</label>
+              <span className="job-title-help-wrap">
+                <button
+                  type="button"
+                  className="job-title-help-trigger"
+                  aria-label="Help with Target Job Title"
+                  aria-describedby="job-title-help-content"
+                >
+                  ?
+                </button>
+                <span className="job-title-help-content" id="job-title-help-content" role="tooltip">
+                  Automatically uses the title from your most recent work experience when available.
+                  You can edit it for the job you are targeting. Leave it blank when creating a resume
+                  from scratch or when you have no work experience.
+                </span>
+              </span>
+            </div>
             <input
               id="resume-job-title"
               type="text"

@@ -40,9 +40,10 @@ function App() {
 
   const [resumeReady, setResumeReady] = useState(false)
   const [page2NeedsContinue, setPage2NeedsContinue] = useState(false)
+  const [page2RequiredFieldsComplete, setPage2RequiredFieldsComplete] = useState(false)
   const [showContinueWarning, setShowContinueWarning] = useState(false)
   const allowSavedContinueRef = useRef(false)
-  const continueWarningMessage = 'You have unsaved resume changes. To save your draft and proceed to tailor your resume, click Continue on the Resume Editor.'
+  const continueWarningMessage = 'You have unsaved resume changes. To save your draft and proceed to Page 3, click Continue on the Resume Editor.'
   const handleContinueToTailor = () => {
     allowSavedContinueRef.current = true
     setPage2NeedsContinue(false)
@@ -84,10 +85,18 @@ function App() {
 
       // Prevent bypassing Page 2's Save + Continue workflow by clicking the
       // sidebar, typing #tailor, or using browser forward navigation.
-      if (nextScreen === 'tailor' && currentScreen === 'parsed' && page2NeedsContinue && !allowSavedContinueRef.current) {
-        setShowContinueWarning(true)
-        window.location.hash = '#parsed'
-        return
+      if (nextScreen === 'tailor' && currentScreen === 'parsed' && !allowSavedContinueRef.current) {
+        // A blank or incomplete editor must not open Page 3 or show a warning.
+        if (!page2RequiredFieldsComplete) {
+          window.location.hash = '#parsed'
+          return
+        }
+        // A completed but modified resume must be saved through Continue.
+        if (page2NeedsContinue) {
+          setShowContinueWarning(true)
+          window.location.hash = '#parsed'
+          return
+        }
       }
       if (nextScreen === 'tailor') allowSavedContinueRef.current = false
 
@@ -116,6 +125,7 @@ function App() {
         bypassWelcomeWarningRef.current = false
         // Do not erase resume data merely because the user visits Welcome.
         setResumeReady(false)
+    setPage2RequiredFieldsComplete(false)
         setResumeSession(current => current + 1)
         window.dispatchEvent(new Event('resetWelcomeForm'))
       }
@@ -134,7 +144,7 @@ function App() {
 
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
-  }, [resumeReady, accountType, currentScreen, profileSection, page2NeedsContinue])
+  }, [resumeReady, accountType, currentScreen, profileSection, page2NeedsContinue, page2RequiredFieldsComplete])
 
 
   // Navigate only after the account state and navigation guard have updated.
@@ -167,6 +177,7 @@ function App() {
     accountTypeRef.current = 'guest'
     setAccountType('guest')
     setResumeReady(false)
+    setPage2RequiredFieldsComplete(false)
     setProfileInitials('G')
     setAccountName(null)
     setResumeSession(current => current + 1)
@@ -190,6 +201,7 @@ function App() {
     accountTypeRef.current = 'user'
     setAccountType('user')
     setResumeReady(false)
+    setPage2RequiredFieldsComplete(false)
     setResumeSession(current => current + 1)
   }
 
@@ -209,6 +221,7 @@ function App() {
     sessionStorage.removeItem(resumeIdStorageKey)
     setResumeSession(current => current + 1)
     setResumeReady(false)
+    setPage2RequiredFieldsComplete(false)
     setSidebarResumePreview(null)
 
     window.dispatchEvent(new Event('resetWelcomeForm'))
@@ -282,6 +295,7 @@ function App() {
       setProfileInitials(null)
       setAccountName(null)
       setResumeReady(false)
+    setPage2RequiredFieldsComplete(false)
       setResumeSession((current) => current + 1)
 
       window.dispatchEvent(new Event('resetWelcomeForm'))
@@ -343,6 +357,7 @@ function App() {
             isGuest={accountType !== 'user'}
             onResumeReadyChange={setResumeReady}
             onNeedsContinueChange={setPage2NeedsContinue}
+              onRequiredFieldsCompleteChange={setPage2RequiredFieldsComplete}
             onContinueToTailor={handleContinueToTailor}
           />
         )
@@ -410,9 +425,13 @@ function App() {
       onHomeClick={handleHomeClick}
       onBuildResumeClick={handleBuildResumeClick}
       onTailorNavigationClick={() => {
-        if (currentScreen === 'parsed' && page2NeedsContinue) {
-          setShowContinueWarning(true)
-          return false
+        if (currentScreen === 'parsed') {
+          // Ignore Page 3 clicks until the mandatory Page 2 fields are filled.
+          if (!page2RequiredFieldsComplete) return false
+          if (page2NeedsContinue) {
+            setShowContinueWarning(true)
+            return false
+          }
         }
         return true
       }}
@@ -434,6 +453,7 @@ function App() {
               isGuest={accountType !== 'user'}
               onResumeReadyChange={setResumeReady}
               onNeedsContinueChange={setPage2NeedsContinue}
+              onRequiredFieldsCompleteChange={setPage2RequiredFieldsComplete}
               onContinueToTailor={handleContinueToTailor}
             />
           </div>

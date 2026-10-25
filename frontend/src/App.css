@@ -3845,3 +3845,160 @@ textarea::placeholder {
   .saved-resume-row-header { display: none; }
   .saved-resume-actions { justify-content: flex-start; }
 }
+
+
+/* Sprint 4: Saved Resumes responds to the card's actual available width,
+   including a laptop with the sidebar open or Windows display scaling. */
+.saved-resumes-card {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+.saved-resumes-card .saved-resumes-heading,
+.saved-resumes-card .saved-resume-list,
+.saved-resumes-card .saved-resume-controls {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.saved-resumes-card .saved-resume-list {
+  width: 100%;
+  overflow-x: visible;
+}
+
+.saved-resumes-card .saved-resume-row {
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 245px);
+  column-gap: 12px;
+}
+
+.saved-resumes-card .saved-resume-row > * { min-width: 0; }
+.saved-resumes-card .saved-resume-name > span:last-child { min-width: 0; }
+.saved-resumes-card .saved-resume-name strong {
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+.saved-resumes-card .saved-resume-name small,
+.saved-resumes-card .saved-resume-job-title,
+.saved-resumes-card .saved-resume-date {
+  overflow-wrap: anywhere;
+}
+.saved-resumes-card .saved-resume-actions {
+  min-width: 0;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  white-space: normal;
+}
+.saved-resumes-card .saved-resume-actions .button {
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 10px;
+}
+.saved-resumes-card .saved-resume-controls { flex: 1 1 auto; }
+.saved-resumes-card .saved-resume-search { flex: 1 1 180px; min-width: 0; }
+
+/* Two-column cards when the *content area* is narrower than a desktop table. */
+@container (max-width: 820px) {
+  .saved-resumes-card .saved-resumes-heading { flex-direction: column; gap: 14px; }
+  .saved-resumes-card .saved-resume-controls { width: 100%; justify-content: flex-start; }
+  .saved-resumes-card .saved-resume-row-header { display: none; }
+  .saved-resumes-card .saved-resume-row:not(.saved-resume-row-header) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px 20px;
+    padding: 16px 10px;
+    border: 1px solid var(--divider);
+    border-radius: 10px;
+    margin-block: 10px;
+  }
+  .saved-resumes-card .saved-resume-name { grid-column: 1 / -1; }
+  .saved-resumes-card .saved-resume-actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .saved-resumes-card .saved-resume-job-title::before,
+  .saved-resumes-card .saved-resume-date::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .saved-resumes-card .saved-resume-filter-options { left: 0; right: auto; }
+}
+
+@container (max-width: 480px) {
+  .saved-resumes-card .saved-resume-controls { flex-direction: column; align-items: stretch; }
+  .saved-resumes-card .saved-resume-search { width: 100%; flex: 0 0 auto; }
+  .saved-resumes-card .saved-resume-job-filter > summary { width: 100%; }
+  .saved-resumes-card .saved-resume-job-filter { width: 100%; }
+  .saved-resumes-card .saved-resume-filter-options { width: 100%; max-width: 100%; box-sizing: border-box; }
+  .saved-resumes-card .saved-resume-row:not(.saved-resume-row-header) { grid-template-columns: minmax(0, 1fr); }
+  .saved-resumes-card .saved-resume-name,
+  .saved-resumes-card .saved-resume-actions { grid-column: 1; }
+}
+
+/* Page 2: accessible Target Job Title help tooltip */
+.job-title-label-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 4px;
+}
+.job-title-label-row > label { margin-bottom: 0; }
+.job-title-help-wrap { position: relative; display: inline-flex; flex-shrink: 0; }
+.job-title-help-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  border: 1px solid #64748b;
+  padding: 0;
+  background: #fff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+}
+.job-title-help-trigger:hover, .job-title-help-trigger:focus-visible {
+  color: #1d4ed8;
+  border-color: #1d4ed8;
+  outline-offset: 3px;
+}
+.job-title-help-content {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(290px, calc(100vw - 40px));
+  white-space: normal;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #172033;
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 400;
+  text-align: left;
+  z-index: 30;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.job-title-help-wrap:hover .job-title-help-content,
+.job-title-help-wrap:focus-within .job-title-help-content {
+  opacity: 1;
+  visibility: visible;
+}
+@media (max-width: 560px) {
+  .job-title-help-content { left: 0; transform: none; }
+}

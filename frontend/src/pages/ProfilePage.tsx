@@ -564,11 +564,11 @@ export function ProfilePage({
                     </span>
                   </div>
 
-                  <span className="saved-resume-job-title">
+                  <span className="saved-resume-job-title" data-label="Job Title">
                     {getJobTitle(resume)}
                   </span>
 
-                  <span className="saved-resume-date">
+                  <span className="saved-resume-date" data-label="Last Updated">
                     {formatDateTime(resume.updated_at ?? resume.created_at)}
                   </span>
 
