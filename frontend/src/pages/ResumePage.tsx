@@ -66,6 +66,27 @@ type ResumeDraft = {
   targetJobTitle?: string;
   csvSourceFilename?: string;
 };
+// Derive the most recent actual role from structured Work Experience entries.
+// Empty roles are ignored; dated entries outrank undated entries. When dates
+// are unavailable, preserve resume order (normally most recent first).
+const getMostRecentExperienceTitle = (sections: ResumeSection[]): string => {
+  const work = sections.find((section) => section.key === "work_experience");
+  if (!work) return "";
+  const roles = (work.entries as WorkExperience[])
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => typeof entry?.job_title === "string" && entry.job_title.trim() !== "");
+  if (roles.length === 0) return "";
+  const dateValue = (value: string | undefined): number => {
+    const match = (value ?? "").match(/^(\d{4})(?:[-/](\d{1,2}))?/);
+    return match ? Number(match[1]) * 12 + (Number(match[2] ?? 1) - 1) : -1;
+  };
+  roles.sort((a, b) =>
+    dateValue(b.entry.start_date) - dateValue(a.entry.start_date) ||
+    dateValue(b.entry.end_date) - dateValue(a.entry.end_date) ||
+    a.index - b.index
+  );
+  return roles[0].entry.job_title.trim();
+};
 // JobCoachAI resume profile CSV: one row for each field of each resume entry.
 const csvEscape = (value: string): string => `"${value.replace(/"/g, '""')}"`;
 const parseResumeCsv = (input: string): string[][] => {
@@ -111,12 +132,9 @@ const parseResumeProfileCsv = (csv: string, uploadedFilename: string): ResumeDra
   const entryMaps = new Map<SectionKey, Map<number, Record<string, string> | string>>();
   let filename = uploadedFilename.replace(/\.csv$/i, "");
   let importedOrder: SectionKey[] | null = null;
-  let importedJobTitle = "";
   for (const [kind, sectionName, entryValue, field, value = ""] of rows) {
     if (kind === "meta" && field === "filename") {
       filename = value;
-    } else if (kind === "meta" && (field === "jobTitle" || field === "targetJobTitle")) {
-      importedJobTitle = value;
     } else if (kind === "meta" && field === "section_order") {
       try {
         const order: unknown = JSON.parse(value);
@@ -156,7 +174,8 @@ const parseResumeProfileCsv = (csv: string, uploadedFilename: string): ResumeDra
   if (!sections.some((section) => section.key === "summary")) {
     sections.unshift({ key: "summary", title: sectionLabels.summary, entries: [profile.professional_summary || ""] });
   }
-  return { profile, sections, filename, jobTitle: importedJobTitle, targetJobTitle: importedJobTitle, csvSourceFilename: uploadedFilename };
+  const recentRole = getMostRecentExperienceTitle(sections);
+  return { profile, sections, filename, jobTitle: recentRole, targetJobTitle: recentRole, csvSourceFilename: uploadedFilename };
 };
 const downloadResumeProfileCsv = (draft: ResumeDraft): void => {
   const rows: string[][] = [resumeCsvHeader];
@@ -337,7 +356,7 @@ export function ResumePage({
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [importedCsvFilename, setImportedCsvFilename] = useState<string | null>(storedDraft?.csvSourceFilename ?? null);
   const [resumeFilename, setResumeFilename] = useState(storedDraft?.filename ?? "");
-  const [jobTitle, setJobTitle] = useState(storedDraft?.jobTitle ?? storedDraft?.targetJobTitle ?? "");
+  const [jobTitle, setJobTitle] = useState(() => getMostRecentExperienceTitle(storedDraft?.sections ?? []));
   const [status, setStatus] = useState("");
   const [savingResume, setSavingResume] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -788,7 +807,7 @@ const hasExportableData = Boolean(
       setProfile(draft.profile);
       setSections(lockProfessionalSummaryFirst(draft.sections));
       setResumeFilename(draft.filename);
-      setJobTitle(draft.jobTitle ?? draft.targetJobTitle ?? "");
+      setJobTitle(getMostRecentExperienceTitle(draft.sections));
       setResumeFile(null);
       setImportedCsvFilename(file.name);
       setResumeDeleted(false);
@@ -980,7 +999,7 @@ const hasExportableData = Boolean(
             />
           </div>
           <div className="resume-filename-field" style={{ flex: "1 1 200px", minWidth: "180px" }}>
-            <label htmlFor="resume-job-title">Job Title</label>
+            <label htmlFor="resume-job-title">Target Job Title</label>
             <input
               id="resume-job-title"
               type="text"

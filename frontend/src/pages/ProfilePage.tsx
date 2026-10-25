@@ -138,6 +138,11 @@ function saveDatabaseResumeAsDraft(databaseResume: Record<string, any>) {
   )
 }
 
+function getDisplayResumeFilename(filename: string) {
+  // The resume type appears on the second line, so omit a trailing type suffix.
+  return filename.replace(/-(original|tailored)$/i, '')
+}
+
 function getJobTitle(resume: SavedResumeSummary) {
   return getSavedResumeDisplayMeta(resume.id)?.jobTitle?.trim() || resume.title?.trim() || 'Untitled'
 }
@@ -237,7 +242,7 @@ export function ProfilePage({
         (!selectedJobTitles.includes('__none__') && selectedJobTitles.includes(jobTitle))
 
       const displayFilename = meta
-        ? `${meta.filename}-${meta.kind}`
+        ? getDisplayResumeFilename(meta.filename)
         : resume.full_name?.trim()
           ? `${resume.full_name} Resume`
           : 'Saved Resume'
@@ -540,7 +545,7 @@ export function ProfilePage({
                       <strong>
                         {(() => {
                           const meta = getSavedResumeDisplayMeta(resume.id)
-                          if (meta) return `${meta.filename}-${meta.kind}`
+                          if (meta) return getDisplayResumeFilename(meta.filename)
                           return resume.full_name?.trim()
                             ? `${resume.full_name} Resume`
                             : 'Saved Resume'
