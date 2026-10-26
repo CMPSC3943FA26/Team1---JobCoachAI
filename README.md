@@ -198,11 +198,14 @@ Features that interact with the backend require the Flask server to be running.
 Make sure the frontend .env contains:
 
 VITE_API_URL=http://localhost:5000
+
 2. Start the Flask backend
 
 From the root of the project, run:
 
+```bash
 python -m backend.app
+```
 
 Keep the backend running while testing backend-dependent features.
 
@@ -210,7 +213,9 @@ Keep the backend running while testing backend-dependent features.
 
 In a separate terminal, run:
 
+```bash
 npm run dev
+```
 
 ## Application Workflow
 
