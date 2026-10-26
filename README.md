@@ -1,6 +1,8 @@
 # JobCoachAI
 
-JobCoachAI is an AI-powered career development platform designed to help job seekers create professional resumes, tailor applications to specific job opportunities, identify missing qualifications, and improve their career readiness. The platform aims to simplify the job application process by providing resume-building tools, AI-assisted recommendations, ATS compatibility analysis, and organized resume management.
+JobCoachAI is an AI-powered career development platform designed to help job seekers create professional resumes, tailor applications to specific job opportunities, identify missing qualifications, and improve their career readiness. 
+
+The platform aims to simplify the job application process by providing resume-building tools, AI-assisted recommendations, ATS compatibility analysis, and organized resume management.
 
 This repository combines the Team1 product plans and documentation with the working Vite/React and Supabase starter implementation. The application is still an MVP in progress: the current codebase provides the frontend shell and Supabase client setup, while the broader coaching features remain planned work.
 
