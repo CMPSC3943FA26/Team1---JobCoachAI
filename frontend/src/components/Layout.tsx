@@ -248,13 +248,6 @@ export function Layout({
                     return
                   }
 
-                  // The Saved Resumes view may open Page 2 but never Page 3
-                  // directly from the sidebar. Ignore clicks without a message.
-                  if (step.key === 'tailor' && currentScreen === 'profile') {
-                    event.preventDefault()
-                    return
-                  }
-
                   
                   if (step.key === 'parsed' && currentScreen === 'tailor') {
                     event.preventDefault()

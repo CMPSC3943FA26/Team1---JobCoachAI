@@ -3869,7 +3869,7 @@ textarea::placeholder {
 .saved-resumes-card .saved-resume-row {
   width: 100%;
   min-width: 0;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 245px);
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 315px);
   column-gap: 12px;
 }
 

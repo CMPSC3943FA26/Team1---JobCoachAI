@@ -29,7 +29,7 @@ function getCurrentScreen(): ScreenName {
 const tailoredPayloadStorageKey = 'jobcoachai.tailoredResumePayload'
 
 const leaveWorkspaceMessage =
-  'Going to Welcome clears the current resume and starts a new workspace. Continue?'
+  'Going to Welcome will logout from current workspace. Do you want to logout?'
 
 function App() {
   const [resumeSession, setResumeSession] = useState(0)
@@ -43,6 +43,9 @@ function App() {
   const [page2RequiredFieldsComplete, setPage2RequiredFieldsComplete] = useState(false)
   const [showContinueWarning, setShowContinueWarning] = useState(false)
   const allowSavedContinueRef = useRef(false)
+  // Saved Resumes has already loaded a valid draft before navigating to Page 3.
+  // A ref makes that authorization visible to the synchronous hashchange handler.
+  const openingSavedTailorRef = useRef(false)
   const continueWarningMessage = 'You have unsaved resume changes. To save your draft and proceed to Page 3, click Continue on the Resume Editor.'
   const handleContinueToTailor = () => {
     allowSavedContinueRef.current = true
@@ -76,9 +79,10 @@ function App() {
         return
       }
 
-      // Saved Resumes is an edit/review entry point, not a shortcut to tailoring.
-      // Ignore direct hash navigation to Page 3 from this view as well.
-      if (nextScreen === 'tailor' && currentScreen === 'profile' && profileSection === 'resumes') {
+      // A saved resume is loaded before navigation; React state may not have
+      // committed yet when hashchange runs. Trust that one explicit action.
+      const openingSavedTailor = nextScreen === 'tailor' && openingSavedTailorRef.current
+      if (nextScreen === 'tailor' && currentScreen === 'profile' && profileSection === 'resumes' && !resumeReady && !openingSavedTailor) {
         window.location.hash = '#profile'
         return
       }
@@ -101,11 +105,14 @@ function App() {
       if (nextScreen === 'tailor') allowSavedContinueRef.current = false
 
       // Page 3 also requires a resume.
-      if (nextScreen === 'tailor' && !resumeReady) {
+      if (nextScreen === 'tailor' && !resumeReady && !openingSavedTailor) {
         window.location.hash = '#parsed'
         return
       }
-      if (nextScreen === 'tailor') setTailorMounted(true)
+      if (nextScreen === 'tailor') {
+        openingSavedTailorRef.current = false
+        setTailorMounted(true)
+      }
 
       if (nextScreen === 'welcome') {
         const leavingResumeWorkspace =
@@ -376,8 +383,14 @@ function App() {
           <ProfilePage
             focusSection={profileSection}
             onNameChange={handleProfileNameChange}
-            onResumeOpened={() => {
+            onResumeOpened={(destination: 'parsed' | 'tailor') => {
               setSidebarResumePreview(null)
+              // Opening a different saved resume must not show the previous
+              // Page 3's AI results or resume data.
+              setTailorMounted(false)
+              allowSavedContinueRef.current = destination === 'tailor'
+              openingSavedTailorRef.current = destination === 'tailor'
+              setPage2NeedsContinue(false)
               setResumeReady(true)
               setResumeSession(current => current + 1)
             }}
@@ -425,6 +438,20 @@ function App() {
       onHomeClick={handleHomeClick}
       onBuildResumeClick={handleBuildResumeClick}
       onTailorNavigationClick={() => {
+        // From Saved Resumes, let the sidebar open Page 3 using the resume
+        // already loaded into the editor (rather than blocking all Profile clicks).
+        if (currentScreen === 'profile' && profileSection === 'resumes') {
+          const hasDraft = Boolean(sessionStorage.getItem(resumeDraftStorageKey))
+          if (!resumeReady && !hasDraft) {
+            // No resume has been selected yet. Keep the user in Saved Resumes.
+            return false
+          }
+          openingSavedTailorRef.current = true
+          allowSavedContinueRef.current = true
+          setResumeReady(true)
+          setPage2NeedsContinue(false)
+          return true
+        }
         if (currentScreen === 'parsed') {
           // Ignore Page 3 clicks until the mandatory Page 2 fields are filled.
           if (!page2RequiredFieldsComplete) return false
@@ -588,7 +615,7 @@ function App() {
                 onClick={() => { void goHome() }}
                 disabled={logoutPending}
               >
-                {logoutPending ? 'Logging out…' : 'Go to Home →'}
+                {logoutPending ? 'Logging out…' : accountType === 'user' ? 'Logout' : 'Go to Home →'}
               </button>
             </div>
           </div>

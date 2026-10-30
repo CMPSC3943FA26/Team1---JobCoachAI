@@ -1,6 +1,6 @@
 
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
-import { Document, HeadingLevel, Packer, Paragraph, TextRun } from "docx";
+import { buildDownloadResume, downloadSavedResumeDocx, downloadSavedResumePdf } from "./ProfilePage";
 import { Button } from "../components/Button";
 import { ResumePreview, type PreviewSection } from "../components/ResumePreview";
 import {
@@ -613,22 +613,6 @@ export function ResumePage({
   useEffect(() => {
     onResumeReadyChange?.(resumeReady && !resumeDeleted);
   }, [onResumeReadyChange, resumeReady, resumeDeleted]);
-  // Format resume entries for the preview
-  const formatEntryPreview = (entry: SectionEntry) => {
-    if (typeof entry === "string") return entry.trim();
-    return Object.entries(entry)
-      .filter(([, value]) => typeof value === "string" && value.trim() !== "")
-      .map(([fieldKey, value]) => {
-        const fieldLabel = fieldKey
-          .replace(/_/g, " ")
-          .replace(/\b\w/g, (char) => char.toUpperCase());
-        if (fieldKey === "description" || fieldKey === "skill_name") {
-          return value;
-        }
-        return `${fieldLabel}: ${value}`;
-      })
-      .join(" • ");
-  };
   // Normalize the editor's display-friendly date values to the concrete ISO
   // dates required by the current backend/database schema. This keeps the
   // frontend compatible without changing backend or database files.
@@ -834,61 +818,26 @@ const hasExportableData = Boolean(
       setStatus("Add resume information before exporting a DOCX or PDF.");
       return;
     }
-    const exportSnapshot = currentResumeSnapshot;
-    const contactDetails = [profile.email, profile.phone, profile.location]
-      .filter(Boolean)
-      .join(" • ");
-    const children: Paragraph[] = [
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: [profile.first_name, profile.last_name].filter(Boolean).join(" ") || "Resume",
-            bold: true,
-            size: 32,
-          }),
-        ],
-        heading: HeadingLevel.TITLE,
-      }),
-    ];
-    if (contactDetails) {
-      children.push(new Paragraph(contactDetails));
+    try {
+      await downloadSavedResumeDocx(buildDownloadResume(profile, sections, resumeFilename));
+      setExportedGuestSnapshot(currentResumeSnapshot);
+      setStatus("Resume DOCX download started.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to export DOCX.");
     }
-    sections
-      .filter((section) => section.entries.some(hasEntryContent))
-      .forEach((section) => {
-        children.push(
-          new Paragraph({ text: section.title, heading: HeadingLevel.HEADING_1 }),
-        );
-        section.entries.filter(hasEntryContent).forEach((entry) => {
-          children.push(new Paragraph(formatEntryPreview(entry)));
-        });
-      });
-    const document = new Document({ sections: [{ children }] });
-    const blob = await Packer.toBlob(document);
-    const link = window.document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.href = url;
-    link.download = `${getSafeFilename(resumeFilename)}.docx`;
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setExportedGuestSnapshot(exportSnapshot);
-    setStatus("Resume DOCX download started.");
   };
   const exportResumeAsPdf = () => {
     if (!hasExportableData) {
       setStatus("Add resume information before exporting a DOCX or PDF.");
       return;
     }
-    setStatus("Choose Save as PDF in the print dialog to download your resume.");
-    // The print dialog cannot tell us whether the PDF was actually saved.
-    // Record that export was initiated; guests can continue without another confirmation.
-    setExportedGuestSnapshot(currentResumeSnapshot);
-    const originalTitle = document.title;
-    document.title = getSafeFilename(resumeFilename);
-    window.print();
-    window.setTimeout(() => {
-      document.title = originalTitle;
-    }, 1000);
+    try {
+      downloadSavedResumePdf(buildDownloadResume(profile, sections, resumeFilename));
+      setExportedGuestSnapshot(currentResumeSnapshot);
+      setStatus("Resume PDF download started.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to export PDF.");
+    }
   };
   const handleDelete = async () => {
     try {

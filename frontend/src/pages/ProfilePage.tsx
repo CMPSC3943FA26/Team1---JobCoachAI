@@ -8,12 +8,171 @@ import {
   loadResumeFromDatabase,
   type SavedResumeSummary,
 } from '../services/resumeService'
-import { resumeDraftStorageKey, resumeIdStorageKey } from './ResumePage'
+const resumeDraftStorageKey = 'jobcoachai.resumeDraft'
+const resumeIdStorageKey = 'jobcoachai.resumeId'
+import { Document, Packer, Paragraph, TextRun } from 'docx'
+
+type SavedResume = Record<string, any>
+type ExportPart = { kind: 'title' | 'contact' | 'section' | 'heading' | 'dates' | 'subtitle' | 'body' | 'skills'; text: string }
+
+const exportSections = [
+  ['summary', 'Professional Summary'], ['work_experience', 'Experience'],
+  ['education', 'Education'], ['skills', 'Skills'], ['projects', 'Projects'],
+  ['certifications', 'Certifications'],
+] as const
+const safeFilename = (value: string) => value.replace(/[\\/:*?"<>|]/g, '_').trim() || 'resume'
+const asText = (value: unknown) => typeof value === 'string' ? value.trim().replace(/[•·]/g, ' | ').replace(/\s+\|\s+/g, ' | ') : ''
+
+// Keep section, field, and entry order consistent with the shared Page 2 / Page 3 ResumePreview.
+function resumeContent(resume: SavedResume) {
+  const filename = safeFilename(asText(resume.exportFilename) || getSavedResumeDisplayMeta(String(resume.id))?.filename || `${resume.full_name || 'resume'}-resume`)
+  const parts: ExportPart[] = [
+    { kind: 'title', text: asText(resume.full_name) || 'Resume' },
+    { kind: 'contact', text: [resume.email, resume.phone, resume.location].map(asText).filter(Boolean).join(' | ') },
+  ]
+  for (const [key, label] of exportSections) {
+    const entries: unknown[] = key === 'summary' ? [resume.professional_summary] :
+      Array.isArray(resume[key]) ? [...resume[key]].sort((a, b) => Number(a?.sort_order ?? 0) - Number(b?.sort_order ?? 0)) : []
+    const rendered: ExportPart[] = []
+    if (key === 'skills') {
+      const names = entries.map((entry) => typeof entry === 'string' ? entry : asText((entry as Record<string, unknown> | null)?.skill_name)).filter(Boolean)
+      if (names.length) rendered.push({ kind: 'skills', text: names.join(' | ') })
+    } else for (const entry of entries) {
+      if (typeof entry === 'string') {
+        if (entry.trim()) rendered.push({ kind: 'body', text: entry.trim() })
+        continue
+      }
+      if (!entry || typeof entry !== 'object') continue
+      const fields = entry as Record<string, unknown>
+      const titleKey = key === 'work_experience' ? 'job_title' : key === 'education' ? 'school' :
+        key === 'projects' || key === 'certifications' ? 'name' : ''
+      const subtitleKeys = key === 'work_experience' ? ['company', 'location'] : key === 'education' ? ['degree', 'field_of_study'] :
+        key === 'certifications' ? ['issuer', 'date_earned'] : []
+      const dateKeys = key === 'work_experience' || key === 'education' ? ['start_date', 'end_date'] : []
+      const title = asText(fields[titleKey])
+      const dates = dateKeys.map((field) => asText(fields[field])).filter(Boolean).join(' – ')
+      const subtitle = subtitleKeys.map((field) => asText(fields[field])).filter(Boolean).join(' | ')
+      const description = asText(fields.description)
+      const used = new Set(['id', 'resume_id', 'sort_order', 'description', titleKey, ...dateKeys, ...subtitleKeys])
+      const extra = Object.entries(fields).filter(([field, value]) => !used.has(field) && asText(value)).map(([, value]) => asText(value)).join(' | ')
+      if (title) rendered.push({ kind: 'heading', text: title })
+      if (dates) rendered.push({ kind: 'dates', text: dates })
+      if (subtitle) rendered.push({ kind: 'subtitle', text: subtitle })
+      if (description) rendered.push({ kind: 'body', text: description })
+      if (extra) rendered.push({ kind: 'body', text: extra })
+    }
+    if (rendered.length) parts.push({ kind: 'section', text: label }, ...rendered)
+  }
+  return { filename, parts }
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 10000)
+}
+
+export async function downloadSavedResumeDocx(resume: SavedResume) {
+  const { filename, parts } = resumeContent(resume)
+  const spacing = { title: 0, contact: 250, section: 110, heading: 25, dates: 70, subtitle: 55, body: 145, skills: 150 }
+  const children = parts.filter((part) => part.text).map((part) => {
+    const kind = part.kind
+    const isHeader = kind === 'title' || kind === 'section' || kind === 'heading'
+    return new Paragraph({
+      children: [new TextRun({ text: part.text, bold: isHeader, color: kind === 'heading' ? '182C4E' : kind === 'dates' ? '475569' : '171717',
+        size: kind === 'title' ? 34 : kind === 'section' ? 22 : kind === 'heading' ? 20 : kind === 'dates' ? 17 : 19,
+        font: 'Georgia' })],
+      alignment: kind === 'title' || kind === 'contact' ? 'center' : 'left',
+      spacing: { before: kind === 'section' ? 230 : 0, after: spacing[kind], line: kind === 'body' || kind === 'skills' ? 330 : 275 },
+      border: kind === 'section' ? { bottom: { color: 'D5D9DF', space: 5, size: 5, style: 'single' } } :
+        kind === 'contact' ? { bottom: { color: '64748B', space: 14, size: 6, style: 'single' } } : undefined,
+      keepNext: kind === 'section' || kind === 'heading',
+    })
+  })
+  const document = new Document({ sections: [{ properties: { page: { margin: { top: 720, bottom: 720, left: 780, right: 780 } } }, children }] })
+  saveBlob(await Packer.toBlob(document), `${filename}.docx`)
+}
+
+// Generate the file directly in the current tab. No print window, print dialog, or preview page.
+// Uses PDF's built-in Helvetica font, supporting standard Western characters.
+export function downloadSavedResumePdf(resume: SavedResume) {
+  const { filename, parts } = resumeContent(resume)
+  const pageWidth = 612, pageHeight = 792, margin = 46, usableWidth = pageWidth - 2 * margin
+  const pages: string[][] = [[]]
+  let y = pageHeight - margin
+  const page = () => pages[pages.length - 1]
+  const newPage = () => { pages.push([]); y = pageHeight - margin }
+  const plain = (s: string) => s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[•·]/g, ' | ').replace(/[–—]/g, '-').replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/[^\x20-\x7e]/g, '?')
+  const pdfText = (s: string) => plain(s).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)')
+  const fontSize: Record<ExportPart['kind'], number> = { title: 18, contact: 9.5, section: 11.5, heading: 10.5, dates: 8.8, subtitle: 9.4, body: 9.5, skills: 9.5 }
+  const estimate = (s: string, size: number) => [...plain(s)].reduce((n, c) => n + (c === ' ' ? 0.26 : 'il.,:;!|'.includes(c) ? 0.25 : 'MW@'.includes(c) ? 0.85 : 0.52) * size, 0)
+  const wrap = (s: string, size: number) => s.split('\n').flatMap((line) => {
+    const words = line.split(/\s+/).filter(Boolean), out: string[] = []
+    let row = ''
+    for (const word of words) {
+      const next = row ? row + ' ' + word : word
+      if (estimate(next, size) > usableWidth && row) { out.push(row); row = word } else row = next
+    }
+    out.push(row)
+    return out
+  })
+  const drawText = (line: string, size: number, bold: boolean, center = false, color = '0.09 0.09 0.09') => {
+    const x = center ? Math.max(margin, (pageWidth - estimate(line, size)) / 2) : margin
+    page().push(`${color} rg BT /${bold ? 'F2' : 'F1'} ${size} Tf 1 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)} Tm (${pdfText(line)}) Tj ET`)
+  }
+  for (const part of parts) {
+    if (!part.text) continue
+    const size = fontSize[part.kind]
+    const lines = wrap(part.text, size)
+    const leading = part.kind === 'body' || part.kind === 'skills' ? 15 : 13
+    const before = part.kind === 'section' ? 18 : part.kind === 'heading' ? 8 : part.kind === 'body' ? 5 : 2
+    const after = part.kind === 'title' ? 5 : part.kind === 'contact' ? 20 : part.kind === 'section' ? 9 : 2
+    const required = before + Math.min(lines.length, 2) * leading + after + (part.kind === 'section' ? 20 : 0)
+    if (y - required < margin) newPage()
+    y -= before
+    const bold = ['title', 'section', 'heading'].includes(part.kind)
+    for (const line of lines) {
+      if (y - leading < margin) newPage()
+      drawText(line, size, bold, part.kind === 'title' || part.kind === 'contact', part.kind === 'dates' ? '0.27 0.33 0.41' : '0.09 0.09 0.09')
+      y -= leading
+    }
+    if (part.kind === 'section' || part.kind === 'contact') {
+      page().push(`0.72 0.76 0.81 RG 0.6 w ${margin} ${y + 3} m ${pageWidth - margin} ${y + 3} l S`)
+    }
+    y -= after
+  }
+  const objects: string[] = ['']
+  const add = (body: string) => { objects.push(body); return objects.length - 1 }
+  const font = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>')
+  const fontBold = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>')
+  const pagesObj = add('')
+  const refs = pages.map((commands) => {
+    const content = commands.join('\n')
+    const stream = add(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`)
+    return add(`<< /Type /Page /Parent ${pagesObj} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${font} 0 R /F2 ${fontBold} 0 R >> >> /Contents ${stream} 0 R >>`)
+  })
+  objects[pagesObj] = `<< /Type /Pages /Kids [${refs.map((id) => `${id} 0 R`).join(' ')}] /Count ${refs.length} >>`
+  const root = add(`<< /Type /Catalog /Pages ${pagesObj} 0 R >>`)
+  let pdf = '%PDF-1.4\n'
+  const offsets = [0]
+  for (let i = 1; i < objects.length; i++) {
+    offsets.push(pdf.length)
+    pdf += `${i} 0 obj\n${objects[i]}\nendobj\n`
+  }
+  const start = pdf.length
+  pdf += `xref\n0 ${objects.length}\n0000000000 65535 f \n${offsets.slice(1).map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size ${objects.length} /Root ${root} 0 R >>\nstartxref\n${start}\n%%EOF`
+  saveBlob(new Blob([pdf], { type: 'application/pdf' }), `${filename}.pdf`)
+}
 
 type ProfilePageProps = {
   focusSection?: 'profile' | 'resumes'
   onNameChange?: (firstName: string, lastName: string) => void
-  onResumeOpened?: () => void
+  onResumeOpened?: (destination: 'parsed' | 'tailor') => void
   onResumePreviewed?: (resume: Record<string, any>) => void
 }
 
@@ -160,6 +319,8 @@ export function ProfilePage({
   const [saving, setSaving] = useState(false)
   const [resumeLoadingId, setResumeLoadingId] = useState<string | null>(null)
   const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null)
+  const [resumePendingDownload, setResumePendingDownload] = useState<SavedResumeSummary | null>(null)
+  const [downloadingResume, setDownloadingResume] = useState(false)
   const [resumePendingDelete, setResumePendingDelete] = useState<SavedResumeSummary | null>(null)
   const [deletingResume, setDeletingResume] = useState(false)
   const [message, setMessage] = useState('')
@@ -327,7 +488,7 @@ export function ProfilePage({
     }
   }
 
-  const handleOpenResume = async (resumeId: string) => {
+  const handleOpenResume = async (resumeId: string, destination: 'parsed' | 'tailor' = 'parsed') => {
     setResumeLoadingId(resumeId)
     setMessage('')
 
@@ -340,8 +501,8 @@ export function ProfilePage({
       }
 
       saveDatabaseResumeAsDraft(databaseResume)
-      onResumeOpened?.()
-      window.location.hash = '#parsed'
+      onResumeOpened?.(destination)
+      window.location.hash = `#${destination}`
     } catch (error) {
       console.error('Open saved resume error:', error)
       setMessage(
@@ -349,6 +510,33 @@ export function ProfilePage({
       )
     } finally {
       setResumeLoadingId(null)
+    }
+  }
+
+  const handleDownloadResume = async (format: 'pdf' | 'docx') => {
+    if (!resumePendingDownload || downloadingResume) return
+    const selected = resumePendingDownload
+    setDownloadingResume(true)
+    setMessage('')
+    try {
+      const response = await loadResumeFromDatabase(selected.id)
+      const databaseResume = response?.resume ?? response
+      if (!databaseResume || databaseResume.error) {
+        throw new Error(databaseResume?.error ?? 'Unable to download this resume.')
+      }
+      if (format === 'pdf') {
+        downloadSavedResumePdf({ ...databaseResume, id: selected.id })
+        setMessage('Resume PDF download started.')
+      } else {
+        await downloadSavedResumeDocx({ ...databaseResume, id: selected.id })
+        setMessage('Resume DOCX download started.')
+      }
+      setResumePendingDownload(null)
+    } catch (error) {
+      console.error('Download saved resume error:', error)
+      setMessage(error instanceof Error ? error.message : 'Unable to download this resume.')
+    } finally {
+      setDownloadingResume(false)
     }
   }
 
@@ -590,6 +778,13 @@ export function ProfilePage({
                       {resumeLoadingId === resume.id ? 'Opening…' : 'Open'}
                     </button>
                     <button
+                      className="button button-secondary"
+                      type="button"
+                      onClick={() => setResumePendingDownload(resume)}
+                    >
+                      Download
+                    </button>
+                    <button
                       className="text-button saved-resume-delete"
                       type="button"
                       onClick={() => setResumePendingDelete(resume)}
@@ -602,6 +797,29 @@ export function ProfilePage({
           </div>
         )}
       </section>
+
+      {resumePendingDownload && (
+        <div className="export-dialog-backdrop" role="presentation">
+          <div className="export-dialog" role="dialog" aria-modal="true"
+            aria-labelledby="saved-resume-export-title" aria-describedby="saved-resume-export-description">
+            <span className="panel-icon">SAVE AS</span>
+            <h3 id="saved-resume-export-title">Choose a file type</h3>
+            <p id="saved-resume-export-description">Download your saved resume as PDF or DOCX.</p>
+            <div className="export-dialog-options">
+              <button className="button button-primary" type="button" disabled={downloadingResume}
+                onClick={() => void handleDownloadResume('pdf')}>
+                Save as PDF <span aria-hidden="true">↓</span>
+              </button>
+              <button className="button button-primary" type="button" disabled={downloadingResume}
+                onClick={() => void handleDownloadResume('docx')}>
+                Save as DOCX <span aria-hidden="true">↓</span>
+              </button>
+            </div>
+            <button className="export-dialog-cancel" type="button" disabled={downloadingResume}
+              onClick={() => setResumePendingDownload(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
 
       {resumePendingDelete && (
         <div className="dialog-backdrop" role="presentation">
@@ -644,4 +862,25 @@ export function ProfilePage({
       )}
     </section>
   )
+}
+
+
+// Convert an in-editor resume into the same structured data used by Saved Resumes exports.
+// Exporting from the editor does not require first saving the resume to the database.
+export function buildDownloadResume(profile: { first_name: string; last_name: string; email: string; phone: string; location: string; professional_summary: string }, sections: Array<{ key: string; entries: Array<unknown> }>, filename: string) {
+  const entryList = (key: string) => sections.find((section) => section.key === key)?.entries ?? [];
+  const summary = entryList('summary').find((value) => typeof value === 'string');
+  return {
+    exportFilename: filename,
+    full_name: [profile.first_name, profile.last_name].filter(Boolean).join(' '),
+    email: profile.email,
+    phone: profile.phone,
+    location: profile.location,
+    professional_summary: typeof summary === 'string' ? summary : profile.professional_summary,
+    work_experience: entryList('work_experience'),
+    education: entryList('education'),
+    skills: entryList('skills'),
+    projects: entryList('projects'),
+    certifications: entryList('certifications'),
+  };
 }

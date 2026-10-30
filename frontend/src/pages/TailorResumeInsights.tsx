@@ -10,7 +10,7 @@
  * Suggestions are returned by the backend AI tailoring service.
  */
 import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
-import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx'
+import { buildDownloadResume, downloadSavedResumeDocx, downloadSavedResumePdf } from './ProfilePage'
 import { AtsScorePanel } from '../components/AtsScorePanel'
 import { ResumePreview, type PreviewSection } from '../components/ResumePreview'
 import { SummaryOptions } from '../components/SummaryOptions'
@@ -94,13 +94,6 @@ function payloadFromDraft(draft: Draft): ResumeSaveRequest {
     projects: asEntries(draft.sections, 'projects'),
     certifications: asEntries(draft.sections, 'certifications'),
   }
-}
-function entryText(entry: Sections[number]['entries'][number]): string {
-  if (typeof entry === 'string') return entry
-  return Object.entries(entry)
-    .filter(([key, value]) => key !== 'id' && key !== 'sort_order' && typeof value === 'string' && value.trim())
-    .map(([, value]) => String(value))
-    .join(' · ')
 }
 function sectionNameFromPath(path: string): string {
   const section = path.replace(/^resume\./, '').split(/[.\[]/)[0]
@@ -597,38 +590,10 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     if (!tailored || exportBusy) return
     setExportBusy(true)
     try {
-      const name = [tailored.profile.first_name, tailored.profile.last_name]
-        .filter(Boolean).join(' ') || 'Your name'
-      const contact = [tailored.profile.email, tailored.profile.phone, tailored.profile.location]
-        .filter(Boolean).join(' · ')
-      const paragraphs: Paragraph[] = [
-        new Paragraph({
-          children: [new TextRun({ text: name, bold: true, size: 32 })],
-          heading: HeadingLevel.TITLE,
-        }),
-      ]
-      if (contact) paragraphs.push(new Paragraph(contact))
-      for (const section of tailored.sections) {
-        const content = section.entries.map(entryText).filter(Boolean)
-        if (!content.length) continue
-        paragraphs.push(new Paragraph({
-          text: section.title ?? section.key.replace(/_/g, ' ')
-            .replace(/\b\w/g, (letter) => letter.toUpperCase()),
-          heading: HeadingLevel.HEADING_1,
-        }))
-        for (const value of content) paragraphs.push(new Paragraph(value))
-      }
-      const document = new Document({ sections: [{ children: paragraphs }] })
-      const blob = await Packer.toBlob(document)
-      const url = URL.createObjectURL(blob)
-      const link = window.document.createElement('a')
-      link.href = url
-      link.download = `${tailoredFilename()}.docx`
-      link.click()
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-      setMessage('Tailored resume DOCX download started. Check your downloads to confirm it saved.')
+      await downloadSavedResumeDocx(buildDownloadResume(tailored.profile, tailored.sections, tailoredFilename()))
+      setMessage('Tailored resume DOCX download started.')
     } catch (error) {
-      console.error('Tailored resume DOCX export failed:', error)
+      console.error('Tailored DOCX export failed:', error)
       setMessage('Could not export the tailored resume as DOCX. Please try again.')
     } finally {
       setExportBusy(false)
@@ -636,16 +601,12 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
   }
   const exportTailoredAsPdf = () => {
     if (!tailored) return
-    const originalTitle = window.document.title
-    window.document.title = tailoredFilename()
-    // App.css already targets .resume-preview-page-frame for print, the same
-    // class used by the tailored preview below. Only the resume is printed.
-    const restoreTitle = () => { window.document.title = originalTitle }
-    window.addEventListener('afterprint', restoreTitle, { once: true })
     try {
-      window.print()
-    } finally {
-      window.setTimeout(restoreTitle, 1000)
+      downloadSavedResumePdf(buildDownloadResume(tailored.profile, tailored.sections, tailoredFilename()))
+      setMessage('Tailored resume PDF download started.')
+    } catch (error) {
+      console.error('Tailored PDF export failed:', error)
+      setMessage('Could not export the tailored resume as PDF. Please try again.')
     }
   }
   return (
