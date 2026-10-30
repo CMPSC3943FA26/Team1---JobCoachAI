@@ -358,6 +358,7 @@ export function ResumePage({
   const [savingResume, setSavingResume] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [showGuestExportWarning, setShowGuestExportWarning] = useState(false);
+  const [showUserContinueWarning, setShowUserContinueWarning] = useState(false);
   const [exportedGuestSnapshot, setExportedGuestSnapshot] = useState<string | null>(null);
   // Confirmation dialogs and resume deletion state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -393,6 +394,7 @@ export function ResumePage({
     setResumeDeleted(false);
     setExportMenuOpen(false);
     setShowGuestExportWarning(false);
+    setShowUserContinueWarning(false);
     setExportedGuestSnapshot(null);
     setShowDeleteDialog(false);
     // Keep Professional Summary expanded by default and optional sections collapsed.
@@ -907,6 +909,55 @@ const hasExportableData = Boolean(
     );
   }
   // Main resume builder interface
+  // The sidebar and Continue button share one validation/save flow.
+  const continueToTailor = async () => {
+              const showContinueError = (message: string) => {
+                setStatus(message);
+                // Keep the user near the Continue button and its validation message.
+                requestAnimationFrame(() => {
+                  window.scrollTo({
+                    top: document.documentElement.scrollHeight,
+                    behavior: "smooth",
+                  });
+                });
+              };
+              if (!personalInfoComplete) {
+                showContinueError("Personal information and professional summary is required to continue.");
+                return;
+              }
+              if (!summaryComplete) {
+                showContinueError("Professional summary is required before continuing.");
+                return;
+              }
+              if (!resumeReady) {
+                showContinueError("Please create or upload a resume to continue.");
+                return;
+              }
+              if (isGuest && hasResumeContent && !guestExportIsCurrent) {
+                setStatus("");
+                setShowGuestExportWarning(true);
+                return;
+              }
+              const saved = await handleSave()
+              if (!saved) {
+                return;
+              }
+              setStatus("");
+              goToTailorAfterSave();
+  };
+  useEffect(() => {
+    const requestContinue = () => {
+      if (isGuest) {
+        void continueToTailor();
+      } else {
+        setStatus("");
+        setShowUserContinueWarning(true);
+      }
+    };
+    window.addEventListener('jobcoachai:request-resume-continue', requestContinue);
+    return () => window.removeEventListener('jobcoachai:request-resume-continue', requestContinue);
+  });
+
   return (
     <section className="screen resume-editor-page" data-screen="parsed">
       <div className={resumeFile ? "resume-side-by-side" : undefined}>
@@ -1348,41 +1399,7 @@ const hasExportableData = Boolean(
           <Button
             variant="secondary"
             type="button"
-            onClick={async() => {
-              const showContinueError = (message: string) => {
-                setStatus(message);
-                // Keep the user near the Continue button and its validation message.
-                requestAnimationFrame(() => {
-                  window.scrollTo({
-                    top: document.documentElement.scrollHeight,
-                    behavior: "smooth",
-                  });
-                });
-              };
-              if (!personalInfoComplete) {
-                showContinueError("Personal information and professional summary is required to continue.");
-                return;
-              }
-              if (!summaryComplete) {
-                showContinueError("Professional summary is required before continuing.");
-                return;
-              }
-              if (!resumeReady) {
-                showContinueError("Please create or upload a resume to continue.");
-                return;
-              }
-              if (isGuest && hasResumeContent && !guestExportIsCurrent) {
-                setStatus("");
-                setShowGuestExportWarning(true);
-                return;
-              }
-              const saved = await handleSave()
-              if (!saved) {
-                return;
-              }
-              setStatus("");
-              goToTailorAfterSave();
-            }}
+            onClick={() => { void continueToTailor(); }}
           >
             Continue <span aria-hidden="true">→</span>
           </Button>
@@ -1399,6 +1416,42 @@ const hasExportableData = Boolean(
           </div>
         </div>
       </div>
+      {showUserContinueWarning && (
+        <div className="dialog-backdrop" role="presentation">
+          <div
+            className="confirm-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="user-continue-title"
+            aria-describedby="user-continue-description"
+          >
+            <span className="panel-icon">ACCOUNT RESUME</span>
+            <h3 id="user-continue-title">Save and continue?</h3>
+            <p id="user-continue-description">
+              Your resume will be saved to your account before continuing to tailor your resume. Do you want to save and continue?
+            </p>
+            {status && <p role="status" aria-live="polite">{status}</p>}
+            <div className="dialog-actions guest-export-dialog-actions">
+              <div className="guest-export-navigation">
+                <Button variant="secondary" type="button" disabled={savingResume}
+                  onClick={() => setShowUserContinueWarning(false)}>
+                  Stay on resume
+                </Button>
+                <Button variant="secondary" type="button" disabled={savingResume}
+                  onClick={async () => {
+                    const saved = await handleSave();
+                    if (!saved) return;
+                    setShowUserContinueWarning(false);
+                    setStatus("");
+                    goToTailorAfterSave();
+                  }}>
+                  {savingResume ? "Saving…" : "Save and continue"} <span aria-hidden="true">→</span>
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {showGuestExportWarning && (
         <div className="dialog-backdrop" role="presentation">
           <div

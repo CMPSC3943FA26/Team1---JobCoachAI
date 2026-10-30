@@ -28,8 +28,10 @@ function getCurrentScreen(): ScreenName {
 
 const tailoredPayloadStorageKey = 'jobcoachai.tailoredResumePayload'
 
-const leaveWorkspaceMessage =
+const userLeaveWorkspaceMessage =
   'Going to Welcome will logout from current workspace. Do you want to logout?'
+const guestLeaveWorkspaceMessage =
+  'Going to Welcome will end your current guest session. Your resume may not be available if you leave this session. Do you want to continue?'
 
 function App() {
   const [resumeSession, setResumeSession] = useState(0)
@@ -97,7 +99,7 @@ function App() {
         }
         // A completed but modified resume must be saved through Continue.
         if (page2NeedsContinue) {
-          setShowContinueWarning(true)
+          window.dispatchEvent(new Event('jobcoachai:request-resume-continue'))
           window.location.hash = '#parsed'
           return
         }
@@ -456,7 +458,7 @@ function App() {
           // Ignore Page 3 clicks until the mandatory Page 2 fields are filled.
           if (!page2RequiredFieldsComplete) return false
           if (page2NeedsContinue) {
-            setShowContinueWarning(true)
+            window.dispatchEvent(new Event('jobcoachai:request-resume-continue'))
             return false
           }
         }
@@ -583,7 +585,7 @@ function App() {
           >
             <span className="panel-icon">LEAVE WORKSPACE</span>
             <h3 id="home-warning-title">Leave this page?</h3>
-            <p id="home-warning-description">{leaveWorkspaceMessage}</p>
+            <p id="home-warning-description">{accountType === 'user' ? userLeaveWorkspaceMessage : guestLeaveWorkspaceMessage}</p>
             {logoutError && (
               <p role="alert" style={{ color: '#b42318', marginTop: 12 }}>
                 {logoutError}
@@ -615,7 +617,7 @@ function App() {
                 onClick={() => { void goHome() }}
                 disabled={logoutPending}
               >
-                {logoutPending ? 'Logging out…' : accountType === 'user' ? 'Logout' : 'Go to Home →'}
+                {accountType === 'user' ? (logoutPending ? 'Logging out…' : 'Logout') : 'Leave workspace →'}
               </button>
             </div>
           </div>
