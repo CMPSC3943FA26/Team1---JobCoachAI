@@ -1,10 +1,6 @@
 /**
  * JobCoachAI — Tailor-only analysis and suggestion panels.
  *
- * Add <TailorResumeInsights /> inside your EXISTING Tailor page.
- * Reads the base resume draft saved by ResumePage from sessionStorage.
- * All suggested changes stay in this component's in-memory tailored copy;
- * this component NEVER calls your database or overwrites the base resume draft.
  *
  * ATS score is local keyword matching, NOT an official ATS score.
  * Suggestions are returned by the backend AI tailoring service.
@@ -314,7 +310,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
   }
   // Manually confirmed keywords are context for locally generated summaries, NOT resume edits.
   // The original and tailored resume data remain unchanged when these chips are edited.
-  const addMissedSkill = (name: string, sections: string[], experience: string, options: Record<string, string[]>): string | null => {
+  const addMissedSkill = (name: string, sections: string[], _experience: string, options: Record<string, string[]>): string | null => {
     if (!tailored) return 'No tailored resume is available.'
     const normalized = skillKey(name)
     if (!normalized) return 'Enter a keyword before adding it.'
@@ -327,12 +323,16 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     if (!sections.length || sections.some((section) => !['Work Experience', 'Professional Summary'].includes(section))) {
       return 'Choose Work Experience, Professional Summary, or both.'
     }
-    if (experience.trim().length < 15) return 'Describe real experience before proceeding.'
     if (sections.some((section) => !(options[section] ?? []).length)) return 'No wording was prepared for one or more sections.'
     setKeywordAssignments((current) => [
       ...current.filter((item) => skillKey(item.keyword) !== normalized),
       ...sections.map((section) => ({ keyword: name, section, options: options[section] })),
     ])
+    // A confirmed keyword moves from Missing to Found in the interactive ATS
+    // display. The original resume is still unchanged until wording is applied.
+    setManuallyFoundSkills((current) => current.some((item) => skillKey(item) === normalized)
+      ? current
+      : [...current, name])
     setSuggestionsOpen(true)
     setHiddenAtsKeywords((current) => {
       const updated = new Set(current)

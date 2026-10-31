@@ -586,20 +586,27 @@
 }
 /* Compact, readable cards for user-approved missing-keyword drafts. */
 .keyword-draft-card {
-  gap: 10px;
-  padding: 15px 16px;
+  gap: 16px;
+  padding: 20px 22px;
 }
-.keyword-draft-header { display: flex; flex-direction: column; gap: 3px; }
-.keyword-draft-header h4 { margin: 1px 0 3px; line-height: 1.3; }
+.keyword-draft-header { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.keyword-draft-header h4 { margin: 0; font-size: 19px; line-height: 1.3; overflow-wrap: anywhere; }
 .keyword-draft-header p { margin: 0; line-height: 1.45; }
 .keyword-draft-caption { color: var(--muted, #586273); font-size: 12px; line-height: 1.45; margin: 0; }
 .keyword-draft-options { border: 0; margin: 0; padding: 0; min-width: 0; }
+.keyword-draft-section-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; }
+.keyword-draft-section-row > span { color: var(--muted, #586273); }
+.keyword-draft-section-badge { padding: 5px 10px; border-radius: 999px; background: #e8f0ff; color: #234a84; font-size: 12px; }
+.keyword-draft-field-title { display: block; font-size: 13px; margin-bottom: 8px; }
+.keyword-draft-generated-text { margin: 0; padding: 14px 16px; border-left: 3px solid #7696c3; border-radius: 0 8px 8px 0; background: #f3f6fb; color: #1c2d43; font-size: 14px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.keyword-draft-edit-heading { display: flex; flex-direction: column; gap: 4px; }
+.keyword-draft-edit-heading > span { color: var(--muted, #586273); font-size: 12px; line-height: 1.45; }
 .keyword-draft-options legend { padding: 0; margin-bottom: 6px; font-weight: 700; font-size: 13px; }
 .keyword-draft-option { display: flex; align-items: flex-start; gap: 9px; margin: 0 0 7px; line-height: 1.45; cursor: pointer; }
 .keyword-draft-option input { flex: none; margin: 3px 0 0; }
 .keyword-draft-option span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .keyword-draft-edit-label { font-weight: 700; font-size: 13px; }
-.keyword-draft-textarea { width: 100%; box-sizing: border-box; padding: 10px; line-height: 1.45; }
+.keyword-draft-textarea { width: 100%; box-sizing: border-box; padding: 12px 14px; line-height: 1.6; min-height: 110px; }
 .keyword-draft-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
 
 

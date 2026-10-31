@@ -224,11 +224,9 @@ export function previewKeywordWording(keyword: string, experience: string, secti
   for (const section of sections) {
     if (section === 'Work Experience') result[section] = [
       `${evidence}.`,
-      `${evidence} (related to ${keyword}).`,
     ]
     if (section === 'Professional Summary') result[section] = [
       `Familiar with ${keyword} through the following experience: ${evidence}.`,
-      `Experience or training involving ${keyword}: ${evidence}.`,
     ]
   }
   return result

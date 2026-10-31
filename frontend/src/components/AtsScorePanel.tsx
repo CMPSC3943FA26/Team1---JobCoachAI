@@ -127,7 +127,7 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
             {dialogStep === 'explain' && <>
               <p role="alert"><strong>Have you used or learned {selectedKeyword}?</strong></p>
               <p>Only describe genuine experience or learning. Do not claim employment, duties, or qualifications you do not have.</p>
-              <label htmlFor="keyword-evidence">How have you used or learned this keyword?</label>
+              <label htmlFor="keyword-evidence">Please provide more information related to keyword</label>
               <textarea id="keyword-evidence" rows={4} value={experience} style={{ width: '100%', boxSizing: 'border-box', padding: 10 }}
                 onChange={(event) => { setExperience(event.target.value); setGenerationError('') }}
                 placeholder="Explain a real project, class, task, or job where you used or learned this skill." />
@@ -166,8 +166,12 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
               </div>
             </>}
             {dialogStep === 'review' && <>
-              <h4 style={{ margin: '8px 0' }}>Generated descriptions</h4>
-              <p style={{ fontSize: 13 }}>These are frontend-only draft descriptions based on your explanation, not AI-evaluated text. Review them and choose which sections to send to AI Suggestions.</p>
+              <h4 style={{ margin: '8px 0' }}>Review description</h4>
+              <div style={{ padding: 12, background: '#f3f6fb', borderRadius: 8, margin: '12px 0' }}>
+                <strong style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Your entered text</strong>
+                <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{experience.trim()}</p>
+              </div>
+              <p style={{ fontSize: 13 }}>Review the suggested wording below and select where to add it. This is a frontend-generated draft, not an AI-evaluated description.</p>
               <div style={{ display: 'grid', gap: 14, maxHeight: '46vh', overflowY: 'auto', margin: '14px 0' }}>
                 {selectedSections.map((section) => (
                   <label key={section} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, textAlign: 'left', padding: 12, border: '1px solid #d1d5db', borderRadius: 8, cursor: 'pointer' }}>
@@ -177,9 +181,8 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
                         ? [...current, section] : current.filter((value) => value !== section))} />
                     <span style={{ display: 'grid', gap: 7, minWidth: 0 }}>
                       <strong>{section}</strong>
-                      {(draftOptions[section] ?? []).map((wording, index) => (
-                        <span key={index} style={{ fontSize: 13, lineHeight: 1.5 }}>{index + 1}. {wording}</span>
-                      ))}
+                      <span style={{ fontSize: 12, color: '#586273' }}>Suggested description</span>
+                      <span style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{draftOptions[section]?.[0] ?? ''}</span>
                     </span>
                   </label>
                 ))}

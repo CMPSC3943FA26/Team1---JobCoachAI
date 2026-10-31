@@ -523,7 +523,6 @@ function KeywordDraftSelection({ keyword, section, options, onApply, onRemove }:
   onApply: (keyword: string, section: string, wording: string) => string | null
   onRemove: () => void
 }) {
-  const [selected, setSelected] = useState(0)
   const [wording, setWording] = useState(options[0] ?? '')
   const [error, setError] = useState('')
   const [applied, setApplied] = useState(false)
@@ -533,22 +532,22 @@ function KeywordDraftSelection({ keyword, section, options, onApply, onRemove }:
       <div className="keyword-draft-header">
         <span className="suggestion-diff-label">Keyword to incorporate</span>
         <h4>{keyword}</h4>
-        <p><strong>Add to section:</strong> {section}</p>
+        <div className="keyword-draft-section-row">
+          <span>Add to section</span>
+          <strong className="keyword-draft-section-badge">{section}</strong>
+        </div>
         <p className="keyword-draft-caption">Added from Missing Keywords · Draft wording only · Not applied automatically</p>
       </div>
 
-      <fieldset className="keyword-draft-options">
-        <legend>Choose wording</legend>
-        {options.map((option, index) => (
-          <label key={index} className="keyword-draft-option">
-            <input type="radio" name={`wording-${keyword}-${section}`} checked={selected === index}
-              onChange={() => { setSelected(index); setWording(option); setApplied(false); setError('') }} />
-            <span>{option}</span>
-          </label>
-        ))}
-      </fieldset>
+      <div className="keyword-draft-options">
+        <strong className="keyword-draft-field-title">Generated description</strong>
+        <p className="keyword-draft-generated-text">{options[0] ?? ''}</p>
+      </div>
 
-      <label className="keyword-draft-edit-label" htmlFor={`edit-${keyword}-${section}`}>Edit selected wording</label>
+      <div className="keyword-draft-edit-heading">
+        <label className="keyword-draft-edit-label" htmlFor={`edit-${keyword}-${section}`}>Edit selected wording</label>
+        <span>Review or adjust the description before applying.</span>
+      </div>
       <textarea id={`edit-${keyword}-${section}`} rows={3} value={wording}
         onChange={(event) => { setWording(event.target.value); setApplied(false) }}
         className="keyword-draft-textarea" />
