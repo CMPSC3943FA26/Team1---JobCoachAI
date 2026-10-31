@@ -62,9 +62,8 @@ type ResumeDraft = {
   targetJobTitle?: string;
   csvSourceFilename?: string;
 };
-// Derive the most recent actual role from structured Work Experience entries.
-// Empty roles are ignored; dated entries outrank undated entries. When dates
-// are unavailable, preserve resume order (normally most recent first).
+// Prefer a current role, then the most recent dated Work Experience entry.
+// Empty roles are ignored; resume order breaks ties between equally dated roles.
 const getMostRecentExperienceTitle = (sections: ResumeSection[]): string => {
   const work = sections.find((section) => section.key === "work_experience");
   if (!work) return "";
@@ -77,6 +76,8 @@ const getMostRecentExperienceTitle = (sections: ResumeSection[]): string => {
     return match ? Number(match[1]) * 12 + (Number(match[2] ?? 1) - 1) : -1;
   };
   roles.sort((a, b) =>
+    Number(/^present$/i.test(b.entry.end_date?.trim() ?? "")) -
+      Number(/^present$/i.test(a.entry.end_date?.trim() ?? "")) ||
     dateValue(b.entry.start_date) - dateValue(a.entry.start_date) ||
     dateValue(b.entry.end_date) - dateValue(a.entry.end_date) ||
     a.index - b.index
@@ -354,6 +355,12 @@ export function ResumePage({
   const [importedCsvFilename, setImportedCsvFilename] = useState<string | null>(storedDraft?.csvSourceFilename ?? null);
   const [resumeFilename, setResumeFilename] = useState(storedDraft?.filename ?? "");
   const [jobTitle, setJobTitle] = useState(() => getMostRecentExperienceTitle(storedDraft?.sections ?? []));
+  const latestExperienceJobTitle = getMostRecentExperienceTitle(sections);
+  // Keep the account's top Job Title in sync when work experience changes.
+  // A manual edit remains intact until the derived work-experience title changes.
+  useEffect(() => {
+    if (!isGuest) setJobTitle(latestExperienceJobTitle);
+  }, [isGuest, latestExperienceJobTitle]);
   const [status, setStatus] = useState("");
   const [savingResume, setSavingResume] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -1219,11 +1226,14 @@ const hasExportableData = Boolean(
                       }
                       return (
                         <div className="resume-entry-card" key={`${section.key}-${entryIndex}`}>
-                          <div className="resume-entry-grid">
+                          <div className="resume-entry-grid" style={section.key === "projects" ? { gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gridTemplateRows: "repeat(2, auto)", alignItems: "stretch", gap: "16px" } : undefined}>
                             {Object.entries(entry).map(([fieldKey, value]) => (
                               <div
                                 className={`field-group ${section.key === "work_experience" && fieldKey === "description" ? "resume-responsibilities-field" : ""}`}
                                 key={`${section.key}-${entryIndex}-${fieldKey}`}
+                                style={section.key === "projects" ? (fieldKey === "description"
+                                  ? { gridColumn: 2, gridRow: "1 / span 2", display: "flex", flexDirection: "column" }
+                                  : { gridColumn: 1, gridRow: ({ name: 1, link: 2 } as Record<string, number>)[fieldKey] }) : undefined}
                               >
                                 <div className="resume-field-caption">
                                   {!(section.key === "work_experience" &&
@@ -1261,7 +1271,8 @@ const hasExportableData = Boolean(
                                   fieldKey === "description" ? (
                                       <textarea
                                         id={`${section.key}-${entryIndex}-${fieldKey}`}
-                                        rows={3}
+                                        rows={section.key === "projects" ? 5 : 3}
+                                        style={section.key === "projects" ? { flex: "none", width: "100%", height: "180px", minHeight: "130px", maxHeight: "none", overflow: "auto", resize: "vertical" } : undefined}
                                         value={value}
                                         onChange={(event) =>
                                           updateEntry(section.key, entryIndex, fieldKey, event.target.value)
@@ -1270,8 +1281,8 @@ const hasExportableData = Boolean(
                                   ) : (
                                       <input
                                         id={`${section.key}-${entryIndex}-${fieldKey}`}
-                                        type={fieldKey.endsWith("_date") ? "date" : "text"}
-                                        value={fieldKey.endsWith("_date") ? toDateInputValue(String(value)) : String(value)}
+                                        type={fieldKey.endsWith("_date") || fieldKey === "date_earned" ? "date" : "text"}
+                                        value={fieldKey.endsWith("_date") || fieldKey === "date_earned" ? toDateInputValue(String(value)) : String(value)}
                                         onChange={(event) =>
                                           updateEntry(section.key, entryIndex, fieldKey, event.target.value)
                                         }
