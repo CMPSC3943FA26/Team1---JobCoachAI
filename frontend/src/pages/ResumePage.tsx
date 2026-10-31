@@ -988,9 +988,9 @@ const hasExportableData = Boolean(
         }}
       >
         {/* Resume file upload */}
-        <div className="resume-upload-row" style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: "16px", flex: "1 1 440px", flexWrap: "wrap" }}>
-          <div className="resume-filename-field" style={{ flex: "1 1 200px", minWidth: "180px" }}>
+        <div className="resume-upload-row" style={{ display: "flex", flexDirection: isGuest ? "column" : "row", alignItems: "flex-end", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "16px", flex: isGuest ? "0 0 auto" : "1 1 440px", width: isGuest ? "48%" : undefined, minWidth: isGuest ? "220px" : undefined, maxWidth: "100%", flexWrap: "wrap" }}>
+          <div className="resume-filename-field" style={{ flex: isGuest ? "1 1 100%" : "1 1 200px", minWidth: "180px", marginLeft: isGuest ? "auto" : undefined }}>
             <label htmlFor="resume-filename">Resume filename</label>
             <input
               id="resume-filename"
@@ -1000,6 +1000,7 @@ const hasExportableData = Boolean(
               placeholder="Filename for export"
             />
           </div>
+          {!isGuest && (
           <div className="resume-filename-field" style={{ flex: "1 1 200px", minWidth: "180px" }}>
             <div className="job-title-label-row">
               <label htmlFor="resume-job-title">Job Title</label>
@@ -1027,6 +1028,7 @@ const hasExportableData = Boolean(
               placeholder="e.g., Backend Developer"
             />
           </div>
+          )}
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px", flex: "0 0 auto", marginLeft: "auto",}}>
             <div className="resume-upload-file" style={{ marginRight: 0 }}>
