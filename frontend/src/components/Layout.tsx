@@ -4,6 +4,7 @@ import jobCoachLogo from '../assets/jobcoach-logo.png'
 type LayoutProps = {
   children: ReactNode
   currentScreen: 'welcome' | 'parsed' | 'tailor' | 'profile'
+  savedResumesActive?: boolean
   profileInitials: string | null
   isGuest: boolean
   hasEnteredWorkspace: boolean
@@ -21,6 +22,7 @@ type LayoutProps = {
 export function Layout({
   children,
   currentScreen,
+  savedResumesActive = false,
   profileInitials,
   isGuest,
   hasEnteredWorkspace,
@@ -77,7 +79,7 @@ export function Layout({
   ] as const
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell${savedResumesActive ? ' app-shell-saved-resumes' : ''}`}>
       <aside className="sidebar" aria-label="Workflow navigation">
         {resumePreview ? (
           <div className="sidebar-resume-preview">

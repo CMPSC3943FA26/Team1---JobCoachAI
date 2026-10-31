@@ -56,6 +56,18 @@ a {
   min-height: 100vh;
 }
 
+/* Give the logged-in Saved Resumes list more horizontal space while keeping
+   the left navigation panel and its background/border in one aligned column. */
+@media (min-width: 851px) {
+  .app-shell-saved-resumes {
+    grid-template-columns: minmax(280px, 34%) minmax(0, 1fr);
+  }
+
+  .app-shell-saved-resumes > .sidebar {
+    border-right: 1px solid rgba(148, 163, 184, 0.3);
+  }
+}
+
 
 /* LEFT SIDEBAR */
 

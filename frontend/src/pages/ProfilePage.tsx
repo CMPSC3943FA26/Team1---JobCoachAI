@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { supabase, updateCurrentUserProfile } from '../lib/supabase'
 import {
   deleteResumeFromDatabase,
@@ -64,6 +64,37 @@ function resumeContent(resume: SavedResume) {
     if (rendered.length) parts.push({ kind: 'section', text: label }, ...rendered)
   }
   return { filename, parts }
+}
+
+function InlineResumePreview({ resume }: { resume: SavedResume }) {
+  const { parts } = resumeContent(resume)
+  // Mirror the PDF export's Helvetica typography, colors, margins and dividers.
+  const sizes: Record<ExportPart['kind'], string> = {
+    title: '18pt', contact: '9.5pt', section: '11.5pt', heading: '10.5pt',
+    dates: '8.8pt', subtitle: '9.4pt', body: '9.5pt', skills: '9.5pt',
+  }
+  return (
+    <article aria-label="Resume document" style={{ width: '100%', maxWidth: '612px', minHeight: '792px', boxSizing: 'border-box', margin: '0 auto', padding: '46px', background: '#fff', color: '#171717', fontFamily: 'Arial, Helvetica, sans-serif', border: '1px solid #d1d5db', boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)' }}>
+      {parts.filter((part) => part.text).map((part, index) => (
+        <p key={index} style={{
+          margin: 0,
+          padding: 0,
+          fontFamily: 'Arial, Helvetica, sans-serif',
+          fontSize: sizes[part.kind],
+          fontWeight: ['title', 'section', 'heading'].includes(part.kind) ? 700 : 400,
+          color: part.kind === 'dates' ? '#475569' : '#171717',
+          textAlign: part.kind === 'title' || part.kind === 'contact' ? 'center' : 'left',
+          lineHeight: part.kind === 'body' || part.kind === 'skills' ? '15pt' : '13pt',
+          whiteSpace: 'pre-line',
+          overflowWrap: 'anywhere',
+          marginTop: part.kind === 'section' ? '18pt' : part.kind === 'heading' ? '8pt' : part.kind === 'body' ? '5pt' : '2pt',
+          marginBottom: part.kind === 'title' ? '5pt' : part.kind === 'contact' ? '20pt' : part.kind === 'section' ? '9pt' : '2pt',
+          borderBottom: part.kind === 'section' || part.kind === 'contact' ? '1px solid #b8c2cf' : undefined,
+          paddingBottom: part.kind === 'section' || part.kind === 'contact' ? '3px' : 0,
+        }}>{part.text}</p>
+      ))}
+    </article>
+  )
 }
 
 function saveBlob(blob: Blob, filename: string) {
@@ -310,7 +341,6 @@ export function ProfilePage({
   focusSection = 'profile',
   onNameChange,
   onResumeOpened,
-  onResumePreviewed,
 }: ProfilePageProps) {
   const [form, setForm] = useState<ProfileForm>(emptyForm)
   const [initialForm, setInitialForm] = useState<ProfileForm>(emptyForm)
@@ -319,6 +349,7 @@ export function ProfilePage({
   const [saving, setSaving] = useState(false)
   const [resumeLoadingId, setResumeLoadingId] = useState<string | null>(null)
   const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null)
+  const [expandedPreview, setExpandedPreview] = useState<{ id: string; data: SavedResume } | null>(null)
   const [resumePendingDownload, setResumePendingDownload] = useState<SavedResumeSummary | null>(null)
   const [downloadingResume, setDownloadingResume] = useState(false)
   const [resumePendingDelete, setResumePendingDelete] = useState<SavedResumeSummary | null>(null)
@@ -466,6 +497,10 @@ export function ProfilePage({
   }
 
   const handlePreviewResume = async (resumeId: string) => {
+    if (expandedPreview?.id === resumeId) {
+      setExpandedPreview(null)
+      return
+    }
     setPreviewLoadingId(resumeId)
     setMessage('')
 
@@ -477,7 +512,7 @@ export function ProfilePage({
         throw new Error(databaseResume?.error ?? 'Unable to preview this resume.')
       }
 
-      onResumePreviewed?.(databaseResume)
+      setExpandedPreview({ id: resumeId, data: { ...databaseResume, id: resumeId } })
     } catch (error) {
       console.error('Preview saved resume error:', error)
       setMessage(
@@ -726,7 +761,8 @@ export function ProfilePage({
               </div>
 
               {filteredResumes.map((resume) => (
-                <div className="saved-resume-row" key={resume.id}>
+                <Fragment key={resume.id}>
+                <div className="saved-resume-row">
                   <div className="saved-resume-name">
                     <span className="saved-resume-icon" aria-hidden="true">▤</span>
                     <span>
@@ -766,8 +802,10 @@ export function ProfilePage({
                       type="button"
                       onClick={() => void handlePreviewResume(resume.id)}
                       disabled={previewLoadingId === resume.id}
+                      aria-expanded={expandedPreview?.id === resume.id}
+                      aria-controls={`saved-resume-preview-${resume.id}`}
                     >
-                      {previewLoadingId === resume.id ? 'Previewing…' : 'Preview'}
+                      {previewLoadingId === resume.id ? 'Previewing…' : expandedPreview?.id === resume.id ? 'Hide Preview' : 'Preview'}
                     </button>
                     <button
                       className="button button-secondary"
@@ -793,6 +831,18 @@ export function ProfilePage({
                     </button>
                   </div>
                 </div>
+                {expandedPreview?.id === resume.id && (
+                  <div id={`saved-resume-preview-${resume.id}`} style={{ padding: '16px clamp(8px, 3vw, 28px) 24px', background: '#f1f5f9', borderBottom: '1px solid #cbd5e1', borderRadius: '0 0 8px 8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '14px', flexWrap: 'wrap' }}>
+                      <strong style={{ fontSize: '14px', color: '#1e293b' }}>Resume Preview</strong>
+                      <button type="button" className="button button-secondary" onClick={() => setExpandedPreview(null)}>Close Preview ×</button>
+                    </div>
+                    <div style={{ maxHeight: '560px', overflowY: 'auto', overscrollBehavior: 'contain' }}>
+                      <InlineResumePreview resume={expandedPreview.data} />
+                    </div>
+                  </div>
+                )}
+                </Fragment>
               ))}
           </div>
         )}

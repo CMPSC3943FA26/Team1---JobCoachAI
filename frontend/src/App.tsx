@@ -433,6 +433,7 @@ function App() {
   return (
     <Layout
       currentScreen={currentScreen}
+      savedResumesActive={currentScreen === 'profile' && profileSection === 'resumes' && accountType === 'user'}
       profileInitials={profileInitials}
       isGuest={accountType === 'guest'}
       hasEnteredWorkspace={accountType !== null}
