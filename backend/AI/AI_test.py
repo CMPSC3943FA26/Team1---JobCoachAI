@@ -5,7 +5,10 @@ import json
 
 
 import os
+import logging
+import re
 from time import perf_counter
+from uuid import uuid4
 
 
 from dotenv import load_dotenv
@@ -18,6 +21,41 @@ from backend.services.resume import get_resume
 
 
 AI_MODEL_KEY = os.getenv("AI_MODEL_KEY")
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+
+def _safe_provider_error(response):
+    """Return bounded provider error metadata without logging response content."""
+    try:
+        body = response.json()
+    except ValueError:
+        return {"body_type": "non_json"}
+
+    if not isinstance(body, dict):
+        return {"body_type": type(body).__name__}
+
+    details = {"top_level_keys": sorted(str(key) for key in body.keys())[:12]}
+    error = body.get("error")
+    if isinstance(error, dict):
+        for key in ("type", "code", "param"):
+            value = error.get(key)
+            if isinstance(value, str):
+                value = re.sub(
+                    r"(?i)\b(bearer)\s+\S+",
+                    r"\1 [REDACTED]",
+                    value,
+                )
+                value = re.sub(
+                    r"(?i)\b(api[_ -]?key|token|secret|password)"
+                    r"\s*[:=]\s*[^\s,;]+",
+                    r"\1=[REDACTED]",
+                    value,
+                )
+                details[f"error_{key}"] = value[:240]
+    elif isinstance(error, str):
+        details["error_type"] = "string"
+    return details
 
 
 prompt= """
@@ -668,7 +706,14 @@ ANALYSIS_SCHEMA = _object_schema({
 })
 
 
-def request_ai(content, schema_name, schema, reasoning_effort="medium"):
+def request_ai(
+    content,
+    schema_name,
+    schema,
+    reasoning_effort="medium",
+    request_id="unknown",
+    stage="unknown",
+):
     """Send a stage's prompt using the selected model's output settings."""
     model = "nvidia/nemotron-3-ultra-550b-a55b:free"
     payload = {
@@ -689,15 +734,64 @@ def request_ai(content, schema_name, schema, reasoning_effort="medium"):
         }
         payload["provider"] = {"require_parameters": True}
 
-    return requests.post(
-        url="https://openrouter.ai/api/v1/chat/completions",
-        headers={
+    started = perf_counter()
+    logger.info(
+        "AI provider call started request_id=%s stage=%s attempt=1",
+        request_id,
+        stage,
+    )
+    try:
+        response = requests.post(
+            url="https://openrouter.ai/api/v1/chat/completions",
+            headers={
             "Authorization": f"Bearer {AI_MODEL_KEY}",
             "Content-Type": "application/json",
-        },
-        data=json.dumps(payload),
-        timeout=(10, 120),
-    )
+            },
+            data=json.dumps(payload),
+            timeout=(10, 120),
+        )
+    except requests.Timeout as exc:
+        logger.warning(
+            "AI provider call timed out request_id=%s stage=%s "
+            "elapsed_seconds=%.2f error_type=%s",
+            request_id,
+            stage,
+            perf_counter() - started,
+            type(exc).__name__,
+        )
+        raise
+    except requests.RequestException as exc:
+        logger.warning(
+            "AI provider call failed request_id=%s stage=%s "
+            "elapsed_seconds=%.2f error_type=%s",
+            request_id,
+            stage,
+            perf_counter() - started,
+            type(exc).__name__,
+        )
+        raise
+
+    elapsed = perf_counter() - started
+    if not response.ok:
+        logger.warning(
+            "AI provider call ended request_id=%s stage=%s status=%s "
+            "elapsed_seconds=%.2f provider_error=%s",
+            request_id,
+            stage,
+            response.status_code,
+            elapsed,
+            json.dumps(_safe_provider_error(response), sort_keys=True),
+        )
+    else:
+        logger.info(
+            "AI provider call ended request_id=%s stage=%s status=%s "
+            "elapsed_seconds=%.2f",
+            request_id,
+            stage,
+            response.status_code,
+            elapsed,
+        )
+    return response
 
 
 test_job_description = {
@@ -925,13 +1019,94 @@ def analyze_resume(evidence, requirements_response):
   return ai_input_json
 
 
-def parse_ai_response(response):
-    """Read a successful AI response as JSON."""
+def parse_ai_response(response, request_id="unknown", stage="unknown"):
+    """Parse an AI response while logging only response structure and error metadata."""
     response.raise_for_status()
-    message = response.json()["choices"][0]["message"]["content"]
-    result = json.loads(message)
-    print("AI RESPONSE:")
-    print(json.dumps(result, indent=2))
+    try:
+        body = response.json()
+    except ValueError as exc:
+        logger.warning(
+            "AI provider response JSON decoding failed request_id=%s "
+            "stage=%s status=%s error_type=%s",
+            request_id,
+            stage,
+            response.status_code,
+            type(exc).__name__,
+        )
+        raise
+
+    choices = body.get("choices") if isinstance(body, dict) else None
+    if not isinstance(choices, list) or not choices:
+        logger.warning(
+            "AI provider response missing choices request_id=%s stage=%s "
+            "status=%s body_type=%s top_level_keys=%s provider_error=%s",
+            request_id,
+            stage,
+            response.status_code,
+            type(body).__name__,
+            sorted(str(key) for key in body.keys())[:12]
+            if isinstance(body, dict) else [],
+            json.dumps(_safe_provider_error(response), sort_keys=True),
+        )
+        raise KeyError("AI provider response missing choices")
+
+    first_choice = choices[0]
+    message = (
+        first_choice.get("message")
+        if isinstance(first_choice, dict) else None
+    )
+    content = message.get("content") if isinstance(message, dict) else None
+    if not isinstance(content, str):
+        logger.warning(
+            "AI provider response missing message content request_id=%s "
+            "stage=%s status=%s choice_type=%s message_type=%s",
+            request_id,
+            stage,
+            response.status_code,
+            type(first_choice).__name__,
+            type(message).__name__,
+        )
+        raise ValueError("AI provider response missing message content")
+
+    try:
+        result = json.loads(content)
+    except json.JSONDecodeError as exc:
+        logger.warning(
+            "AI content JSON parsing failed request_id=%s stage=%s "
+            "line=%s column=%s",
+            request_id,
+            stage,
+            exc.lineno,
+            exc.colno,
+        )
+        raise
+
+    if stage == "job_requirements":
+        requirements = result.get("requirements") if isinstance(result, dict) else None
+        valid = isinstance(requirements, list) and all(
+            isinstance(item, dict)
+            and isinstance(item.get("requirement"), str)
+            and item.get("importance") in {"required", "desired", "mentioned"}
+            and isinstance(item.get("direct_search_terms"), list)
+            and isinstance(item.get("related_search_terms"), list)
+            for item in requirements
+        )
+    elif stage == "resume_analysis":
+        valid = isinstance(result, dict) and all(
+            isinstance(result.get(key), list)
+            for key in ("evidence", "suggestions", "removals", "improvements")
+        )
+    else:
+        valid = True
+
+    if not valid:
+        logger.warning(
+            "AI schema validation failed request_id=%s stage=%s "
+            "reason=invalid_response_shape",
+            request_id,
+            stage,
+        )
+        raise ValueError(f"AI response failed {stage} schema validation")
     return result
 
 
@@ -1055,8 +1230,14 @@ def restore_combined_resume_text(response, structured_resume):
     }
 
 
-def run_combined_pipeline(structured_resume, job, timings=None):
+def run_combined_pipeline(structured_resume, job, timings=None, request_id=None):
     """Extract requirements, then classify evidence and tailor in one request."""
+    request_id = request_id or uuid4().hex
+    pipeline_started = perf_counter()
+    logger.info(
+        "AI pipeline started request_id=%s retries=0 fallback=none",
+        request_id,
+    )
     if timings is None:
         timings = {}
     job_input = {
@@ -1075,14 +1256,30 @@ def run_combined_pipeline(structured_resume, job, timings=None):
         schema_name="job_requirements",
         schema=REQUIREMENTS_SCHEMA,
         reasoning_effort="low",
+        request_id=request_id,
+        stage="job_requirements",
     )
-    requirements_response = parse_ai_response(response)
+    requirements_response = parse_ai_response(
+        response, request_id=request_id, stage="job_requirements"
+    )
     timings["Stage 1: job requirements"] = perf_counter() - started
+    logger.info(
+        "AI pipeline stage ended request_id=%s stage=job_requirements "
+        "elapsed_seconds=%.2f",
+        request_id,
+        timings["Stage 1: job requirements"],
+    )
 
     started = perf_counter()
     evidence = process_resume(structured_resume)["evidence"]
     matched_evidence = analyze_resume(evidence, requirements_response)
     timings["Evidence preprocessing"] = perf_counter() - started
+    logger.info(
+        "AI pipeline stage ended request_id=%s stage=evidence_preprocessing "
+        "elapsed_seconds=%.2f",
+        request_id,
+        timings["Evidence preprocessing"],
+    )
 
     started = perf_counter()
     combined_response = request_ai(
@@ -1094,18 +1291,38 @@ def run_combined_pipeline(structured_resume, job, timings=None):
         schema_name="resume_analysis",
         schema=ANALYSIS_SCHEMA,
         reasoning_effort="low",
+        request_id=request_id,
+        stage="resume_analysis",
     )
-    recommendations_response = parse_ai_response(combined_response)
+    recommendations_response = parse_ai_response(
+        combined_response, request_id=request_id, stage="resume_analysis"
+    )
     timings["Stage 2: classification and recommendations"] = perf_counter() - started
+    logger.info(
+        "AI pipeline stage ended request_id=%s stage=resume_analysis "
+        "elapsed_seconds=%.2f",
+        request_id,
+        timings["Stage 2: classification and recommendations"],
+    )
 
     started = perf_counter()
     expected = {item["requirement"] for item in requirements_response["requirements"]}
     classified = recommendations_response.get("evidence", [])
     names = [item["requirement"] for item in classified]
     if set(names) != expected or len(names) != len(set(names)):
+        logger.warning(
+            "AI schema validation failed request_id=%s stage=resume_analysis "
+            "reason=requirements_mismatch",
+            request_id,
+        )
         raise ValueError("Combined response must classify each requirement exactly once")
     if any(item.get("classification") not in {"supported", "partial", "unsupported"}
            for item in classified):
+        logger.warning(
+            "AI schema validation failed request_id=%s stage=resume_analysis "
+            "reason=invalid_classification",
+            request_id,
+        )
         raise ValueError("Combined response contains an invalid classification")
     # Keep importance tied to the extracted requirements, rather than a new AI value.
     importance = {item["requirement"]: item["importance"]
@@ -1114,9 +1331,17 @@ def run_combined_pipeline(structured_resume, job, timings=None):
         {**item, "importance": importance[item["requirement"]]}
         for item in classified
     ]}
-    recommendations_response = restore_combined_resume_text(
-        recommendations_response, structured_resume
-    )
+    try:
+        recommendations_response = restore_combined_resume_text(
+            recommendations_response, structured_resume
+        )
+    except (ValueError, KeyError, TypeError, IndexError):
+        logger.exception(
+            "AI schema validation failed request_id=%s stage=resume_analysis "
+            "reason=invalid_resume_reference",
+            request_id,
+        )
+        raise
     recommendations_response["missing_requirements"] = [
         {"requirement": item["requirement"]}
         for item in classifications["evidence"]
@@ -1124,10 +1349,21 @@ def run_combined_pipeline(structured_resume, job, timings=None):
     ]
     result = build_frontend_response(recommendations_response, classifications)
     timings["Frontend response mapping"] = perf_counter() - started
+    logger.info(
+        "AI pipeline stage ended request_id=%s stage=response_mapping "
+        "elapsed_seconds=%.2f",
+        request_id,
+        timings["Frontend response mapping"],
+    )
+    logger.info(
+        "AI pipeline ended request_id=%s elapsed_seconds=%.2f",
+        request_id,
+        perf_counter() - pipeline_started,
+    )
     return result
 
 
-def main_request_combined(id, job, user_id):
+def main_request_combined(id, job, user_id, request_id=None):
     """Load a saved resume and run the current two-request pipeline."""
     resume = get_resume(str(id), str(user_id))
     if resume is None:
@@ -1140,7 +1376,9 @@ def main_request_combined(id, job, user_id):
         "resume": {key: value for key, value in resume.items() if key not in section_names},
         **{section: resume.get(section, []) for section in section_names},
     }
-    return run_combined_pipeline(structured_resume, job)
+    return run_combined_pipeline(
+        structured_resume, job, request_id=request_id
+    )
 
 
 def console_test_combined(resume=None, job=None):
