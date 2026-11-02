@@ -1230,7 +1230,11 @@ def restore_combined_resume_text(response, structured_resume):
     }
 
 
+<<<<<<< Updated upstream
 def run_combined_pipeline(structured_resume, job, timings=None, request_id=None):
+=======
+def run_combined_pipeline(structured_resume, job, timings=None,requirements=None):
+>>>>>>> Stashed changes
     """Extract requirements, then classify evidence and tailor in one request."""
     request_id = request_id or uuid4().hex
     pipeline_started = perf_counter()
@@ -1240,6 +1244,7 @@ def run_combined_pipeline(structured_resume, job, timings=None, request_id=None)
     )
     if timings is None:
         timings = {}
+        
     job_input = {
         "title": job.get("title"),
         "company": job.get("company", job.get("company_name")),
@@ -1249,6 +1254,7 @@ def run_combined_pipeline(structured_resume, job, timings=None, request_id=None)
     combined_response = None
     requirements_response = None
     recommendations_response = None
+<<<<<<< Updated upstream
 
     started = perf_counter()
     response = request_ai(
@@ -1270,6 +1276,21 @@ def run_combined_pipeline(structured_resume, job, timings=None, request_id=None)
         timings["Stage 1: job requirements"],
     )
 
+=======
+    if requirements is None:
+        started = perf_counter()
+        response = request_ai(
+            prompt + "\nJob description:\n" + json.dumps(job_input),
+            schema_name="job_requirements",
+            schema=REQUIREMENTS_SCHEMA,
+            reasoning_effort="low",
+        )
+        requirements_response = parse_ai_response(response)
+        timings["Stage 1: job requirements"] = perf_counter() - started
+        requirements=requirements_response
+    else:
+        requirements_response=requirements
+>>>>>>> Stashed changes
     started = perf_counter()
     evidence = process_resume(structured_resume)["evidence"]
     matched_evidence = analyze_resume(evidence, requirements_response)
@@ -1349,6 +1370,7 @@ def run_combined_pipeline(structured_resume, job, timings=None, request_id=None)
     ]
     result = build_frontend_response(recommendations_response, classifications)
     timings["Frontend response mapping"] = perf_counter() - started
+<<<<<<< Updated upstream
     logger.info(
         "AI pipeline stage ended request_id=%s stage=response_mapping "
         "elapsed_seconds=%.2f",
@@ -1360,6 +1382,9 @@ def run_combined_pipeline(structured_resume, job, timings=None, request_id=None)
         request_id,
         perf_counter() - pipeline_started,
     )
+=======
+    result["requirements"] = requirements
+>>>>>>> Stashed changes
     return result
 
 
@@ -1376,10 +1401,16 @@ def main_request_combined(id, job, user_id, request_id=None):
         "resume": {key: value for key, value in resume.items() if key not in section_names},
         **{section: resume.get(section, []) for section in section_names},
     }
+<<<<<<< Updated upstream
     return run_combined_pipeline(
         structured_resume, job, request_id=request_id
     )
 
+=======
+    return run_combined_pipeline(structured_resume, job)
+def regenerate(resume,job,requirements):
+    return run_combined_pipeline(resume,job,requirements=requirements)
+>>>>>>> Stashed changes
 
 def console_test_combined(resume=None, job=None):
     """Test the current pipeline with two live AI calls and section timings."""

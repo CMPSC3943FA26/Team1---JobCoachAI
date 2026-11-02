@@ -11,3 +11,4 @@ class JobBase(BaseModel):
     source: str
     created_at: datetime
     updated_at: datetime
+    

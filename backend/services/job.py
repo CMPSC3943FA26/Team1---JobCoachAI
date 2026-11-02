@@ -9,8 +9,8 @@ def create_job(user_id, job_data):
         "company": job_data.company,
         "source": job_data.source
     }).execute()
-
-    return response
+    job_id = response[0]['id']
+    return job_id
 
 
 def get_job(user_id, job_id):
