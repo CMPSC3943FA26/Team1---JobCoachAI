@@ -203,7 +203,6 @@ export async function tailor_resume(
   }
 }
 
-<<<<<<< Updated upstream
 // Frontend-only preview. Replace with a backend AI call once that endpoint is implemented.
 export type KeywordRewriteResponse = { suggestions: Record<string, string>; note?: string }
 export async function rewriteKeywordExperience(_keyword: string, experience: string, sections: string[]): Promise<KeywordRewriteResponse> {
@@ -232,10 +231,10 @@ export function previewKeywordWording(keyword: string, experience: string, secti
   }
   return result
 }
-=======
+
 export async function regenerate_tailor(resume_id:string, job: {title: string; company: string; description:string},) {
 
 }
   
 
->>>>>>> Stashed changes
+
