@@ -1,4 +1,10 @@
-import type { TailoringResponse } from '../types/ai'
+import type {
+  JobRequirements,
+  EvidenceSuggestionResponse,
+  ResumeAnalysisResponse,
+  TailoringResponse,
+  UserEvidence,
+} from '../types/ai'
 // resumeService.ts
 // Database persistence functions used by the resume editor and profile page.
 
@@ -203,6 +209,107 @@ export async function tailor_resume(
   }
 }
 
+function aiRequestPath(path: string, clientRequestId?: string) {
+  return clientRequestId
+    ? `${path}?client_request_id=${encodeURIComponent(clientRequestId)}`
+    : path
+}
+
+const pendingAiRequests = new Map<string, Promise<unknown>>()
+
+function deduplicatedAiRequest<T>(
+  path: string,
+  body: string,
+  clientRequestId?: string,
+  signal?: AbortSignal,
+): Promise<T> {
+  const key = `${path}:${body}`
+  if (!signal) {
+    const pending = pendingAiRequests.get(key)
+    if (pending) return pending as Promise<T>
+  }
+
+  const request = authorizedRequest(aiRequestPath(path, clientRequestId), {
+    method: 'POST',
+    body,
+    signal,
+  }) as Promise<T>
+  if (signal) return request
+
+  pendingAiRequests.set(key, request)
+  const clearPending = () => {
+    if (pendingAiRequests.get(key) === request) {
+      pendingAiRequests.delete(key)
+    }
+  }
+  void request.then(clearPending, clearPending)
+  return request
+}
+
+export async function analyze_resume(
+  current_resume: object,
+  job: { title: string; company: string; description: string },
+  requirements?: JobRequirements,
+  user_evidence: UserEvidence[] = [],
+  client_request_id?: string,
+  signal?: AbortSignal,
+): Promise<ResumeAnalysisResponse> {
+  return deduplicatedAiRequest(
+    '/ai/analyze_resume',
+    JSON.stringify({ current_resume, job, requirements, user_evidence }),
+    client_request_id,
+    signal,
+  )
+}
+
+export async function generate_tailoring_suggestions(
+  current_resume: object,
+  job: { title: string; company: string; description: string },
+  requirements: JobRequirements,
+  analysis: ResumeAnalysisResponse,
+  user_evidence: UserEvidence[] = [],
+  unapplied_suggestions: {
+    section_name: string
+    original_text: string
+    suggested_change: string
+    reasoning: string
+  }[] = [],
+  client_request_id?: string,
+  candidate_context = '',
+  signal?: AbortSignal,
+): Promise<TailoringResponse> {
+  return deduplicatedAiRequest(
+    '/ai/generate_suggestions',
+    JSON.stringify({
+      current_resume,
+      job,
+      requirements,
+      analysis,
+      user_evidence,
+      unapplied_suggestions,
+      candidate_context,
+    }),
+    client_request_id,
+    signal,
+  )
+}
+
+export async function generate_evidence_section_suggestions(
+  current_resume: object,
+  job: { title: string; company: string; description: string },
+  requirements: JobRequirements,
+  user_evidence: UserEvidence[],
+  client_request_id?: string,
+  signal?: AbortSignal,
+): Promise<EvidenceSuggestionResponse> {
+  return deduplicatedAiRequest(
+    '/ai/generate_evidence_suggestions',
+    JSON.stringify({ current_resume, job, requirements, user_evidence }),
+    client_request_id,
+    signal,
+  )
+}
+
 // Frontend-only preview. Replace with a backend AI call once that endpoint is implemented.
 export type KeywordRewriteResponse = { suggestions: Record<string, string>; note?: string }
 export async function rewriteKeywordExperience(_keyword: string, experience: string, sections: string[]): Promise<KeywordRewriteResponse> {
@@ -232,9 +339,24 @@ export function previewKeywordWording(keyword: string, experience: string, secti
   return result
 }
 
-export async function regenerate_tailor(resume_id:string, job: {title: string; company: string; description:string},) {
-
+export async function regenerate_tailor(
+  current_resume: object,
+  job: {title: string; company: string; description:string},
+  requirements: JobRequirements | undefined,
+  unapplied_suggestions: { section_name: string; original_text: string; suggested_change: string; reasoning: string }[],
+  candidate_context = '',
+): Promise<TailoringResponse> {
+  const body = JSON.stringify({
+    current_resume,
+    job,
+    requirements,
+    unapplied_suggestions,
+    candidate_context,
+  })
+  const request: Promise<TailoringResponse> = authorizedRequest('/ai/regenerate_resume', {
+    method: 'POST',
+    body,
+  })
+  return await request
 }
   
-
-

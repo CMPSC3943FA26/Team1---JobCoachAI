@@ -164,6 +164,10 @@
   color: var(--success);
 }
 
+.ats-stat-partial strong {
+  color: #a87516;
+}
+
 .ats-stat-missing strong {
   color: #c1453a;
 }
@@ -219,6 +223,12 @@
   color: #a8463a;
   background: #fbf2f1;
   border: 1px solid #f2d8d5;
+}
+
+.ats-chip-partial {
+  color: #8a6418;
+  background: #fff8e8;
+  border: 1px solid #f1dfb8;
 }
 
 .ats-no-keywords {

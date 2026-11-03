@@ -15,10 +15,27 @@ import { TailoringLoading } from '../components/TailoringLoading'
 import { generateSummaryOptions } from '../features/resume/resumeInsights'
 import { replaceTextInField } from '../features/resume/resumeSuggestions'
 import { addedWordMask } from '../features/resume/addedWords'
-import { tailor_resume, setSavedResumeDisplayMeta } from '../services/resumeService'
-import type { ResumeProfile, ResumeSaveRequest } from '../features/resume/resumeData'
+import {
+  analyze_resume,
+  generate_evidence_section_suggestions,
+  generate_tailoring_suggestions,
+  setSavedResumeDisplayMeta,
+} from '../services/resumeService'
+import type {
+  Project,
+  ResumeProfile,
+  ResumeSaveRequest,
+  WorkExperience,
+} from '../features/resume/resumeData'
 import type { ResumeRecommendation, SuggestionChange } from '../features/resume/resumeSuggestions'
-import type { SummaryOption, SummaryTone, TailoringResponse } from '../types/ai'
+import type {
+  ResumeAnalysisResponse,
+  Improvement,
+  SummaryOption,
+  SummaryTone,
+  TailoringResponse,
+  UserEvidence,
+} from '../types/ai'
 
 // Matches the exact prop type expected by the existing Kiran component.
 type Sections = ComponentProps<typeof ResumeSuggestions>['sections']
@@ -103,6 +120,31 @@ function sectionNameFromPath(path: string): string {
   }
   return labels[section] ?? 'Other'
 }
+function recommendationKey(recommendation: ResumeRecommendation): string {
+  return JSON.stringify([
+    recommendation.section_name,
+    recommendation.original_text,
+    recommendation.suggested_change,
+  ])
+}
+function createRecommendation(
+  recommendation: Omit<ResumeRecommendation, 'id'>,
+): ResumeRecommendation {
+  return {
+    ...recommendation,
+    id: crypto.randomUUID(),
+  }
+}
+function jobRequirementsKey(job: { title: string; company: string; description: string }): string {
+  return JSON.stringify([job.title, job.company, job.description])
+}
+function analysisInputKey(
+  resume: object,
+  job: { title: string; company: string; description: string },
+  userEvidence: UserEvidence[],
+): string {
+  return JSON.stringify([resume, job, userEvidence])
+}
 export interface TailorResumeInsightsProps {
   jobDescription: string
   title: string
@@ -118,6 +160,12 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
   const [summaryOptions, setSummaryOptions] = useState<SummaryOption[]>([])
   const [appliedTone, setAppliedTone] = useState<SummaryTone | null>(null)
   const [recommendations, setRecommendations] = useState<ResumeRecommendation[]>([])
+  const [analysis, setAnalysis] = useState<ResumeAnalysisResponse | null>(null)
+  const [analysisKey, setAnalysisKey] = useState<string | null>(null)
+  const [requirementsJobKey, setRequirementsJobKey] = useState<string | null>(null)
+  const [appliedRecommendationKeys, setAppliedRecommendationKeys] = useState<Set<string>>(
+    () => new Set(),
+  )
   const [message, setMessage] = useState('')
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const [exportBusy, setExportBusy] = useState(false)
@@ -126,19 +174,34 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
   const [showResetConfirmation, setShowResetConfirmation] = useState(false)
   const [hiddenAtsKeywords, setHiddenAtsKeywords] = useState<Set<string>>(() => new Set())
   const [manuallyFoundSkills, setManuallyFoundSkills] = useState<string[]>([])
-  const [sectionDrafts, setSectionDrafts] = useState<Record<string, string>>({})
-  const [keywordAssignments, setKeywordAssignments] = useState<{ keyword: string; section: string; options: string[] }[]>([])
+  const [userEvidence, setUserEvidence] = useState<UserEvidence[]>([])
+  const [evidenceImprovement, setEvidenceImprovement] = useState<Improvement | null>(null)
+  const [improvementEvidenceText, setImprovementEvidenceText] = useState('')
+  const [improvementEvidenceSection, setImprovementEvidenceSection] =
+    useState<
+      Extract<
+        UserEvidence['target_section'],
+        'Work Experience' | 'Projects' | 'Professional Summary'
+      >
+    >('Work Experience')
   const [loading,setLoading]=useState(false)
+  const [loadingStage, setLoadingStage] = useState<'analysis' | 'suggestions'>('analysis')
+  const [regenerating, setRegenerating] = useState(false)
+  const [addingEvidence, setAddingEvidence] = useState(false)
+  const [updatingRequirements, setUpdatingRequirements] = useState<string[]>([])
   const [error,setError]=useState<string>('')
   const [result, setResult] = useState<TailoringResponse | null>(null)
-  const [aiRetry, setAiRetry] = useState(0)
-  // Keyword changes affect the local ATS estimate immediately. The AI request
-  // is rerun only when the user explicitly clicks Regenerate AI suggestions.
-  const keywordContextRef = useRef({ confirmed: [] as string[], removed: [] as string[] })
-  keywordContextRef.current = {
-    confirmed: manuallyFoundSkills,
-    removed: [...hiddenAtsKeywords],
+  const activeAiRequests = useRef(new Set<AbortController>())
+  const cancelAiRequests = () => {
+    for (const controller of activeAiRequests.current) controller.abort()
+    activeAiRequests.current.clear()
+    setLoading(false)
+    setRegenerating(false)
+    setAddingEvidence(false)
+    setUpdatingRequirements([])
   }
+  // Keyword changes affect the local ATS estimate immediately. AI suggestions
+  // are regenerated explicitly using the requirements from the first response.
   // Keep the latest live tailored copy available to TailorPage's Save button.
   // This stores a save-ready payload, not the original base resume draft.
   useEffect(() => {
@@ -155,56 +218,186 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       jobTitle: title.trim(),
     }))
   }, [tailored, title])
-  // Generate live AI suggestions for the submitted resume and job.
-  // Keep the existing ATS controls, summary tools, and local demo fallback intact.
-  // Page 3 is considered save-ready only after an AI recommendation or
-  // generated summary has actually been applied to the tailored copy.
+  // Return the Stage 2 ATS result before awaiting Stage 3 suggestions.
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
+    activeAiRequests.current.add(controller)
     async function tailoring_resume() {
       setLoading(true)
+      setLoadingStage('analysis')
       setError('')
       setResult(null)
+      setAnalysis(null)
+      setAnalysisKey(null)
       setRecommendations([])
+      setAppliedRecommendationKeys(new Set())
+      setRequirementsJobKey(null)
+      setUserEvidence([])
       setSuggestionsOpen(true)
       try {
-        const { confirmed, removed } = keywordContextRef.current
-        // Keep user-confirmed ATS selections separate from the underlying resume.
-        // They are unverified context, NOT permission to invent qualifications.
-        const context = aiRetry > 0 && (confirmed.length || removed.length)
-          ? `\n\nCandidate ATS review notes (unverified UI selections, not job requirements):` +
-            (confirmed.length ? `\nUser marked as found: ${confirmed.join(', ')}.` : '') +
-            (removed.length ? `\nUser removed from found: ${removed.join(', ')}.` : '') +
-            `\nOnly suggest experience supported by the actual resume. Do not invent skills.`
-          : ''
-        const response = await tailor_resume(resume_id, {
-          title, company, description: jobDescription + context,
-        })
-        if (cancelled) return
-        if (!Array.isArray(response.suggestions)) {
-          throw new Error('Invalid tailoring response.')
-        }
-        setResult(response)
+        const draft = readDraft()
+        if (!draft) throw new Error('No local resume draft found.')
+        const currentResume = payloadFromDraft(draft)
+        const job = { title, company, description: jobDescription }
+        const clientRequestId = crypto.randomUUID()
+        const matched = await analyze_resume(
+          currentResume, job, undefined, [], clientRequestId, controller.signal,
+        )
+        if (cancelled || controller.signal.aborted) return
+        setAnalysis(matched)
+        setAnalysisKey(analysisInputKey(currentResume, job, []))
+        setResult(matched)
+        setRequirementsJobKey(jobRequirementsKey(job))
+        setAppliedRecommendationKeys(new Set())
         setManuallyFoundSkills([])
         setHiddenAtsKeywords(new Set())
 
-        setRecommendations(response.suggestions.map((item) => ({
+        setLoadingStage('suggestions')
+        const response = await generate_tailoring_suggestions(
+          currentResume,
+          job,
+          matched.requirements,
+          matched,
+          [],
+          [],
+          clientRequestId,
+          '',
+          controller.signal,
+        )
+        if (cancelled || controller.signal.aborted) return
+        setResult({ ...matched, ...response })
+        setRecommendations(response.suggestions.map((item) => createRecommendation({
           section_name: sectionNameFromPath(item.resume_id),
           original_text: item.before,
           suggested_change: item.suggestion,
           reasoning: item.reason,
         })))
       } catch (error) {
-        if (!cancelled) {
+        if (!cancelled && !controller.signal.aborted) {
           setError(error instanceof Error ? error.message : 'Tailoring failed.')
         }
       } finally {
-        if (!cancelled) setLoading(false)
+        activeAiRequests.current.delete(controller)
+        if (!cancelled && !controller.signal.aborted) setLoading(false)
       }
     }
-    void tailoring_resume()
-    return () => { cancelled = true }
-  }, [resume_id, title, company, jobDescription, aiRetry])
+    // StrictMode runs an extra setup/cleanup cycle in development. Defer the
+    // request so that the discarded first effect can be cancelled before it
+    // starts any backend work.
+    const startTimer = window.setTimeout(() => {
+      void tailoring_resume()
+    }, 0)
+    return () => {
+      cancelled = true
+      window.clearTimeout(startTimer)
+      controller.abort()
+      activeAiRequests.current.delete(controller)
+    }
+  }, [resume_id, title, company, jobDescription])
+  async function regenerateSuggestions(
+    evidenceForGeneration = userEvidence,
+    targetedRequirement?: string,
+  ) {
+    if (!tailored || !result) return
+    const controller = new AbortController()
+    activeAiRequests.current.add(controller)
+    setRegenerating(true)
+    setUpdatingRequirements(targetedRequirement ? [skillKey(targetedRequirement)] : [])
+    setError('')
+    try {
+      const confirmed = manuallyFoundSkills
+      const removed = [...hiddenAtsKeywords]
+      const candidateContext = confirmed.length || removed.length
+        ? `\n\nCandidate ATS review notes (unverified UI selections, not job requirements):` +
+          (confirmed.length ? `\nUser marked as found: ${confirmed.join(', ')}.` : '') +
+          (removed.length ? `\nUser removed from found: ${removed.join(', ')}.` : '') +
+          `\nOnly suggest experience supported by the actual resume. Do not invent skills.`
+        : ''
+      const job = { title, company, description: jobDescription }
+      const currentResume = payloadFromDraft(tailored)
+      const clientRequestId = crypto.randomUUID()
+      const cachedRequirements = requirementsJobKey === jobRequirementsKey(job)
+        ? result.requirements
+        : undefined
+      const currentAnalysisKey = analysisInputKey(currentResume, job, evidenceForGeneration)
+      const matched = analysis && analysisKey === currentAnalysisKey
+        ? analysis
+        : await analyze_resume(
+          currentResume,
+          job,
+          cachedRequirements,
+          evidenceForGeneration,
+          clientRequestId,
+          controller.signal,
+        )
+      if (controller.signal.aborted) return
+      setAnalysis(matched)
+      setAnalysisKey(currentAnalysisKey)
+      setRequirementsJobKey(jobRequirementsKey(job))
+      const response = await generate_tailoring_suggestions(
+        currentResume,
+        job,
+        matched.requirements,
+        matched,
+        evidenceForGeneration,
+        recommendations.filter(
+          (recommendation) =>
+            !appliedRecommendationKeys.has(recommendationKey(recommendation)),
+        ),
+        clientRequestId,
+        candidateContext,
+        controller.signal,
+      )
+      if (controller.signal.aborted) return
+      if (!Array.isArray(response.suggestions)) {
+        throw new Error('Invalid tailoring response.')
+      }
+      setResult({ ...matched, ...response })
+      setRequirementsJobKey(jobRequirementsKey(job))
+      setAppliedRecommendationKeys(new Set())
+      setRecommendations(response.suggestions.map((item) => createRecommendation({
+        section_name: sectionNameFromPath(item.resume_id),
+        original_text: item.before,
+        suggested_change: item.suggestion,
+        reasoning: item.reason,
+      })))
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setError(error instanceof Error ? error.message : 'Tailoring failed.')
+      }
+    } finally {
+      activeAiRequests.current.delete(controller)
+      if (!controller.signal.aborted) {
+        setRegenerating(false)
+        setUpdatingRequirements([])
+      }
+    }
+  }
+  function saveImprovementEvidence(regenerate: boolean) {
+    if (!evidenceImprovement || !improvementEvidenceText.trim()) return
+    const newEvidence: UserEvidence = {
+      requirement: evidenceImprovement.requirement,
+      evidence: improvementEvidenceText.trim(),
+      target_section: improvementEvidenceSection,
+      source: 'user',
+    }
+    const nextEvidence = userEvidence.some((item) =>
+      item.requirement === newEvidence.requirement &&
+      item.evidence === newEvidence.evidence &&
+      item.target_section === newEvidence.target_section)
+      ? userEvidence
+      : [...userEvidence, newEvidence]
+    setUserEvidence(nextEvidence)
+    setEvidenceImprovement(null)
+    setImprovementEvidenceText('')
+    setMessage(regenerate
+      ? 'Evidence saved. Regenerating AI suggestions…'
+      : 'Evidence saved for the next time you regenerate AI suggestions.')
+    if (regenerate) {
+      void regenerateSuggestions(nextEvidence, newEvidence.requirement)
+    }
+  }
   useEffect(() => {
     onTailoredReadyChange?.(changedFields.size > 0)
   }, [changedFields, onTailoredReadyChange])
@@ -212,8 +405,11 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
   useEffect(() => {
     setHiddenAtsKeywords(new Set())
     setManuallyFoundSkills([])
-    setKeywordAssignments([])
-    setSectionDrafts({})
+    setUserEvidence([])
+    setEvidenceImprovement(null)
+    setImprovementEvidenceText('')
+    setAnalysis(null)
+    setAnalysisKey(null)
   }, [jobDescription])
 
   // Interactive ATS display: a moved/added keyword appears under Found, while
@@ -246,9 +442,15 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       const original = result.requirements_met.find(
         (item) => skillKey(item.requirement) === keyword,
       )
-      if (original) {
+      const evidence = result.evidence?.find(
+        (item) => skillKey(item.group || item.requirement) === keyword,
+      )
+      if (original || evidence) {
         missing.set(keyword, {
-          requirement: original.requirement,
+          requirement: original?.requirement
+            ?? evidence?.group
+            ?? evidence?.requirement
+            ?? keyword,
         })
       }
       found.delete(keyword)
@@ -257,7 +459,20 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     for (const keyword of found.keys()) missing.delete(keyword)
     const requirements_met = found.size
     const requirements_missing = missing.size
-    const total = requirements_met + requirements_missing
+    const requirementKeys = new Set(
+      result.requirements.requirements.map((item) =>
+        skillKey(item.group || item.requirement)),
+    )
+    const partial = new Set(
+      (result.evidence ?? [])
+        .filter((item) => item.group_classification === 'partial')
+        .map((item) => skillKey(item.group || item.requirement))
+        .filter((key) => requirementKeys.has(key)
+          && !missing.has(key)
+          && !manuallyFoundSkills.some((skill) => skillKey(skill) === key)
+          && !hiddenAtsKeywords.has(key)),
+    )
+    const total = requirementKeys.size
     const hasKeywordChanges =
       manuallyFoundSkills.length > 0 || hiddenAtsKeywords.size > 0
     return {
@@ -266,7 +481,9 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       missing_requirements: [...missing.values()],
       requirements_missing,
       ATS_score: hasKeywordChanges
-        ? (total ? Math.round(requirements_met / total * 100) : 0)
+        ? (total
+          ? Math.round((requirements_met + 0.5 * partial.size) / total * 100)
+          : 0)
         : result.ATS_score,
     }
   }, [result, hiddenAtsKeywords, manuallyFoundSkills])
@@ -286,17 +503,21 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     }, jobDescription))
   }, [jobDescription])
   const refreshBaseResume = () => {
+    cancelAiRequests()
     setTailored(readDraft())
     setBaseDraft(readDraft())
     setChangedFields(new Set())
     setHiddenAtsKeywords(new Set())
     setManuallyFoundSkills([])
-    setKeywordAssignments([])
-    setSectionDrafts({})
+    setUserEvidence([])
+    setAnalysis(null)
+    setAnalysisKey(null)
     setSummaryGeneration(0)
     setSummaryOptions([])
     setAppliedTone(null)
     setRecommendations([])
+    setAppliedRecommendationKeys(new Set())
+    setError('')
     setMessage('A fresh tailored copy was loaded. Your original resume was not changed.')
     const base = readDraft()
     if (base) {
@@ -308,48 +529,135 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       }, jobDescription))
     }
   }
-  // Manually confirmed keywords are context for locally generated summaries, NOT resume edits.
-  // The original and tailored resume data remain unchanged when these chips are edited.
-  const addMissedSkill = (name: string, sections: string[], _experience: string, options: Record<string, string[]>): string | null => {
-    if (!tailored) return 'No tailored resume is available.'
-    const normalized = skillKey(name)
-    if (!normalized) return 'Enter a keyword before adding it.'
-    const matchedKeywords = result?.requirements_met.map((item) => item.requirement) ?? []
-    if (manuallyFoundSkills.some((item) => skillKey(item) === normalized) ||
-        (matchedKeywords.some((item) => skillKey(item) === normalized) &&
-          !hiddenAtsKeywords.has(normalized))) {
-      return 'That keyword is already displayed under Found in your resume.'
+  const addUserEvidence = async (items: UserEvidence[]): Promise<string | null> => {
+    if (!tailored || !result) return 'No tailored resume is available.'
+    if (!items.length || items.some((item) => !item.evidence.trim())) {
+      return 'Please provide evidence before generating suggestions.'
     }
-    if (!sections.length || sections.some((section) => !['Work Experience', 'Professional Summary'].includes(section))) {
-      return 'Choose Work Experience, Professional Summary, or both.'
+    const controller = new AbortController()
+    activeAiRequests.current.add(controller)
+    const nextEvidence = [...userEvidence]
+    for (const item of items) {
+      if (!nextEvidence.some((existing) =>
+        existing.requirement === item.requirement &&
+        existing.evidence === item.evidence &&
+        existing.target_section === item.target_section)) {
+        nextEvidence.push(item)
+      }
     }
-    if (sections.some((section) => !(options[section] ?? []).length)) return 'No wording was prepared for one or more sections.'
-    setKeywordAssignments((current) => [
-      ...current.filter((item) => skillKey(item.keyword) !== normalized),
-      ...sections.map((section) => ({ keyword: name, section, options: options[section] })),
-    ])
-    // A confirmed keyword moves from Missing to Found in the interactive ATS
-    // display. The original resume is still unchanged until wording is applied.
-    setManuallyFoundSkills((current) => current.some((item) => skillKey(item) === normalized)
-      ? current
-      : [...current, name])
-    setSuggestionsOpen(true)
-    setHiddenAtsKeywords((current) => {
-      const updated = new Set(current)
-      updated.delete(normalized)
-      return updated
-    })
-    return null
-  }
-  const removeKeywordSuggestion = (keyword: string, section: string) => {
-    setKeywordAssignments((current) => current.filter((item) =>
-      !(skillKey(item.keyword) === skillKey(keyword) && item.section === section)))
-    setMessage(`Removed the ${keyword} suggestion for ${section}. Any wording already applied to the tailored resume remains unchanged.`)
+    setUserEvidence(nextEvidence)
+    setAddingEvidence(true)
+    setUpdatingRequirements([...new Set(items.map((item) => skillKey(item.requirement)))])
+    setError('')
+    try {
+      const currentResume = payloadFromDraft(tailored)
+      const job = { title, company, description: jobDescription }
+      const clientRequestId = crypto.randomUUID()
+      const cachedRequirements = requirementsJobKey === jobRequirementsKey(job)
+        ? result.requirements
+        : undefined
+      const matched = await analyze_resume(
+        currentResume,
+        job,
+        cachedRequirements,
+        nextEvidence,
+        clientRequestId,
+        controller.signal,
+      )
+      if (controller.signal.aborted) return 'Evidence generation was canceled.'
+      setAnalysis(matched)
+      setAnalysisKey(analysisInputKey(currentResume, job, nextEvidence))
+      setRequirementsJobKey(jobRequirementsKey(job))
+      setResult((current) => current ? {
+        ...matched,
+        suggestions: current.suggestions,
+        improvements: current.improvements,
+        removals: current.removals,
+      } : matched)
+      setManuallyFoundSkills((current) => [...new Set([
+        ...current,
+        ...items.map((item) => item.requirement),
+      ])])
+      setHiddenAtsKeywords((current) => {
+        const updated = new Set(current)
+        for (const item of items) updated.delete(skillKey(item.requirement))
+        return updated
+      })
+      const suggestions = await generate_evidence_section_suggestions(
+        currentResume,
+        job,
+        matched.requirements,
+        items,
+        clientRequestId,
+        controller.signal,
+      )
+      if (controller.signal.aborted) return 'Evidence generation was canceled.'
+      const additions = suggestions.suggestions.map((item) => {
+        const newEntry: WorkExperience | Project | undefined =
+          item.new_entry && item.section_name === 'Work Experience'
+            ? {
+              job_title: item.new_entry.job_title ?? '',
+              company: item.new_entry.company ?? '',
+              location: item.new_entry.location ?? '',
+              start_date: item.new_entry.start_date ?? '',
+              end_date: item.new_entry.end_date ?? '',
+              description: item.new_entry.description,
+            }
+            : item.new_entry && item.section_name === 'Projects'
+              ? {
+                name: item.new_entry.name ?? '',
+                description: item.new_entry.description,
+                link: item.new_entry.link ?? '',
+              }
+              : undefined
+        return createRecommendation({
+          section_name: item.section_name,
+          original_text: item.original_text,
+          suggested_change: item.suggestion || newEntry?.description || '',
+          reasoning: item.reason || 'Based on the experience you provided.',
+          ...(newEntry ? { new_entry: newEntry } : {}),
+        })
+      })
+      setRecommendations((current) => [...current, ...additions])
+      const evidenceKeywords = items.map((item) => skillKey(item.requirement))
+      const addressedRequirements = new Set(
+        matched.requirements.requirements
+          .filter((requirement) => [
+            requirement.requirement,
+            ...requirement.direct_search_terms,
+          ].some((term) => {
+            const normalizedTerm = skillKey(term)
+            return evidenceKeywords.some((keyword) =>
+              normalizedTerm === keyword ||
+              normalizedTerm.startsWith(`${keyword} `) ||
+              normalizedTerm.includes(` ${keyword} `))
+          }))
+          .map((requirement) => skillKey(requirement.requirement)),
+      )
+      setResult((current) => current ? {
+        ...current,
+        improvements: current.improvements.filter(
+          (improvement) => !addressedRequirements.has(skillKey(improvement.requirement)),
+        ),
+      } : current)
+      setSuggestionsOpen(true)
+      return null
+    } catch (error) {
+      if (controller.signal.aborted) return 'Evidence generation was canceled.'
+      const message = error instanceof Error ? error.message : 'Could not generate AI suggestions.'
+      setError(message)
+      return message
+    } finally {
+      activeAiRequests.current.delete(controller)
+      if (!controller.signal.aborted) {
+        setAddingEvidence(false)
+        setUpdatingRequirements([])
+      }
+    }
   }
   const removeAtsKeyword = (keyword: string) => {
     const key = skillKey(keyword)
     setManuallyFoundSkills((current) => current.filter((item) => skillKey(item) !== key))
-    setKeywordAssignments((current) => current.filter((item) => skillKey(item.keyword) !== key))
     setHiddenAtsKeywords((current) => new Set(current).add(key))
   }
   // Keep professional-summary suggestions in sync with manually added/removed keywords.
@@ -454,92 +762,89 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     setMessage('Original parsed professional summary restored to the tailored preview.')
   }
   const applySuggestion = (change: SuggestionChange): string | null => {
-    const section = tailored?.sections.find((item) => item.key === change.target.sectionKey)
-    const entry = section?.entries[change.target.entryIndex]
-    if (entry === undefined || (typeof entry !== 'string' && !(change.target.fieldKey in entry))) {
+    const target = change.target
+    if (!target) return 'This suggestion does not target an existing resume field.'
+    const section = tailored?.sections.find((item) => item.key === target.sectionKey)
+    const entry = section?.entries[target.entryIndex]
+    if (entry === undefined || (typeof entry !== 'string' && !(target.fieldKey in entry))) {
       return 'This suggestion targets a field not present in the tailored resume.'
     }
     let updatedText: string
     try {
       const currentText = typeof entry === 'string'
         ? entry
-        : String(entry[change.target.fieldKey as keyof typeof entry] ?? '')
+        : String(entry[target.fieldKey as keyof typeof entry] ?? '')
       updatedText = replaceTextInField(currentText, change.previousText, change.newText)
     } catch (cause) {
       return cause instanceof Error ? cause.message : 'Unable to safely apply this suggestion.'
     }
-    markChanged(change.target.sectionKey, change.target.entryIndex, change.target.fieldKey)
+    markChanged(target.sectionKey, target.entryIndex, target.fieldKey)
     setTailored((current) => current && ({
       ...current,
-      sections: current.sections.map((item) => item.key !== change.target.sectionKey
+      sections: current.sections.map((item) => item.key !== target.sectionKey
         ? item
         : {
           ...item,
-          entries: item.entries.map((oldEntry, index) => index !== change.target.entryIndex
+          entries: item.entries.map((oldEntry, index) => index !== target.entryIndex
             ? oldEntry
             : typeof oldEntry === 'string'
               ? updatedText
-              : { ...oldEntry, [change.target.fieldKey]: updatedText }),
+              : { ...oldEntry, [target.fieldKey]: updatedText }),
         }),
     }))
     setAppliedTone(null)
     setMessage('Suggestion applied to the tailored copy only. Regenerate AI suggestions to reassess the edited resume.')
     return null
   }
-  // The per-keyword Apply buttons only stage text in the section-level editor.
-  // They intentionally do not mutate `tailored` or the save-ready resume payload.
-  const sectionSourceText = (sectionName: string): string | null => {
-    if (!tailored) return null
-    if (sectionName === 'Professional Summary') {
-      const summary = tailored.sections.find((section) => section.key === 'summary')
-      return typeof summary?.entries[0] === 'string' ? summary.entries[0] : null
+  const applyRecommendation = (change: SuggestionChange): string | null => {
+    if (change.newEntry) {
+      const newEntry = {
+        ...change.newEntry,
+        description: change.newText.trim(),
+      }
+      const newSection: TailorSection = 'job_title' in newEntry
+        ? {
+          key: 'work_experience',
+          title: 'Work Experience',
+          entries: [newEntry],
+        }
+        : {
+          key: 'projects',
+          title: 'Projects',
+          entries: [newEntry],
+        }
+      const sectionKey = newSection.key
+      if (sectionNameFromPath(sectionKey) !== change.suggestion.section_name) {
+        return 'This suggestion targets an invalid resume section.'
+      }
+      if (!tailored) return 'No tailored resume is available.'
+      const section = tailored.sections.find((item) => item.key === sectionKey)
+      const entryIndex = section?.entries.length ?? 0
+      markChanged(sectionKey, entryIndex, 'description')
+      setTailored((current) => {
+        if (!current) return current
+        const exists = current.sections.some((item) => item.key === sectionKey)
+        const sections = exists
+          ? current.sections.map((item) => item.key === sectionKey
+            ? { ...item, entries: [...item.entries, newEntry] }
+            : item)
+          : [...current.sections, newSection]
+        return { ...current, sections }
+      })
+      setAppliedRecommendationKeys((current) => new Set(current).add(
+        recommendationKey(change.suggestion),
+      ))
+      setAppliedTone(null)
+      setMessage('New entry applied to the tailored copy only.')
+      return null
     }
-    if (sectionName === 'Work Experience') {
-      const work = tailored.sections.find((section) => section.key === 'work_experience')
-      if (!work || work.entries.length !== 1) return null
-      const entry = work.entries[0]
-      return typeof entry !== 'string' && 'description' in entry ? String(entry.description ?? '') : null
+    const error = applySuggestion(change)
+    if (!error) {
+      setAppliedRecommendationKeys((current) => new Set(current).add(
+        recommendationKey(change.suggestion),
+      ))
     }
-    return null
-  }
-  const applyKeywordWording = (_keyword: string, sectionName: string, wording: string): string | null => {
-    if (!wording.trim()) return 'Select a non-empty wording option.'
-    const source = sectionSourceText(sectionName)
-    if (source === null) {
-      return sectionName === 'Work Experience'
-        ? 'To avoid assigning this experience to the wrong employer, this section draft requires exactly one Work Experience entry with a description.'
-        : 'Add a Professional Summary before staging this wording.'
-    }
-    setSectionDrafts((current) => {
-      const existing = current[sectionName] ?? source
-      return { ...current, [sectionName]: [existing.trim(), wording.trim()].filter(Boolean).join('\n') }
-    })
-    setMessage(`Added wording to the suggested ${sectionName} section. Review it in the existing Original / Suggested card before applying to your tailored resume.`)
-    return null
-  }
-  const applySectionDraft = (sectionName: string): string | null => {
-    if (!tailored) return 'No tailored resume is available.'
-    const draft = sectionDrafts[sectionName]?.trim()
-    if (!draft) return 'The section draft is empty.'
-    const previousText = sectionSourceText(sectionName)
-    if (previousText === null) return 'The resume section has changed. Review its contents before applying.'
-    const target = sectionName === 'Professional Summary'
-      ? { sectionKey: 'summary' as const, entryIndex: 0, fieldKey: 'value' }
-      : { sectionKey: 'work_experience' as const, entryIndex: 0, fieldKey: 'description' }
-    const error = applySuggestion({
-      suggestion: { section_name: sectionName, original_text: previousText, suggested_change: draft, reasoning: 'Reviewed section-level wording.' },
-      target,
-      previousText,
-      newText: draft,
-    })
-    if (error) return error
-    setSectionDrafts((current) => {
-      const next = { ...current }
-      delete next[sectionName]
-      return next
-    })
-    setMessage(`Applied the reviewed ${sectionName} section to the tailored resume preview.`)
-    return null
+    return error
   }
   // Export the live tailored state, never the original sessionStorage draft.
   const tailoredFilename = () => {
@@ -627,12 +932,20 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
                 missingRequirements={interactiveatsresponse?.missing_requirements}
                 hiddenKeywords={hiddenAtsKeywords}
                 onRemoveKeyword={removeAtsKeyword}
-                onAddSkill={addMissedSkill}
+                onAddUserEvidence={addUserEvidence}
                 manuallyFoundSkills={manuallyFoundSkills}
               />
+              {result?.requirements && (
+                <details className="tailor-requirements-debug">
+                  <summary>
+                    Exact AI-extracted requirements ({result.requirements.requirements.length})
+                  </summary>
+                  <pre>{JSON.stringify(result.requirements, null, 2)}</pre>
+                </details>
+              )}
             </section>
           )}
-          {loading && <TailoringLoading />}
+          {loading && <TailoringLoading stage={loadingStage} />}
           <section className="tailor-dropdown" aria-label="AI Professional Summary">
             <button type="button" className="tailor-dropdown-trigger" aria-expanded={summaryOpen}
               aria-controls="tailor-summary-content" onClick={() => setSummaryOpen((open) => !open)}>
@@ -669,36 +982,62 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
                   <button
                     type="button"
                     className="button button-secondary"
-                    disabled={loading}
-                    onClick={() => setAiRetry((previous) => previous + 1)}
+                    disabled={loading || regenerating || addingEvidence || !tailored || !result}
+                    onClick={() => void regenerateSuggestions()}
                   >
-                    {loading ? 'Generating AI suggestions…' : 'Regenerate AI suggestions'}
+                    {regenerating || addingEvidence
+                      ? 'Updating AI suggestions…'
+                      : loading ? 'Generating AI suggestions…' : 'Regenerate AI suggestions'}
                   </button>
                 </div>
+                {(regenerating || addingEvidence) && (
+                  <p role="status" aria-live="polite">
+                    {updatingRequirements.length
+                      ? `Updating ${updatingRequirements.join(', ')}…`
+                      : 'Refreshing suggestions…'}
+                  </p>
+                )}
                 {error && <p role="alert">{error}</p>}
-                {!loading && !error && result && (
-                  recommendations.length > 0 || keywordAssignments.length > 0 ? (
-                    <ResumeSuggestions recommendations={recommendations} keywordAssignments={keywordAssignments}
-                      sections={tailored.sections} onApplySuggestion={applySuggestion} onApplyKeyword={applyKeywordWording}
-                      onRemoveKeyword={removeKeywordSuggestion} sectionDrafts={sectionDrafts}
-                      sectionOriginals={{
-                        'Professional Summary': sectionSourceText('Professional Summary') ?? '',
-                        'Work Experience': sectionSourceText('Work Experience') ?? '',
-                      }}
-                      onChangeSectionDraft={(section, text) => setSectionDrafts((current) => ({ ...current, [section]: text }))}
-                      onApplySectionDraft={applySectionDraft} />
+                {!loading && result && (
+                  recommendations.length > 0 ? (
+                    <ResumeSuggestions recommendations={recommendations}
+                      sections={tailored.sections} onApplySuggestion={applyRecommendation} />
                   ) : <p>No wording changes were recommended.</p>
                 )}
-                {!loading && !error && result && (
+                {!loading && result && (
                   <section aria-label="AI improvements">
                     <h3>Improvements and clarifications</h3>
                     {result.improvements.map((item, index) => (
-                      <article className="suggestion-card" key={`${item.requirement}:${index}`}>
+                      <article
+                        className="suggestion-card"
+                        key={`${item.requirement}:${index}`}
+                        aria-busy={updatingRequirements.includes(skillKey(item.requirement))}
+                      >
                         <h4>{item.requirement}</h4>
                         <p>{item.improvement}</p>
                         <div className="suggestion-reasoning">
                           <span className="suggestion-reasoning-title">Why this matters</span>
                           <p>{item.reason}</p>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="button button-secondary"
+                            disabled={loading || regenerating || addingEvidence}
+                            onClick={() => {
+                              setEvidenceImprovement(item)
+                              setImprovementEvidenceText('')
+                              setImprovementEvidenceSection('Work Experience')
+                            }}
+                          >
+                            Add evidence
+                          </button>
+                          {updatingRequirements.includes(skillKey(item.requirement)) && (
+                            <small role="status">Updating this requirement…</small>
+                          )}
+                          {userEvidence.some((evidence) =>
+                            skillKey(evidence.requirement) === skillKey(item.requirement),
+                          ) && <small>Evidence saved for regeneration</small>}
                         </div>
                       </article>
                     ))}
@@ -709,7 +1048,11 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
           </section>
           <div className="tailor-insight-actions" style={{ justifyContent: 'flex-end' }}>
             <button className="button button-primary" type="button"
-              onClick={() => setShowResetConfirmation(true)}>Reset All Tailored Changes</button>
+              onClick={() => {
+                cancelAiRequests()
+                setError('')
+                setShowResetConfirmation(true)
+              }}>Reset All Tailored Changes</button>
           </div>
           <section className="resume-preview-section" aria-label="Tailored resume preview">
             <div className="resume-preview-heading">
@@ -733,6 +1076,97 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
               />
             </div>
           </section>
+          {evidenceImprovement && (
+            <div
+              role="presentation"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) setEvidenceImprovement(null)
+              }}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(10, 18, 30, .62)',
+                zIndex: 1100,
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                padding: 16,
+              }}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="improvement-evidence-title"
+                style={{
+                  width: 'min(100%, 480px)',
+                  background: 'var(--card-bg, #fff)',
+                  color: 'var(--text-primary, #172033)',
+                  borderRadius: 14,
+                  padding: 24,
+                  boxShadow: '0 16px 48px rgba(0,0,0,.25)',
+                }}
+              >
+                <h3 id="improvement-evidence-title" style={{ marginTop: 0 }}>Add evidence</h3>
+                <p>Requirement: <strong>{evidenceImprovement.requirement}</strong></p>
+                <label htmlFor="improvement-evidence-section">Relevant resume section</label>
+                <select
+                  id="improvement-evidence-section"
+                  value={improvementEvidenceSection}
+                  onChange={(event) => setImprovementEvidenceSection(
+                    event.target.value as typeof improvementEvidenceSection,
+                  )}
+                  style={{ display: 'block', width: '100%', margin: '8px 0 16px', padding: 10 }}
+                >
+                  <option value="Work Experience">Work Experience</option>
+                  <option value="Projects">Projects</option>
+                  <option value="Professional Summary">Professional Summary</option>
+                </select>
+                <label htmlFor="improvement-evidence-text">Your evidence</label>
+                <textarea
+                  id="improvement-evidence-text"
+                  rows={5}
+                  value={improvementEvidenceText}
+                  onChange={(event) => setImprovementEvidenceText(event.target.value)}
+                  placeholder="Describe genuine experience, coursework, or projects relevant to this requirement."
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    padding: 10,
+                    marginTop: 8,
+                  }}
+                />
+                <p style={{ fontSize: 12 }}>
+                  Your evidence will be saved for AI regeneration. It will not be added to your resume automatically.
+                </p>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    onClick={() => setEvidenceImprovement(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    disabled={!improvementEvidenceText.trim()}
+                    onClick={() => saveImprovementEvidence(false)}
+                  >
+                    Continue editing
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-primary"
+                    disabled={!improvementEvidenceText.trim() || loading}
+                    onClick={() => saveImprovementEvidence(true)}
+                  >
+                    Regenerate
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="resume-bottom-action-buttons">
             <div className="resume-export-actions">
               <button className="button button-primary" type="button"

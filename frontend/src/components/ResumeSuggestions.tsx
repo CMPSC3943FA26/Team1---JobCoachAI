@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import type {
   ResumeRecommendation,
   ResumeSectionLike,
@@ -10,19 +10,21 @@ import './ResumeSuggestions.css'
 
 interface ResumeSuggestionsProps {
   recommendations: ResumeRecommendation[]
-  keywordAssignments?: readonly { keyword: string; section: string; options: string[] }[]
   sections: ResumeSectionLike[]
   onApplySuggestion: (change: SuggestionChange) => string | null
   onRegenerateSection?: (sectionName: string) => void
-  onApplyKeyword?: (keyword: string, section: string, wording: string) => string | null
-  onRemoveKeyword?: (keyword: string, section: string) => void
-  sectionDrafts?: Record<string, string>
-  sectionOriginals?: Record<string, string>
-  onChangeSectionDraft?: (section: string, text: string) => void
-  onApplySectionDraft?: (section: string) => string | null
 }
 
 type DiffKept = Record<number, boolean>
+
+function suggestionKey(suggestion: ResumeRecommendation, index: number): string {
+  return suggestion.id ?? JSON.stringify([
+    suggestion.section_name,
+    suggestion.original_text,
+    suggestion.suggested_change,
+    index,
+  ])
+}
 
 function splitWords(text: string): string[] {
   return text.split(/\s+/).filter(Boolean)
@@ -94,16 +96,9 @@ const chevronIcon = (
 
 export function ResumeSuggestions({
   recommendations,
-  keywordAssignments = [],
   sections,
   onApplySuggestion,
   onRegenerateSection,
-  onApplyKeyword,
-  onRemoveKeyword,
-  sectionDrafts = {},
-  sectionOriginals = {},
-  onChangeSectionDraft,
-  onApplySectionDraft,
 }: ResumeSuggestionsProps) {
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     new Set(),
@@ -111,18 +106,11 @@ export function ResumeSuggestions({
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editValue, setEditValue] = useState<string>('')
   const [appliedChanges, setAppliedChanges] = useState<Record<string, {
-    target: SuggestionTarget
+    target: SuggestionTarget | null
     text: string
+    userEdited: boolean
   }>>({})
   const [applyError, setApplyError] = useState<string | null>(null)
-
-  // New recommendations invalidate the prior cards' applied indicators without
-  // remounting the list or collapsing the section the user is viewing.
-  useEffect(() => {
-    setAppliedChanges({})
-    setEditingKey(null)
-    setApplyError(null)
-  }, [recommendations])
 
   const groups = useMemo(() => {
     const order: string[] = []
@@ -140,20 +128,19 @@ export function ResumeSuggestions({
       }
     }
 
-    for (const assignment of keywordAssignments) {
-      if (!bySection.has(assignment.section)) {
-        bySection.set(assignment.section, [])
-        order.push(assignment.section)
-      }
-    }
     return order.map((name) => ({
       name,
       items: bySection.get(name) ?? [],
-      keywords: keywordAssignments.filter((item) => item.section === name),
     }))
-  }, [recommendations, keywordAssignments])
+  }, [recommendations])
+  const visibleAppliedChanges = useMemo(() => {
+    const currentKeys = new Set(recommendations.map(suggestionKey))
+    return Object.fromEntries(
+      Object.entries(appliedChanges).filter(([key]) => currentKeys.has(key)),
+    )
+  }, [recommendations, appliedChanges])
 
-  if (recommendations.length === 0 && keywordAssignments.length === 0) {
+  if (recommendations.length === 0) {
     return (
       <div className="resume-suggestions">
         <div className="suggestions-empty">
@@ -177,8 +164,7 @@ export function ResumeSuggestions({
           <h3>No AI suggestions yet</h3>
 
           <p>
-            Tailor your resume or load sample suggestions to review and apply
-            recommended wording changes.
+            Submit a job description to generate suggestions to review and apply.
           </p>
         </div>
       </div>
@@ -204,10 +190,14 @@ export function ResumeSuggestions({
     newText: string,
     key: string,
   ) => {
-    // Keep the field location after applying: its original wording is now gone.
-    const target = appliedChanges[key]?.target ?? resolveSuggestionTarget(suggestion, sections)
+    const previous = appliedChanges[key]
+    const target = previous
+      ? previous.target
+      : suggestion.new_entry
+        ? null
+        : resolveSuggestionTarget(suggestion, sections)
 
-    if (!target) {
+    if (!target && !suggestion.new_entry) {
       setApplyError(
         "Couldn't find the original text in your resume. Try adjusting the suggestion or the matching resume text.",
       )
@@ -217,14 +207,22 @@ export function ResumeSuggestions({
     const error = onApplySuggestion({
       suggestion,
       target,
-      previousText: appliedChanges[key]?.text ?? suggestion.original_text,
+      newEntry: suggestion.new_entry,
+      previousText: previous?.text ?? suggestion.original_text,
       newText,
     })
     if (error) {
       setApplyError(error)
       return
     }
-    setAppliedChanges((prev) => ({ ...prev, [key]: { target, text: newText.trim() } }))
+    setAppliedChanges((prev) => ({
+      ...prev,
+      [key]: {
+        target,
+        text: newText.trim(),
+        userEdited: newText.trim() !== suggestion.suggested_change.trim(),
+      },
+    }))
     setEditingKey(null)
     setApplyError(null)
   }
@@ -263,33 +261,23 @@ export function ResumeSuggestions({
                   </span>
                 </span>
 
-                <span className="suggestion-section-count">
-                  {group.items.length + group.keywords.length}
-                </span>
+                <span className="suggestion-section-count">{group.items.length}</span>
 
                 {chevronIcon}
               </button>
 
               {!isCollapsed && (
                 <div className="suggestion-section-body">
-                  {group.keywords.map(({ keyword, section, options }) => (
-                    <KeywordDraftSelection key={`${keyword}:${section}`} keyword={keyword} section={section}
-                      options={options} onApply={onApplyKeyword ?? (() => 'Applying keyword suggestions is not available.')}
-                      onRemove={() => onRemoveKeyword?.(keyword, section)} />
-                  ))}
-                  {(group.items.length ? group.items : (sectionDrafts[group.name] !== undefined ? [{
-                    section_name: group.name,
-                    original_text: sectionOriginals[group.name] ?? '',
-                    suggested_change: sectionDrafts[group.name] ?? '',
-                    reasoning: 'Review this keyword-supported wording for accuracy before applying it.',
-                  } as ResumeRecommendation] : [])).map((suggestion, index) => {
-                    const key = `${group.name}::${index}`
+                  {group.items.map((suggestion) => {
+                    const key = suggestionKey(
+                      suggestion,
+                      recommendations.indexOf(suggestion),
+                    )
                     const isEditing = editingKey === key
-                    const appliedChange = appliedChanges[key]
+                    const appliedChange = visibleAppliedChanges[key]
                     const isApplied = Boolean(appliedChange)
-                    const stagedDraft = index === 0 ? sectionDrafts[group.name] : undefined
-                    const suggestedText = stagedDraft ?? appliedChange?.text ?? suggestion.suggested_change
-                    const originalText = stagedDraft !== undefined ? (sectionOriginals[group.name] ?? suggestion.original_text) : suggestion.original_text
+                    const suggestedText = appliedChange?.text ?? suggestion.suggested_change
+                    const originalText = suggestion.original_text
 
                     const diff = computeDiff(
                       originalText,
@@ -306,7 +294,7 @@ export function ResumeSuggestions({
                         <div className="suggestion-diff">
                           <div className="suggestion-diff-block suggestion-diff-original">
                             <span className="suggestion-diff-label">
-                              Original
+                              {suggestion.new_entry ? 'New resume entry' : 'Original'}
                             </span>
 
                             <p className="suggestion-diff-text">
@@ -395,7 +383,11 @@ export function ResumeSuggestions({
                             Why this change
                           </span>
 
-                          <p>{suggestion.reasoning}</p>
+                          <p>
+                            {appliedChange?.userEdited
+                              ? 'You edited this suggestion. The original AI reasoning may no longer describe your changes.'
+                              : suggestion.reasoning}
+                          </p>
                         </div>
 
                         {applyError && (
@@ -411,16 +403,10 @@ export function ResumeSuggestions({
                                 type="button"
                                 className="suggestion-btn suggestion-btn-save"
                                 onClick={() => {
-                                  if (stagedDraft !== undefined) {
-                                    onChangeSectionDraft?.(group.name, editValue)
-                                    setEditingKey(null)
-                                    setApplyError(null)
-                                  } else {
-                                    applyChange(suggestion, editValue, key)
-                                  }
+                                  applyChange(suggestion, editValue, key)
                                 }}
                               >
-                                {stagedDraft !== undefined ? "Save Suggestion" : "Save & Apply to Resume"}
+                                Save & Apply to Resume
                               </button>
 
                               <button
@@ -439,6 +425,7 @@ export function ResumeSuggestions({
                               <button
                                 type="button"
                                 className="suggestion-btn suggestion-btn-edit"
+                                disabled={isApplied && Boolean(suggestion.new_entry)}
                                 onClick={() => {
                                   setEditingKey(key)
                                   setEditValue(suggestedText)
@@ -465,16 +452,10 @@ export function ResumeSuggestions({
                               <button
                                 type="button"
                                 className="suggestion-btn suggestion-btn-apply"
-                                onClick={() => {
-                                  if (stagedDraft !== undefined) {
-                                    const issue = onApplySectionDraft ? onApplySectionDraft(group.name) : 'Section apply action unavailable.'
-                                    setApplyError(issue)
-                                  } else {
-                                    applyChange(suggestion, suggestedText, key)
-                                  }
-                                }}
+                                disabled={isApplied && Boolean(suggestion.new_entry)}
+                                onClick={() => applyChange(suggestion, suggestedText, key)}
                               >
-                                Apply to Resume
+                                {isApplied && suggestion.new_entry ? 'Applied' : 'Apply to Resume'}
                               </button>
                             </>
                           )}
@@ -513,58 +494,3 @@ export function ResumeSuggestions({
 }
 
 export default ResumeSuggestions
-
-// Each approved keyword/section has independent wording choices. Only the
-// explicit Apply action modifies the tailored copy.
-function KeywordDraftSelection({ keyword, section, options, onApply, onRemove }: {
-  keyword: string
-  section: string
-  options: string[]
-  onApply: (keyword: string, section: string, wording: string) => string | null
-  onRemove: () => void
-}) {
-  const [wording, setWording] = useState(options[0] ?? '')
-  const [error, setError] = useState('')
-  const [applied, setApplied] = useState(false)
-
-  return (
-    <article className="suggestion-card keyword-draft-card">
-      <div className="keyword-draft-header">
-        <span className="suggestion-diff-label">Keyword to incorporate</span>
-        <h4>{keyword}</h4>
-        <div className="keyword-draft-section-row">
-          <span>Add to section</span>
-          <strong className="keyword-draft-section-badge">{section}</strong>
-        </div>
-        <p className="keyword-draft-caption">Added from Missing Keywords · Draft wording only · Not applied automatically</p>
-      </div>
-
-      <div className="keyword-draft-options">
-        <strong className="keyword-draft-field-title">Generated description</strong>
-        <p className="keyword-draft-generated-text">{options[0] ?? ''}</p>
-      </div>
-
-      <div className="keyword-draft-edit-heading">
-        <label className="keyword-draft-edit-label" htmlFor={`edit-${keyword}-${section}`}>Edit selected wording</label>
-        <span>Review or adjust the description before applying.</span>
-      </div>
-      <textarea id={`edit-${keyword}-${section}`} rows={3} value={wording}
-        onChange={(event) => { setWording(event.target.value); setApplied(false) }}
-        className="keyword-draft-textarea" />
-      {error && <p role="alert" className="suggestion-apply-error">{error}</p>}
-      <div className="suggestion-actions keyword-draft-actions">
-        <button type="button" className="suggestion-btn suggestion-btn-apply"
-          disabled={!wording.trim() || applied} onClick={() => {
-            const issue = onApply(keyword, section, wording.trim())
-            if (issue) setError(issue)
-            else { setApplied(true); setError('') }
-          }}>{applied ? `Added to ${section} suggestions` : `Apply to ${section}`}</button>
-        <button type="button" className="suggestion-btn suggestion-btn-cancel" onClick={onRemove}
-          aria-label={`Remove ${keyword} suggestion for ${section}`}>
-          Remove
-        </button>
-      </div>
-      {applied && <p className="keyword-draft-caption">Wording added to this section’s suggested text above. It has not been applied to your tailored resume.</p>}
-    </article>
-  )
-}

@@ -7,6 +7,7 @@ import json
 import os
 import logging
 import re
+from difflib import SequenceMatcher
 from time import perf_counter
 from uuid import uuid4
 
@@ -104,6 +105,74 @@ response=
 
 """
 
+
+prompt = """
+You analyze job descriptions and extract concise, independent qualifications.
+Return a JSON object with a "requirements" array. Each item must have:
+"requirement" (a concise qualification), "importance" ("required", "desired",
+or "mentioned"), "group" (a concise name for the scoring unit),
+"group_logic" ("all" or "any"), "direct_search_terms" (specific evidence),
+and "related_search_terms" (contextual evidence).
+
+Group requirements according to the posting's actual logic:
+- Give independent qualifications their own group, with group_logic "all".
+- Put explicit alternatives in one group with group_logic "any". Examples:
+  "one or more programming languages" is one group with language options;
+  "Bachelor's degree or equivalent experience" is one group, not two mandatory
+  requirements; "X, Y, or Z" is one group.
+- group_logic applies to requirement rows in the same group, not to the
+  related_search_terms. With "all", every requirement row in the group is
+  required; with "any", at least one requirement row in the group is sufficient.
+- For an "all" requirement row, normally provide exactly one direct_search_term:
+  a canonical phrase that represents that independently required qualification.
+  Put synonyms, examples, and alternate wording in related_search_terms, not as
+  additional direct terms. This prevents a matcher from accidentally treating
+  every wording variant as a separate condition.
+- When a sentence contains multiple independently mandatory conditions, split
+  them into separate requirement rows in the same "all" group, with one direct
+  term per row. Use multiple direct_search_terms mainly for a single "any"
+  requirement row whose terms are true alternatives. Do not put mandatory AND
+  conditions into related_search_terms merely to avoid representing them; split
+  them into separate rows so each condition remains required.
+- Do not split examples, technologies, or subtopics within one qualification
+  into independent mandatory requirements. Use "any" only when the posting
+  says alternatives (e.g. "or", "one or more", "any of"). A comma-separated
+  list without alternative wording is not automatically a set of requirements.
+- If one sentence combines mandatory conditions with alternatives, split it
+  into the smallest independently matchable requirements. Put each mandatory
+  experience, setting, or duration condition in its own row in a shared "all"
+  group; put alternative options in a separate "any" group. Never put OR
+  options in an "all" row. For example, "3 years of backend experience using
+  Python or Java" becomes an "all" group with one row for 3 years of backend
+  experience, and an "any" group for Python or Java.
+- A degree or field alternative such as "Master's in Computer Science or a
+  related technical field" is one "any" requirement, not a requirement for both.
+- Boolean examples:
+  * "Python or Java" => one "any" requirement.
+  * "Bachelor's degree or equivalent practical experience" => one "any"
+    requirement.
+  * "One or more of Web, Linux, or ML" => one "any" requirement.
+  * "1 year of software development in an industry setting using one or more
+    programming languages (e.g., Python, C, or Java)" => an "all" group with
+    separate one-direct-term rows for the year/experience and industry-setting
+    conditions, plus an "any" group for the language options.
+  * "Experience with backend development and production systems" => an "all"
+    group with separate one-direct-term rows for backend development and
+    production systems.
+- A group should represent one independently scoreable qualification. Include
+  conditions such as years of experience, industry setting, or degree field in
+  the requirement itself; do not make those conditions disappear by grouping
+  only their example technologies.
+- Do not extract marketing copy, responsibilities, benefits, compensation,
+  equal-opportunity/legal text, or boilerplate as qualifications unless the
+  posting explicitly makes them applicant requirements.
+- Do not add a qualification merely because it is common for the job title.
+- Preserve qualifiers and negation. Do not invent dates or requirements.
+
+Direct search terms should be explicit wording or true aliases, not related
+skills. Related terms may support only a partial match. Keep the output limited
+to material qualifications and avoid duplicate or overlapping groups.
+"""
 
 prompt_combined = """
 You are a resume tailoring assistant.
@@ -429,6 +498,10 @@ The suggestion must:
 5. Never add unsupported facts.
 
 A suggestion may add information from another part of the FULL RESUME when that information is explicitly applicable to the resume content being changed.
+The suggestion's resume_id must identify one exact text field from the supplied
+resume evidence, such as "skills[0].skill_name" or
+"certifications[0].name". Never use a section or collection path such as
+"skills" or "certifications[0]" for a suggestion or removal.
 
 
 IMPORTANT:
@@ -668,14 +741,68 @@ _CLASSIFICATION = {
     "enum": ["supported", "partial", "unsupported"],
 }
 
+
 REQUIREMENTS_SCHEMA = _object_schema({
     "requirements": _array_schema(_object_schema({
         "requirement": _STRING,
         "importance": _IMPORTANCE,
+        "group": _STRING,
+        "group_logic": {"type": "string", "enum": ["all", "any"]},
         "direct_search_terms": _array_schema(_STRING),
         "related_search_terms": _array_schema(_STRING),
     })),
 })
+
+SUGGESTIONS_PROMPT = """
+You are a resume-tailoring assistant. Produce factual, actionable resume edits
+from the supplied current resume, job requirements, and requirement-to-evidence
+analysis. The resume is authoritative for existing claims. User-provided evidence
+is also an explicit candidate claim, but is not part of an unrelated resume field.
+Use it only for the target section identified by the user. Rewrite casual user
+wording professionally; do not copy it verbatim unless it is already polished.
+Do not infer missing tools, technologies, responsibilities, outcomes, or project
+details. A technology listed in skills does not prove it was used in a project.
+An API does not prove REST; a dashboard does not prove web, JavaScript,
+responsive design, real-time behavior, architecture, testing, or scalability.
+Do not generate a resume rewrite solely because substantial English-language
+resume text triggered the ATS-only English-proficiency heuristic.
+
+EVIDENCE CLASSIFICATIONS ARE AUTHORITATIVE:
+- "supported" means the supplied resume evidence directly establishes the
+  qualification. Still include only details explicitly supported by the exact
+  resume field being edited.
+- "partial" means the evidence is related but does not establish the full
+  qualification. Never rewrite it as a definite claim that the candidate has
+  that qualification. Describe only the established fact; if more is needed,
+  ask a specific question in improvements.
+- "unsupported" means there is no resume evidence. Do not claim or imply the
+  candidate has it. Do not use the job description as evidence.
+- Requirements sharing a group are evaluated using group_logic. For an "any"
+  group, one supported option satisfies the whole group; do not suggest or ask
+  for other options in a group that is already supported. For an "all" group,
+  every member must be supported.
+
+In particular, Git, teamwork, or software projects do not by themselves prove
+AI productivity-tool experience or project-management responsibility. A role's
+design/test/deploy/maintain responsibilities do not prove the candidate
+performed every lifecycle activity. Do not add testing, deployment, JavaScript,
+REST, machine-learning algorithms, leadership, deadlines, or other job
+qualifications unless the exact relevant resume evidence establishes them.
+
+Generate at most one suggestion for each original resume text field, considering
+all requirements that field supports together. Do not emit no-op suggestions,
+near-duplicates, keyword stuffing, or repeated rewrites. Suggestion and removal
+resume_id values must point to exact text fields, not section or record paths.
+Do not return original resume text; the backend restores it from the supplied
+resume. Improvements should only ask high-value clarifying questions where
+plausible relevant experience is missing or ambiguous; do not ask for facts
+already provided.
+
+Return only JSON with suggestions, removals, and improvements matching the
+supplied schema. Suggestions must contain requirement, resume_id, suggestion,
+and reason. Improvements must contain requirement, resume_id, improvement, and
+reason. Removals must contain resume_id and reason.
+"""
 
 ANALYSIS_SCHEMA = _object_schema({
     "evidence": _array_schema(_object_schema({
@@ -702,6 +829,73 @@ ANALYSIS_SCHEMA = _object_schema({
         "resume_id": {"type": ["string", "null"]},
         "improvement": _STRING,
         "reason": _STRING,
+    })),
+})
+
+SUGGESTIONS_SCHEMA = _object_schema({
+    "suggestions": ANALYSIS_SCHEMA["properties"]["suggestions"],
+    "removals": ANALYSIS_SCHEMA["properties"]["removals"],
+    "improvements": ANALYSIS_SCHEMA["properties"]["improvements"],
+})
+
+EVIDENCE_SUGGESTION_PROMPT = """
+You create targeted resume edits based only on the user's newly provided evidence.
+Do not regenerate, review, or return any existing suggestions.
+
+For every requested target section, create exactly one separate suggestion:
+- Every suggestion field must contain a non-empty, useful value. In particular,
+  "suggestion" must never be empty or whitespace-only. For action "add", put
+  the complete proposed entry description in both "suggestion" and
+  new_entry.description. For action "replace", put the complete replacement
+  text in "suggestion".
+- Professional Summary: return a complete replacement for the current
+  professional summary. Use action "replace", resume_id
+  "resume.professional_summary", and leave new_entry fields empty.
+- Work Experience or Projects: choose the best fit between editing an existing
+  description and adding a new entry. Prefer "replace" when an existing entry
+  in that same target section is clearly related and can be improved using the
+  user evidence. For a replacement, set resume_id to that exact description
+  field path (for example "work_experience[0].description" or
+  "projects[0].description") and leave new_entry fields empty. The suggestion
+  must be the complete replacement text for that field.
+- If no existing entry in Work Experience or Projects is a clear fit, add a
+  new entry with action "add", leave resume_id empty, and fill only facts
+  stated in the supplied user evidence. Unknown employer, title, location,
+  dates, project name, or link must remain empty.
+
+The user evidence is an explicit candidate claim. The current resume and job
+description provide context, but do not use them to invent details for a new
+entry or transfer details from another experience. Keep the wording
+professionally cautious and accurate. Do not edit skills, education, existing
+entries outside the requested target section, or any section that was not
+requested. Do not rewrite an existing entry just to insert a keyword; make a
+real, evidence-backed improvement.
+
+Return one suggestion for each distinct requirement/target-section pair in
+USER-PROVIDED EVIDENCE, and no other suggestions. Return only JSON matching the
+requested schema.
+"""
+
+EVIDENCE_SUGGESTION_SCHEMA = _object_schema({
+    "suggestions": _array_schema(_object_schema({
+        "requirement": _STRING,
+        "target_section": {
+            "type": "string",
+            "enum": ["Professional Summary", "Work Experience", "Projects"],
+        },
+        "action": {"type": "string", "enum": ["add", "replace"]},
+        "resume_id": _STRING,
+        "suggestion": _STRING,
+        "reason": _STRING,
+        "new_entry": _object_schema({
+            "entry_title": _STRING,
+            "company": _STRING,
+            "location": _STRING,
+            "start_date": _STRING,
+            "end_date": _STRING,
+            "description": _STRING,
+            "link": _STRING,
+        }),
     })),
 })
 
@@ -954,69 +1148,389 @@ def process_resume(test_resume):
     return {"evidence": evidence}
 
 
-def analyze_resume(evidence, requirements_response):
-  ai_input_json = {"requirements": [], "evidence": []}
-  ai_response_processed = requirements_response.get("requirements", [])
-  if not isinstance(ai_response_processed, list):
-    print("AI response is not a list of requirements")
-  elif len(ai_response_processed) == 0:
-    print("AI response is an empty list of requirements")
-  else:
-    for item in ai_response_processed:
-       if not isinstance(item, dict):
-           continue
-       requirement = item.get("requirement")
-       importance = item.get("importance")
-       direct_search_terms = item.get("direct_search_terms")
-       related_search_terms = item.get("related_search_terms")
-       set_of_direct_search_terms = set(direct_search_terms)
-       set_of_related_search_terms = set(related_search_terms)
-       supported = False
-       partial= False
-       supporting_evidence=[]
-       partial_evidence=[]
-       unsupported_evidence=[]
-       for evidence_item in evidence:
-          relevant_text = evidence_item.get("relevant_text").lower()
-          if any(term.lower() in relevant_text for term in set_of_direct_search_terms):
-              supported=True
-              supporting_evidence.append(evidence_item)
-          elif any(term.lower() in relevant_text for term in set_of_related_search_terms):
-              partial=True
-              partial_evidence.append(evidence_item)
-       if supported:
-          for evidence_item in supporting_evidence:
-              ai_input_json["evidence"].append({
-                 "requirement": requirement,
-                 "importance": importance,
-                 "resume_id": evidence_item.get("resume_id"),
-                 "relevant_text": evidence_item.get("relevant_text"),
-                 "match_type": "supported",
-              })
-       elif partial:
-          for evidence_item in partial_evidence:
-              ai_input_json["evidence"].append({
-                 "requirement": requirement,
-                 "importance": importance,
-                 "resume_id": evidence_item.get("resume_id"),
-                 "relevant_text": evidence_item.get("relevant_text"),
-                 "match_type": "partial",
-              })
-       else:
-          ai_input_json["evidence"].append({
-              "requirement": requirement,
-                "importance": importance,
-                "resume_id": None,
-                "relevant_text": None,
-                "match_type": "none",
-            })
-       ai_input_json["requirements"].append({
-          "requirement": requirement,
-          "importance": importance,
-          "direct_search_terms": direct_search_terms,
-          "related_search_terms": related_search_terms,
-       })
-  return ai_input_json
+SKILL_ALIASES = (
+    ("javascript", "js", "ecmascript"),
+    ("typescript", "ts"),
+    ("postgresql", "postgres"),
+    ("microsoft sql server", "sql server", "mssql"),
+    ("c sharp", "c#"),
+    ("c plus plus", "c++"),
+    ("node js", "nodejs", "node.js"),
+    ("react", "reactjs"),
+    ("vue js", "vue.js", "vuejs"),
+    ("amazon web services", "aws"),
+    ("google cloud platform", "gcp", "google cloud"),
+    ("microsoft azure", "azure"),
+    ("machine learning", "ml"),
+    ("artificial intelligence", "ai"),
+    ("natural language processing", "nlp"),
+    ("continuous integration", "ci"),
+    ("continuous delivery", "cd"),
+    ("ci cd", "cicd"),
+    ("microsoft excel", "excel"),
+    ("power bi", "powerbi"),
+    ("version control", "source control"),
+)
+
+SKILL_CATEGORIES = {
+    "programming languages": (
+        "programming language", "programming languages", "coding language",
+        "coding languages", "software development experience",
+        "developing software systems", "software systems",
+        "software design and development", "python", "java", "javascript",
+        "typescript", "c sharp", "c plus plus", "golang", "rust", "ruby",
+        "php", "swift", "kotlin",
+    ),
+    "databases": (
+        "database", "databases", "sql", "mysql", "postgresql", "postgres",
+        "sqlite", "mongodb", "nosql", "data storage",
+    ),
+    "cloud platforms": (
+        "cloud", "cloud computing", "aws", "amazon web services", "azure",
+        "gcp", "google cloud",
+    ),
+    "web development": (
+        "web development", "frontend", "front end", "backend", "back end",
+        "web application development", "web application", "dashboard",
+        "html", "css", "javascript", "react", "angular", "vue",
+    ),
+    "data analytics": (
+        "data analytics", "data analysis", "analytics", "data visualization",
+        "tableau", "power bi", "excel", "pandas",
+    ),
+    "version control": (
+        "version control", "source control", "git", "github", "gitlab",
+    ),
+    "project management": (
+        "project management", "agile", "scrum", "kanban",
+    ),
+    "containers": (
+        "container", "containers", "containerization", "docker", "kubernetes",
+    ),
+    "api development": (
+        "api", "apis", "rest", "restful", "graphql", "web services",
+        "networking", "network protocols",
+    ),
+}
+
+
+def _search_tokens(value):
+    return re.findall(r"[a-z0-9]+(?:[+#]+)?", str(value).casefold())
+
+
+def _normalized_phrase(value):
+    return " ".join(_search_tokens(value))
+
+
+def _alias_terms(term):
+    normalized = _normalized_phrase(term)
+    for group in SKILL_ALIASES:
+        normalized_group = {_normalized_phrase(alias) for alias in group}
+        if normalized in normalized_group:
+            return normalized_group
+    return {normalized} if normalized else set()
+
+
+def _contains_phrase(text_tokens, phrase_tokens):
+    if not phrase_tokens or len(phrase_tokens) > len(text_tokens):
+        return False
+    width = len(phrase_tokens)
+    return any(
+        text_tokens[index:index + width] == phrase_tokens
+        for index in range(len(text_tokens) - width + 1)
+    )
+
+
+def _exact_or_alias_match(text, term):
+    text_tokens = _search_tokens(text)
+    return any(
+        _contains_phrase(text_tokens, _search_tokens(alias))
+        for alias in _alias_terms(term)
+    )
+
+
+def _fuzzy_match(text, term):
+    term_tokens = _search_tokens(term)
+    if not term_tokens or any(len(token) < 4 for token in term_tokens):
+        return False
+    text_tokens = _search_tokens(text)
+    width = len(term_tokens)
+    for candidate_width in range(max(1, width - 1), min(len(text_tokens), width + 1) + 1):
+        for index in range(len(text_tokens) - candidate_width + 1):
+            candidate = " ".join(text_tokens[index:index + candidate_width])
+            target = " ".join(term_tokens)
+            if SequenceMatcher(None, target, candidate).ratio() >= 0.88:
+                return True
+    return False
+
+
+def _requirement_categories(requirement, direct_terms, related_terms):
+    terms = [requirement, *direct_terms, *related_terms]
+    return {
+        category
+        for category, indicators in SKILL_CATEGORIES.items()
+        if any(
+            _exact_or_alias_match(term, indicator)
+            for term in terms
+            for indicator in indicators
+        )
+    }
+
+
+def _degree_levels(value):
+    tokens = set(_search_tokens(value))
+    levels = set()
+    if tokens.intersection({"bachelor", "bachelors", "baccalaureate"}):
+        levels.add("bachelor")
+    if tokens.intersection({"master", "masters", "mba"}):
+        levels.add("master")
+    if tokens.intersection({"doctorate", "doctoral", "phd"}):
+        levels.add("doctoral")
+    return levels
+
+
+ENGLISH_FUNCTION_WORDS = {
+    "a", "an", "and", "are", "as", "be", "by", "for", "from", "in",
+    "is", "of", "on", "or", "that", "the", "this", "to", "was", "were",
+    "with",
+}
+
+
+def _is_english_proficiency_requirement(requirement):
+    tokens = set(_search_tokens(requirement))
+    return "english" in tokens and bool(
+        tokens.intersection({
+            "proficiency", "proficient", "fluency", "fluent", "language",
+            "communication", "written", "verbal",
+        })
+    )
+
+
+def _has_substantial_english_text(evidence):
+    tokens = [
+        token
+        for item in evidence
+        for token in _search_tokens(item.get("relevant_text", ""))
+        if token.isalpha()
+    ]
+    return (
+        len(tokens) >= 50
+        and sum(token in ENGLISH_FUNCTION_WORDS for token in tokens) >= 8
+    )
+
+
+def _category_evidence_match(text, category):
+    indicators = SKILL_CATEGORIES[category]
+    for indicator in indicators:
+        if not _exact_or_alias_match(text, indicator):
+            continue
+        if indicator == "dashboard" and not any(
+            _exact_or_alias_match(text, context)
+            for context in ("api", "endpoint", "http", "web application", "filters")
+        ):
+            continue
+        return True
+    return False
+
+
+def _broad_software_requirement(requirement):
+    normalized = _normalized_phrase(requirement)
+    return any(
+        phrase in normalized
+        for phrase in (
+            "software development",
+            "software systems",
+            "software design",
+        )
+    )
+
+
+def _broad_programming_requirement(requirement):
+    normalized = _normalized_phrase(requirement)
+    return any(
+        phrase in normalized
+        for phrase in (
+            "programming language",
+            "programming experience",
+            "coding language",
+            "coding experience",
+            "software development",
+            "software systems",
+            "software design",
+        )
+    )
+
+
+def _match_resume_requirements(evidence, requirements, user_evidence):
+    user_evidence = _validate_user_evidence(user_evidence)
+    result = []
+    group_logic_by_name = {}
+    for requirement_item in requirements.get("requirements", []):
+        requirement = requirement_item["requirement"]
+        group = requirement_item.get("group") or requirement
+        group_logic = requirement_item.get("group_logic", "all")
+        group_key = _normalized_phrase(group)
+        if not group_key:
+            raise ValueError("Requirement groups must have a non-empty name")
+        previous_logic = group_logic_by_name.setdefault(group_key, group_logic)
+        if previous_logic != group_logic:
+            raise ValueError(
+                f"Requirement group {group!r} has inconsistent group logic"
+            )
+        direct_terms = [
+            term for term in requirement_item.get("direct_search_terms", [])
+            if isinstance(term, str) and term.strip()
+        ]
+        related_terms = [
+            term for term in requirement_item.get("related_search_terms", [])
+            if isinstance(term, str) and term.strip()
+        ]
+        degree_levels = set().union(
+            *(_degree_levels(term) for term in [requirement, *direct_terms])
+        )
+        categories = _requirement_categories(
+            requirement, direct_terms, related_terms
+        )
+        mappings = {}
+        classification = "unsupported"
+        english_heuristic = (
+            _is_english_proficiency_requirement(requirement)
+            and _has_substantial_english_text(evidence)
+        )
+        if english_heuristic:
+            classification = "supported"
+            source = max(
+                evidence,
+                key=lambda item: len(_search_tokens(item.get("relevant_text", ""))),
+            )
+            mappings[source["resume_id"]] = {
+                "resume_id": source["resume_id"],
+                "source": "resume",
+                "reason": (
+                    "ATS-only inference from substantial English-language resume "
+                    "text; do not generate a resume rewrite from this inference."
+                ),
+            }
+
+        for resume_item in evidence:
+            text = resume_item.get("relevant_text", "")
+            resume_id = resume_item.get("resume_id")
+            if not isinstance(text, str) or not isinstance(resume_id, str):
+                continue
+            if degree_levels:
+                resume_degree_levels = _degree_levels(text)
+                if not degree_levels.intersection(resume_degree_levels):
+                    continue
+                classification = "supported"
+                mappings[resume_id] = {
+                    "resume_id": resume_id,
+                    "source": "resume",
+                    "reason": "Matching degree-level evidence.",
+                }
+                continue
+            reasons = []
+            if any(_exact_or_alias_match(text, term) for term in direct_terms):
+                classification = "supported"
+                reasons.append("Direct or alias match.")
+            elif any(_exact_or_alias_match(text, term) for term in related_terms):
+                if classification != "supported":
+                    classification = "partial"
+                reasons.append("Related search-term match.")
+            elif any(_fuzzy_match(text, term) for term in direct_terms):
+                if classification != "supported":
+                    classification = "partial"
+                reasons.append("Possible fuzzy match; verify wording.")
+            elif any(_fuzzy_match(text, term) for term in related_terms):
+                if classification != "supported":
+                    classification = "partial"
+                reasons.append("Possible fuzzy related match; verify wording.")
+            elif any(
+                _category_evidence_match(text, category)
+                for category in categories
+                if category != "programming languages"
+                or _broad_programming_requirement(requirement)
+                if not (
+                    category == "programming languages"
+                    and _broad_software_requirement(requirement)
+                    and resume_id.startswith("skills[")
+                )
+            ):
+                if classification != "supported":
+                    classification = "partial"
+                reasons.append("Related category match; verify relevance.")
+            if reasons:
+                mappings[resume_id] = {
+                    "resume_id": resume_id,
+                    "source": "resume",
+                    "reason": " ".join(reasons),
+                }
+
+        requirement_aliases = (
+            _alias_terms(requirement) | _alias_terms(group)
+        )
+        for index, item in enumerate(user_evidence):
+            if _normalized_phrase(item["requirement"]) in requirement_aliases:
+                if classification != "supported":
+                    classification = "partial"
+                mappings[f"user_evidence[{index}]"] = {
+                    "resume_id": f"user_evidence[{index}]",
+                    "source": "user",
+                    "reason": "Candidate-provided evidence; not independently verified.",
+                }
+
+        result.append({
+            "requirement": requirement,
+            "group": group,
+            "group_logic": group_logic,
+            "importance": requirement_item["importance"],
+            "classification": classification,
+            "evidence": list(mappings.values()),
+        })
+    return {"evidence": result}
+
+
+def _summarize_requirement_groups(entries):
+    groups = {}
+    for item in entries:
+        group = item.get("group") or item["requirement"]
+        key = _normalized_phrase(group)
+        group_items = groups.setdefault(key, {
+            "requirement": group,
+            "group": group,
+            "group_logic": item.get("group_logic", "all"),
+            "items": [],
+        })
+        if group_items["group_logic"] != item.get("group_logic", "all"):
+            raise ValueError(
+                f"Requirement group {group!r} has inconsistent group logic"
+            )
+        group_items["items"].append(item)
+
+    summaries = []
+    for group in groups.values():
+        classifications = {
+            item["classification"] for item in group["items"]
+        }
+        if group["group_logic"] == "any":
+            classification = (
+                "supported" if "supported" in classifications else
+                "partial" if "partial" in classifications else
+                "unsupported"
+            )
+        else:
+            classification = (
+                "supported" if classifications == {"supported"} else
+                "partial" if classifications.intersection({"supported", "partial"})
+                else "unsupported"
+            )
+        summaries.append({
+            "requirement": group["requirement"],
+            "group": group["group"],
+            "group_logic": group["group_logic"],
+            "classification": classification,
+            "items": group["items"],
+        })
+    return summaries
 
 
 def parse_ai_response(response, request_id="unknown", stage="unknown"):
@@ -1081,30 +1595,73 @@ def parse_ai_response(response, request_id="unknown", stage="unknown"):
         )
         raise
 
+    if stage == "evidence_suggestion" and isinstance(result, list):
+        result = {"suggestions": result}
+
     if stage == "job_requirements":
         requirements = result.get("requirements") if isinstance(result, dict) else None
         valid = isinstance(requirements, list) and all(
             isinstance(item, dict)
             and isinstance(item.get("requirement"), str)
+            and bool(item.get("requirement", "").strip())
             and item.get("importance") in {"required", "desired", "mentioned"}
+            and isinstance(item.get("group"), str)
+            and bool(item.get("group", "").strip())
+            and item.get("group_logic") in {"all", "any"}
             and isinstance(item.get("direct_search_terms"), list)
             and isinstance(item.get("related_search_terms"), list)
             for item in requirements
         )
+        if valid:
+            seen_requirements = set()
+            group_logic = {}
+            for item in requirements:
+                requirement_key = _normalized_phrase(item["requirement"])
+                group_key = _normalized_phrase(item["group"])
+                previous_logic = group_logic.setdefault(
+                    group_key, item["group_logic"]
+                )
+                if (
+                    requirement_key in seen_requirements
+                    or previous_logic != item["group_logic"]
+                ):
+                    valid = False
+                    break
+                seen_requirements.add(requirement_key)
     elif stage == "resume_analysis":
         valid = isinstance(result, dict) and all(
             isinstance(result.get(key), list)
             for key in ("evidence", "suggestions", "removals", "improvements")
         )
+    elif stage == "resume_suggestions":
+        valid = isinstance(result, dict) and all(
+            isinstance(result.get(key), list)
+            for key in ("suggestions", "removals", "improvements")
+        )
+    elif stage == "evidence_suggestion":
+        valid = isinstance(result, dict) and isinstance(
+            result.get("suggestions"), list
+        ) and all(
+            isinstance(item, dict)
+            for item in result["suggestions"]
+        )
     else:
         valid = True
 
     if not valid:
+        shape = {
+            "response_type": type(result).__name__,
+            "top_level_keys": sorted(str(key) for key in result)[:12]
+            if isinstance(result, dict) else [],
+            "evidence_type": type(result.get("evidence")).__name__
+            if isinstance(result, dict) else "unavailable",
+        }
         logger.warning(
             "AI schema validation failed request_id=%s stage=%s "
-            "reason=invalid_response_shape",
+            "reason=invalid_response_shape response_shape=%s",
             request_id,
             stage,
+            json.dumps(shape, sort_keys=True),
         )
         raise ValueError(f"AI response failed {stage} schema validation")
     return result
@@ -1117,15 +1674,22 @@ def build_frontend_response(stage_3, stage_2):
         for item in stage_2.get("evidence", [])
     }
     importance_values = {"required": 3, "desired": 2, "mentioned": 1}
+    group_summaries = _summarize_requirement_groups(
+        list(requirements.values())
+    )
     requirements_met = sum(
         item.get("classification") == "supported"
-        for item in requirements.values()
+        for item in group_summaries
     )
     requirements_missing = sum(
         item.get("classification") == "unsupported"
-        for item in requirements.values()
+        for item in group_summaries
     )
-    total = len(requirements)
+    partial_count = sum(
+        item.get("classification") == "partial"
+        for item in group_summaries
+    )
+    total = len(group_summaries)
 
     frontend_response = {
         "suggestions": [],
@@ -1136,20 +1700,39 @@ def build_frontend_response(stage_3, stage_2):
         ],
         "missing_requirements": [
             {"requirement": item["requirement"]}
-            for item in stage_3.get("missing_requirements", [])
+            for item in group_summaries
+            if item["classification"] == "unsupported"
         ],
-        # Compatibility estimate: partial requirements count only in the total.
-        "ATS_score": round(requirements_met / total * 100) if total else 0,
+        "ATS_score": round(
+            (requirements_met + 0.5 * partial_count) / total * 100
+        ) if total else 0,
         "requirements_met": [
             {"requirement": item["requirement"]}
-            for item in requirements.values()
+            for item in group_summaries
             if item["classification"] == "supported"
         ],
         "requirements_missing": requirements_missing,
     }
 
+    def find_requirement(name):
+        requirement = requirements.get(name)
+        if requirement is not None:
+            return requirement
+        matching_group = next(
+            (
+                item for item in requirements.values()
+                if _normalized_phrase(item.get("group", "")) == _normalized_phrase(name)
+            ),
+            None,
+        )
+        if matching_group is None:
+            raise KeyError(f"AI returned unknown requirement: {name!r}")
+        return matching_group
+
     for item in stage_3.get("suggestions", []):
-        requirement = requirements[item["requirement"]]
+        requirement = find_requirement(item["requirement"])
+        if requirement.get("group_classification") == "supported":
+            continue
         frontend_response["suggestions"].append({
             "suggestion": item["suggestion"],
             "type": requirement["classification"],
@@ -1161,7 +1744,9 @@ def build_frontend_response(stage_3, stage_2):
         })
 
     for item in stage_3.get("improvements", []):
-        requirement = requirements[item["requirement"]]
+        requirement = find_requirement(item["requirement"])
+        if requirement.get("group_classification") == "supported":
+            continue
         frontend_response["improvements"].append({
             "improvement": item["improvement"],
             "type": requirement["classification"],
@@ -1198,6 +1783,28 @@ def restore_combined_resume_text(response, structured_resume):
             candidate = path.removeprefix("resume.")
             if candidate in locations:
                 path = candidate
+        if isinstance(path, str) and path in locations and path not in fields:
+            section = path.split(".", 1)[0].split("[", 1)[0]
+            preferred_fields = {
+                "certifications": ("name",),
+                "education": ("degree", "field_of_study", "school"),
+                "projects": ("description", "name"),
+                "skills": ("skill_name",),
+                "work_experience": ("description", "job_title"),
+            }.get(section, ())
+            descendants = [
+                candidate for candidate, text in fields.items()
+                if (candidate.startswith(f"{path}.") or candidate.startswith(f"{path}["))
+                and text.strip()
+            ]
+            path = next(
+                (
+                    candidate for field in preferred_fields
+                    for candidate in descendants
+                    if candidate.endswith(f".{field}")
+                ),
+                next(iter(descendants), path),
+            )
         if path not in locations or not path:
             raise ValueError(f"AI returned an unknown resume field: {path!r}")
         return path
@@ -1230,33 +1837,27 @@ def restore_combined_resume_text(response, structured_resume):
     }
 
 
-<<<<<<< Updated upstream
-def run_combined_pipeline(structured_resume, job, timings=None, request_id=None):
-=======
-def run_combined_pipeline(structured_resume, job, timings=None,requirements=None):
->>>>>>> Stashed changes
-    """Extract requirements, then classify evidence and tailor in one request."""
+def extract_requirements(job, requirements=None, request_id=None, timings=None):
     request_id = request_id or uuid4().hex
-    pipeline_started = perf_counter()
-    logger.info(
-        "AI pipeline started request_id=%s retries=0 fallback=none",
-        request_id,
-    )
-    if timings is None:
-        timings = {}
-        
+    timings = timings if timings is not None else {}
+    if requirements is not None:
+        logger.info(
+            "AI pipeline stage skipped request_id=%s stage=job_requirements "
+            "reason=cached_requirements",
+            request_id,
+        )
+        return requirements
+
     job_input = {
         "title": job.get("title"),
         "company": job.get("company", job.get("company_name")),
         "description": job.get("description"),
     }
-    response = None
-    combined_response = None
-    requirements_response = None
-    recommendations_response = None
-<<<<<<< Updated upstream
-
     started = perf_counter()
+    logger.info(
+        "AI pipeline stage started request_id=%s stage=job_requirements",
+        request_id,
+    )
     response = request_ai(
         prompt + "\nJob description:\n" + json.dumps(job_input),
         schema_name="job_requirements",
@@ -1265,7 +1866,7 @@ def run_combined_pipeline(structured_resume, job, timings=None,requirements=None
         request_id=request_id,
         stage="job_requirements",
     )
-    requirements_response = parse_ai_response(
+    requirements = parse_ai_response(
         response, request_id=request_id, stage="job_requirements"
     )
     timings["Stage 1: job requirements"] = perf_counter() - started
@@ -1275,25 +1876,56 @@ def run_combined_pipeline(structured_resume, job, timings=None,requirements=None
         request_id,
         timings["Stage 1: job requirements"],
     )
+    return requirements
 
-=======
-    if requirements is None:
-        started = perf_counter()
-        response = request_ai(
-            prompt + "\nJob description:\n" + json.dumps(job_input),
-            schema_name="job_requirements",
-            schema=REQUIREMENTS_SCHEMA,
-            reasoning_effort="low",
-        )
-        requirements_response = parse_ai_response(response)
-        timings["Stage 1: job requirements"] = perf_counter() - started
-        requirements=requirements_response
-    else:
-        requirements_response=requirements
->>>>>>> Stashed changes
+
+def _validate_user_evidence(user_evidence):
+    if user_evidence is None:
+        return []
+    if not isinstance(user_evidence, list):
+        raise ValueError("user_evidence must be a list")
+    valid_sections = {
+        "Work Experience", "Professional Summary", "Projects", "Education",
+        "Skills", "Certifications",
+    }
+    normalized = []
+    for index, item in enumerate(user_evidence):
+        if not isinstance(item, dict):
+            raise ValueError(f"user_evidence[{index}] must be an object")
+        requirement = item.get("requirement")
+        evidence = item.get("evidence")
+        target_section = item.get("target_section")
+        if not isinstance(requirement, str) or not requirement.strip():
+            raise ValueError(f"user_evidence[{index}].requirement is required")
+        if not isinstance(evidence, str) or not evidence.strip():
+            raise ValueError(f"user_evidence[{index}].evidence is required")
+        if target_section not in valid_sections:
+            raise ValueError(f"user_evidence[{index}].target_section is invalid")
+        normalized.append({
+            "requirement": requirement.strip(),
+            "evidence": evidence.strip(),
+            "target_section": target_section,
+            "source": "user",
+        })
+    return normalized
+
+
+def analyze_resume_requirements(
+    structured_resume,
+    requirements,
+    user_evidence=None,
+    request_id=None,
+    timings=None,
+):
+    request_id = request_id or uuid4().hex
+    timings = timings if timings is not None else {}
+    user_evidence = _validate_user_evidence(user_evidence)
     started = perf_counter()
-    evidence = process_resume(structured_resume)["evidence"]
-    matched_evidence = analyze_resume(evidence, requirements_response)
+    logger.info(
+        "AI pipeline stage started request_id=%s stage=evidence_preprocessing",
+        request_id,
+    )
+    resume_evidence = process_resume(structured_resume)["evidence"]
     timings["Evidence preprocessing"] = perf_counter() - started
     logger.info(
         "AI pipeline stage ended request_id=%s stage=evidence_preprocessing "
@@ -1303,89 +1935,531 @@ def run_combined_pipeline(structured_resume, job, timings=None,requirements=None
     )
 
     started = perf_counter()
-    combined_response = request_ai(
-        prompt_combined
-        + "\n\nJob requirements and preliminary resume evidence:\n"
-        + json.dumps(matched_evidence)
-        + "\n\nFull resume:\n" + json.dumps(structured_resume)
-        + "\n\nFull job description:\n" + json.dumps(job_input),
-        schema_name="resume_analysis",
-        schema=ANALYSIS_SCHEMA,
+    logger.info(
+        "AI pipeline stage started request_id=%s stage=resume_matching mode=local",
+        request_id,
+    )
+    matching = _match_resume_requirements(
+        resume_evidence, requirements, user_evidence
+    )
+    expected = {
+        item["requirement"]: {
+            "importance": item["importance"],
+            "group": item.get("group") or item["requirement"],
+            "group_logic": item.get("group_logic", "all"),
+        }
+        for item in requirements["requirements"]
+    }
+    entries = matching["evidence"]
+    names = [item.get("requirement") for item in entries]
+    if set(names) != set(expected) or len(names) != len(set(names)):
+        raise ValueError("Resume matching must classify each requirement exactly once")
+
+    resume_ids = {item["resume_id"] for item in resume_evidence}
+    user_ids = {f"user_evidence[{index}]" for index in range(len(user_evidence))}
+    by_requirement = {}
+    for entry in entries:
+        requirement = expected[entry["requirement"]]
+        if entry.get("importance") != requirement["importance"]:
+            raise ValueError("Resume matching returned incorrect requirement importance")
+        if (
+            entry.get("group") != requirement["group"]
+            or entry.get("group_logic") != requirement["group_logic"]
+        ):
+            raise ValueError("Resume matching returned incorrect requirement group")
+        if entry.get("classification") not in {"supported", "partial", "unsupported"}:
+            raise ValueError("Resume matching returned an invalid classification")
+        resume_mappings = []
+        user_mappings = []
+        for item in entry.get("evidence", []):
+            source = item.get("source")
+            path = item.get("resume_id")
+            if source == "user":
+                if path not in user_ids:
+                    raise ValueError(f"AI returned unknown user evidence reference: {path!r}")
+                user_mappings.append(item)
+            elif source == "resume":
+                if path not in resume_ids:
+                    raise ValueError(f"AI returned unknown resume evidence reference: {path!r}")
+                resume_mappings.append(item)
+            else:
+                raise ValueError("Resume matching returned an invalid evidence source")
+        normalized_resume = restore_combined_resume_text(
+            {"evidence": resume_mappings},
+            structured_resume,
+        )["evidence"]
+        by_requirement[entry["requirement"]] = {
+            **entry,
+            **requirement,
+            "evidence": normalized_resume + user_mappings,
+        }
+
+    result_entries = list(by_requirement.values())
+    group_summaries = _summarize_requirement_groups(result_entries)
+    group_classifications = {
+        _normalized_phrase(item["group"]): item["classification"]
+        for item in group_summaries
+    }
+    for item in result_entries:
+        item["group_classification"] = group_classifications[
+            _normalized_phrase(item["group"])
+        ]
+    supported_count = sum(
+        item["classification"] == "supported" for item in group_summaries
+    )
+    partial_count = sum(
+        item["classification"] == "partial" for item in group_summaries
+    )
+    unsupported_count = sum(
+        item["classification"] == "unsupported" for item in group_summaries
+    )
+    total = len(group_summaries)
+    analysis = {
+        "suggestions": [],
+        "improvements": [],
+        "removals": [],
+        "ATS_score": round(
+            (supported_count + 0.5 * partial_count) / total * 100
+        ) if total else 0,
+        "requirements_met": [
+            {"requirement": item["requirement"]}
+            for item in group_summaries
+            if item["classification"] == "supported"
+        ],
+        "requirements_missing": unsupported_count,
+        "missing_requirements": [
+            {"requirement": item["requirement"]}
+            for item in group_summaries
+            if item["classification"] == "unsupported"
+        ],
+        "requirements": requirements,
+        "evidence": result_entries,
+    }
+    timings["Stage 2: resume matching"] = perf_counter() - started
+    logger.info(
+        "AI pipeline stage ended request_id=%s stage=resume_matching mode=local "
+        "elapsed_seconds=%.2f",
+        request_id,
+        timings["Stage 2: resume matching"],
+    )
+    return analysis
+
+
+def _normalized_text(value):
+    return " ".join(value.casefold().split())
+
+
+def deduplicate_suggestions(response):
+    unique = []
+    used_originals = set()
+    seen_pairs = set()
+    for item in response.get("suggestions", []):
+        original = _normalized_text(item.get("relevant_text", ""))
+        suggestion = _normalized_text(item.get("suggestion", ""))
+        reason = item.get("reason", "")
+        if not original or not suggestion or original == suggestion:
+            continue
+        if "no change needed" in reason.casefold():
+            continue
+        pair = (original, suggestion)
+        if pair in seen_pairs or original in used_originals:
+            continue
+        seen_pairs.add(pair)
+        used_originals.add(original)
+        unique.append(item)
+    return {**response, "suggestions": unique}
+
+
+def generate_tailoring_suggestions(
+    structured_resume,
+    job,
+    requirements,
+    analysis,
+    user_evidence=None,
+    unapplied_suggestions=None,
+    request_id=None,
+    timings=None,
+    candidate_context="",
+):
+    request_id = request_id or uuid4().hex
+    timings = timings if timings is not None else {}
+    user_evidence = _validate_user_evidence(user_evidence)
+    started = perf_counter()
+    logger.info(
+        "AI pipeline stage started request_id=%s stage=resume_suggestions",
+        request_id,
+    )
+    job_input = {
+        "title": job.get("title"),
+        "company": job.get("company", job.get("company_name")),
+        "description": job.get("description"),
+    }
+    suggestions_prompt = (
+        SUGGESTIONS_PROMPT
+        + "\nJOB:\n"
+        + json.dumps(job_input)
+        + "\nJOB REQUIREMENTS:\n"
+        + json.dumps(requirements)
+        + "\nSTAGE 2 REQUIREMENT MATCHES:\n"
+        + json.dumps(analysis["evidence"])
+        + "\nCURRENT RESUME:\n"
+        + json.dumps(structured_resume)
+        + "\nUSER-PROVIDED EVIDENCE:\n"
+        + json.dumps(user_evidence)
+        + (
+            "\nPREVIOUSLY UNAPPLIED SUGGESTIONS:\n"
+            + json.dumps(unapplied_suggestions)
+            if unapplied_suggestions else ""
+        )
+        + (
+            "\nUNVERIFIED ATS DISPLAY NOTES (not candidate evidence):\n"
+            + candidate_context
+            if candidate_context else ""
+        )
+    )
+    response = request_ai(
+        suggestions_prompt,
+        schema_name="resume_suggestions",
+        schema=SUGGESTIONS_SCHEMA,
         reasoning_effort="low",
         request_id=request_id,
-        stage="resume_analysis",
+        stage="resume_suggestions",
     )
-    recommendations_response = parse_ai_response(
-        combined_response, request_id=request_id, stage="resume_analysis"
+    suggestions = parse_ai_response(
+        response, request_id=request_id, stage="resume_suggestions"
     )
-    timings["Stage 2: classification and recommendations"] = perf_counter() - started
+    suggestions = restore_combined_resume_text(suggestions, structured_resume)
+    suggestions = deduplicate_suggestions(suggestions)
+    suggestions["missing_requirements"] = analysis["missing_requirements"]
+    result = build_frontend_response(suggestions, analysis)
+    result["requirements"] = requirements
+    result["evidence"] = analysis["evidence"]
+    timings["Stage 3: tailoring suggestions"] = perf_counter() - started
     logger.info(
-        "AI pipeline stage ended request_id=%s stage=resume_analysis "
+        "AI pipeline stage ended request_id=%s stage=resume_suggestions "
         "elapsed_seconds=%.2f",
         request_id,
-        timings["Stage 2: classification and recommendations"],
+        timings["Stage 3: tailoring suggestions"],
+    )
+    return result
+
+
+def generate_evidence_suggestions(
+    structured_resume,
+    job,
+    requirements,
+    user_evidence,
+    request_id=None,
+):
+    request_id = request_id or uuid4().hex
+    user_evidence = _validate_user_evidence(user_evidence)
+    if not user_evidence:
+        raise ValueError("At least one user evidence item is required")
+    allowed_sections = {
+        "Professional Summary", "Work Experience", "Projects",
+    }
+    if any(item["target_section"] not in allowed_sections for item in user_evidence):
+        raise ValueError("Evidence suggestions only support summary, work, or projects")
+
+    job_input = {
+        "title": job.get("title"),
+        "company": job.get("company", job.get("company_name")),
+        "description": job.get("description"),
+    }
+    evidence_prompt = (
+        EVIDENCE_SUGGESTION_PROMPT
+        + "\nJOB:\n" + json.dumps(job_input)
+        + "\nJOB REQUIREMENTS:\n" + json.dumps(requirements)
+        + "\nCURRENT RESUME:\n" + json.dumps(structured_resume)
+        + "\nUSER-PROVIDED EVIDENCE:\n" + json.dumps(user_evidence)
+    )
+    response = request_ai(
+        evidence_prompt,
+        schema_name="evidence_suggestions",
+        schema=EVIDENCE_SUGGESTION_SCHEMA,
+        reasoning_effort="low",
+        request_id=request_id,
+        stage="evidence_suggestion",
+    )
+    parsed = parse_ai_response(
+        response, request_id=request_id, stage="evidence_suggestion"
     )
 
-    started = perf_counter()
-    expected = {item["requirement"] for item in requirements_response["requirements"]}
-    classified = recommendations_response.get("evidence", [])
-    names = [item["requirement"] for item in classified]
-    if set(names) != expected or len(names) != len(set(names)):
-        logger.warning(
-            "AI schema validation failed request_id=%s stage=resume_analysis "
-            "reason=requirements_mismatch",
-            request_id,
-        )
-        raise ValueError("Combined response must classify each requirement exactly once")
-    if any(item.get("classification") not in {"supported", "partial", "unsupported"}
-           for item in classified):
-        logger.warning(
-            "AI schema validation failed request_id=%s stage=resume_analysis "
-            "reason=invalid_classification",
-            request_id,
-        )
-        raise ValueError("Combined response contains an invalid classification")
-    # Keep importance tied to the extracted requirements, rather than a new AI value.
-    importance = {item["requirement"]: item["importance"]
-                  for item in requirements_response["requirements"]}
-    classifications = {"evidence": [
-        {**item, "importance": importance[item["requirement"]]}
-        for item in classified
-    ]}
-    try:
-        recommendations_response = restore_combined_resume_text(
-            recommendations_response, structured_resume
-        )
-    except (ValueError, KeyError, TypeError, IndexError):
-        logger.exception(
-            "AI schema validation failed request_id=%s stage=resume_analysis "
-            "reason=invalid_resume_reference",
-            request_id,
-        )
-        raise
-    recommendations_response["missing_requirements"] = [
-        {"requirement": item["requirement"]}
-        for item in classifications["evidence"]
-        if item["classification"] == "unsupported"
+    expected = {
+        (item["requirement"], item["target_section"])
+        for item in user_evidence
+    }
+    suggestions = parsed["suggestions"]
+    if isinstance(suggestions, dict):
+        suggestions = [suggestions]
+    if not isinstance(suggestions, list):
+        raise ValueError("AI evidence suggestions must be a list")
+    if not suggestions:
+        raise ValueError("AI returned no suggestions for the supplied evidence")
+
+    normalized_items = []
+    for index, raw_item in enumerate(suggestions):
+        if not isinstance(raw_item, dict):
+            raise ValueError(
+                f"AI evidence suggestion {index} must be an object"
+            )
+        item = dict(raw_item)
+        if "suggestion" not in item:
+            item["suggestion"] = item.get(
+                "suggested_change",
+                item.get("description", item.get("text", "")),
+            )
+        if "reason" not in item:
+            item["reason"] = item.get("reasoning", "")
+
+        if item.get("target_section") not in allowed_sections:
+            candidates = [
+                section for requirement, section in expected
+                if requirement == item.get("requirement")
+            ]
+            if len(candidates) == 1:
+                item["target_section"] = candidates[0]
+            elif len(expected) == 1:
+                item["target_section"] = next(iter(expected))[1]
+
+        if not isinstance(item.get("requirement"), str) or not item["requirement"]:
+            if len(expected) == 1:
+                item["requirement"] = next(iter(expected))[0]
+        if (
+            not isinstance(item.get("target_section"), str)
+            or item["target_section"] not in allowed_sections
+        ):
+            raise ValueError(
+                f"AI evidence suggestion {index} has an invalid target section"
+            )
+        if not isinstance(item.get("requirement"), str) or not item["requirement"]:
+            raise ValueError(
+                f"AI evidence suggestion {index} has no requirement"
+            )
+
+        target_section = item["target_section"]
+        resume_id = item.get("resume_id")
+        if not isinstance(resume_id, str):
+            resume_id = ""
+        action = item.get("action")
+        if target_section == "Professional Summary":
+            action = "replace"
+            resume_id = "resume.professional_summary"
+        elif isinstance(action, str) and action in {"new", "create", "add_entry"}:
+            action = "add"
+        elif isinstance(action, str) and action in {"edit", "update", "modify"}:
+            action = "replace"
+        elif not isinstance(action, str) or action not in {"add", "replace"}:
+            action = "replace" if resume_id else "add"
+        item["action"] = action
+        item["resume_id"] = resume_id
+
+        raw_entry = item.get("new_entry")
+        if not isinstance(raw_entry, dict):
+            raw_entry = item.get("entry")
+        if not isinstance(raw_entry, dict):
+            raw_entry = {}
+
+        def entry_text(*keys):
+            for key in keys:
+                value = raw_entry.get(key)
+                if isinstance(value, str):
+                    return value
+            return ""
+
+        item["new_entry"] = {
+            "entry_title": entry_text(
+                "entry_title", "name", "project_name", "job_title", "title", "role"
+            ),
+            "company": entry_text("company", "employer"),
+            "location": entry_text("location"),
+            "start_date": entry_text("start_date", "start"),
+            "end_date": entry_text("end_date", "end"),
+            "description": entry_text(
+                "description", "details", "suggestion", "suggested_change"
+            ) or (
+                item["suggestion"] if action == "add"
+                and isinstance(item["suggestion"], str) else ""
+            ),
+            "link": entry_text("link", "url"),
+        }
+        if not isinstance(item.get("suggestion"), str):
+            item["suggestion"] = ""
+        if not isinstance(item.get("reason"), str):
+            item["reason"] = ""
+        if action == "add" and item["new_entry"]["description"].strip():
+            item["suggestion"] = item["new_entry"]["description"].strip()
+        if action == "add" and not item["reason"].strip():
+            item["reason"] = (
+                "Creates a separate resume entry using the experience you provided."
+            )
+        normalized_items.append(item)
+
+    suggestions = normalized_items
+    actual = [
+        (item["requirement"], item["target_section"])
+        for item in suggestions
     ]
-    result = build_frontend_response(recommendations_response, classifications)
-    timings["Frontend response mapping"] = perf_counter() - started
-<<<<<<< Updated upstream
-    logger.info(
-        "AI pipeline stage ended request_id=%s stage=response_mapping "
-        "elapsed_seconds=%.2f",
-        request_id,
-        timings["Frontend response mapping"],
+    if len(actual) != len(expected) or set(actual) != expected:
+        raise ValueError("AI must return one suggestion per requested evidence target")
+
+    summary = structured_resume.get("resume", {}).get(
+        "professional_summary", ""
     )
+    normalized = []
+    for item in suggestions:
+        target = item["target_section"]
+        is_summary = target == "Professional Summary"
+        entry = item["new_entry"]
+        if is_summary:
+            action = "replace"
+            resume_id = "resume.professional_summary"
+            if item["action"] != action or item["resume_id"] != resume_id:
+                raise ValueError("AI returned an invalid summary suggestion target")
+            if not isinstance(summary, str) or not summary.strip():
+                raise ValueError("A professional summary is required for replacement")
+            if not item["suggestion"].strip():
+                raise ValueError("Summary replacement suggestion cannot be empty")
+            entry = None
+            original_text = summary
+        else:
+            action = item["action"]
+            resume_id = item["resume_id"]
+            if action == "replace":
+                evidence_by_path = {
+                    evidence_item["resume_id"]: evidence_item["relevant_text"]
+                    for evidence_item in process_resume(structured_resume)["evidence"]
+                }
+                allowed_prefix = (
+                    "work_experience["
+                    if target == "Work Experience"
+                    else "projects["
+                )
+                if (
+                    not resume_id.startswith(allowed_prefix)
+                    or not resume_id.endswith(".description")
+                    or resume_id not in evidence_by_path
+                ):
+                    raise ValueError(
+                        "AI returned a replacement outside the requested section"
+                    )
+                if not item["suggestion"].strip():
+                    raise ValueError("Replacement suggestion cannot be empty")
+                original_text = evidence_by_path[resume_id]
+                entry = None
+            elif action == "add":
+                if resume_id:
+                    raise ValueError("New entries must not reference an existing field")
+                if not entry["description"].strip():
+                    raise ValueError("New resume entries must include a description")
+                item["suggestion"] = entry["description"].strip()
+                if target == "Work Experience":
+                    entry = {
+                        "job_title": entry["entry_title"],
+                        "company": entry["company"],
+                        "location": entry["location"],
+                        "start_date": entry["start_date"],
+                        "end_date": entry["end_date"],
+                        "description": entry["description"],
+                    }
+                else:
+                    entry = {
+                        "name": entry["entry_title"],
+                        "description": entry["description"],
+                        "link": entry["link"],
+                    }
+                original_text = ""
+            else:
+                raise ValueError("AI returned an invalid evidence suggestion action")
+        normalized.append({
+            "requirement": item["requirement"],
+            "section_name": target,
+            "action": action,
+            "resume_id": resume_id,
+            "original_text": original_text,
+            "suggestion": item["suggestion"],
+            "reason": item["reason"],
+            "new_entry": entry,
+        })
+    return {"suggestions": normalized}
+
+
+def analyze_resume_pipeline(
+    structured_resume,
+    job,
+    requirements=None,
+    user_evidence=None,
+    request_id=None,
+    timings=None,
+    log_pipeline=True,
+):
+    request_id = request_id or uuid4().hex
+    timings = timings if timings is not None else {}
+    pipeline_started = perf_counter()
+    if log_pipeline:
+        logger.info("AI pipeline started request_id=%s", request_id)
+    requirements = extract_requirements(
+        job, requirements=requirements, request_id=request_id, timings=timings
+    )
+    analysis = analyze_resume_requirements(
+        structured_resume,
+        requirements,
+        user_evidence=user_evidence,
+        request_id=request_id,
+        timings=timings,
+    )
+    if log_pipeline:
+        logger.info(
+            "AI pipeline ended request_id=%s elapsed_seconds=%.2f",
+            request_id,
+            perf_counter() - pipeline_started,
+        )
+    return analysis
+
+
+def run_combined_pipeline(
+    structured_resume,
+    job,
+    timings=None,
+    requirements=None,
+    request_id=None,
+    unapplied_suggestions=None,
+    candidate_context="",
+    user_evidence=None,
+):
+    """Run all three stages and preserve the legacy combined response shape."""
+    request_id = request_id or uuid4().hex
+    timings = timings if timings is not None else {}
+    pipeline_started = perf_counter()
+    logger.info("AI pipeline started request_id=%s", request_id)
+    analysis = analyze_resume_pipeline(
+        structured_resume,
+        job,
+        requirements=requirements,
+        user_evidence=user_evidence,
+        request_id=request_id,
+        timings=timings,
+        log_pipeline=False,
+    )
+    suggestions = generate_tailoring_suggestions(
+        structured_resume,
+        job,
+        analysis["requirements"],
+        analysis,
+        user_evidence=user_evidence,
+        unapplied_suggestions=unapplied_suggestions,
+        request_id=request_id,
+        timings=timings,
+        candidate_context=candidate_context,
+    )
+    if candidate_context:
+        suggestions["candidate_context"] = candidate_context
     logger.info(
         "AI pipeline ended request_id=%s elapsed_seconds=%.2f",
         request_id,
         perf_counter() - pipeline_started,
     )
-=======
-    result["requirements"] = requirements
->>>>>>> Stashed changes
-    return result
+    return suggestions
 
 
 def main_request_combined(id, job, user_id, request_id=None):
@@ -1401,16 +2475,83 @@ def main_request_combined(id, job, user_id, request_id=None):
         "resume": {key: value for key, value in resume.items() if key not in section_names},
         **{section: resume.get(section, []) for section in section_names},
     }
-<<<<<<< Updated upstream
+
+
+
     return run_combined_pipeline(
         structured_resume, job, request_id=request_id
     )
 
-=======
-    return run_combined_pipeline(structured_resume, job)
-def regenerate(resume,job,requirements):
-    return run_combined_pipeline(resume,job,requirements=requirements)
->>>>>>> Stashed changes
+
+def analyze_current_resume(
+    structured_resume,
+    job,
+    requirements=None,
+    user_evidence=None,
+    request_id=None,
+):
+    return analyze_resume_pipeline(
+        structured_resume,
+        job,
+        requirements=requirements,
+        user_evidence=user_evidence,
+        request_id=request_id,
+    )
+
+
+def generate_suggestions_for_resume(
+    structured_resume,
+    job,
+    requirements,
+    analysis,
+    user_evidence=None,
+    unapplied_suggestions=None,
+    request_id=None,
+    candidate_context="",
+):
+    return generate_tailoring_suggestions(
+        structured_resume,
+        job,
+        requirements,
+        analysis,
+        user_evidence=user_evidence,
+        unapplied_suggestions=unapplied_suggestions,
+        request_id=request_id,
+        candidate_context=candidate_context,
+    )
+
+
+def regenerate(
+    resume,
+    job,
+    requirements,
+    unapplied_suggestions=None,
+    request_id=None,
+    candidate_context="",
+    analysis=None,
+    user_evidence=None,
+):
+    request_id = request_id or uuid4().hex
+    analysis = analysis or analyze_resume_pipeline(
+        resume,
+        job,
+        requirements=requirements,
+        user_evidence=user_evidence,
+        request_id=request_id,
+    )
+    result = generate_tailoring_suggestions(
+        resume,
+        job,
+        analysis["requirements"],
+        analysis,
+        user_evidence=user_evidence,
+        unapplied_suggestions=unapplied_suggestions,
+        request_id=request_id,
+        candidate_context=candidate_context,
+    )
+    if candidate_context:
+        result["candidate_context"] = candidate_context
+    return result
 
 def console_test_combined(resume=None, job=None):
     """Test the current pipeline with two live AI calls and section timings."""

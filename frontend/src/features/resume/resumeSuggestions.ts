@@ -8,10 +8,12 @@ import type {
 
 // A single AI recommendation for a resume section (Issue #4 schema).
 export type ResumeRecommendation = {
+  id?: string
   section_name: string
   original_text: string
   suggested_change: string
   reasoning: string
+  new_entry?: WorkExperience | Project
 }
 
 export type SectionKey =
@@ -45,7 +47,8 @@ export type SuggestionTarget = {
 // Emitted by ResumeSuggestions when the user accepts a change.
 export type SuggestionChange = {
   suggestion: ResumeRecommendation
-  target: SuggestionTarget
+  target: SuggestionTarget | null
+  newEntry?: WorkExperience | Project
   previousText: string
   newText: string
 }
@@ -177,4 +180,3 @@ export const sampleResumeRecommendations: ResumeRecommendation[] = [
       'Clarifies the specialization in the education listing to better match UX-focused roles.',
   },
 ]
-

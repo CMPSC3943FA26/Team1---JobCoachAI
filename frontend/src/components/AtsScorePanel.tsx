@@ -1,13 +1,12 @@
 import { useState, type CSSProperties } from 'react'
-import { previewKeywordWording } from '../services/resumeService'
-import type { AIResponse } from '../types/ai'
+import type { AIResponse, UserEvidence } from '../types/ai'
 import './AtsScorePanel.css'
 
 export interface AtsScorePanelProps {
   response: AIResponse | null
   hiddenKeywords: ReadonlySet<string>
   onRemoveKeyword: (keyword: string) => void
-  onAddSkill: (skill: string, sections: string[], experience: string, options: Record<string, string[]>) => string | null
+  onAddUserEvidence: (evidence: UserEvidence[]) => Promise<string | null>
   manuallyFoundSkills: readonly string[]
   missingRequirements?: readonly { requirement: string }[]
   readOnly?: boolean
@@ -21,16 +20,25 @@ const scoreBand = (score: number): { label: string; className: string } => {
 }
 
 const keywordKey = (keyword: string) => keyword.trim().replace(/\s+/g, ' ').toLocaleLowerCase()
+type EvidenceSection = Extract<
+  UserEvidence['target_section'],
+  'Work Experience' | 'Professional Summary' | 'Projects'
+>
+const evidenceSections: EvidenceSection[] = [
+  'Work Experience',
+  'Projects',
+  'Professional Summary',
+]
 
-export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAddSkill, manuallyFoundSkills, missingRequirements, readOnly = false }: AtsScorePanelProps) {
+export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAddUserEvidence, manuallyFoundSkills, missingRequirements, readOnly = false }: AtsScorePanelProps) {
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null)
-  const [selectedSections, setSelectedSections] = useState<string[]>(['Work Experience'])
+  const [selectedSections, setSelectedSections] = useState<EvidenceSection[]>(['Work Experience'])
   const [dialogStep, setDialogStep] = useState<'sections' | 'explain' | 'review'>('sections')
   const [experience, setExperience] = useState('')
-  const [draftOptions, setDraftOptions] = useState<Record<string, string[]>>({})
-  const [reviewSections, setReviewSections] = useState<string[]>([])
+  const [reviewSections, setReviewSections] = useState<EvidenceSection[]>([])
   const [feedback, setFeedback] = useState('')
   const [generationError, setGenerationError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   if (!response) return null
 
   const band = scoreBand(response.ATS_score)
@@ -40,6 +48,14 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
   const displayedFound = [...matchedKeywords,
     ...manuallyFoundSkills.filter((skill) => !matchedKeywords.some((keyword) => keywordKey(keyword) === keywordKey(skill))
       && !hiddenKeywords.has(keywordKey(skill)))]
+  const partialKeywords = [...new Set((response.evidence ?? [])
+    .filter((item) => item.group_classification === 'partial')
+    .map((item) => item.group || item.requirement)
+    .filter(Boolean))]
+    .filter((keyword) =>
+      !hiddenKeywords.has(keywordKey(keyword))
+      && !displayedFound.some((found) => keywordKey(found) === keywordKey(keyword))
+      && !manuallyFoundSkills.some((skill) => keywordKey(skill) === keywordKey(keyword)))
   const missingKeywords = [...new Set((missingRequirements ?? response.improvements)
     .map((item) => item.requirement).filter(Boolean))]
     .filter((keyword) =>
@@ -54,7 +70,7 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
             <button type="button" className="ats-chip-add"
               aria-label={`Choose a section for ${keyword}`}
               title="Choose an AI Suggestions section"
-              onClick={() => { setSelectedKeyword(keyword); setSelectedSections(['Work Experience']); setDialogStep('sections'); setExperience(''); setGenerationError(''); setDraftOptions({}); setReviewSections([]); setFeedback('') }}>+</button>
+              onClick={() => { setSelectedKeyword(keyword); setSelectedSections(['Work Experience']); setDialogStep('sections'); setExperience(''); setGenerationError(''); setReviewSections([]); setFeedback('') }}>+</button>
           ) : (
             <button type="button" className="ats-chip-remove"
               aria-label={`Remove ${keyword} from found keywords`}
@@ -78,17 +94,28 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
           <div className="ats-score-ring-inner"><strong>{response.ATS_score}%</strong><span>{band.label}</span></div>
         </div>
         <div className="ats-score-stats">
-          <div className="ats-stat ats-stat-met"><strong>{displayedFound.length}</strong><span>requirements met</span></div>
+          <div className="ats-stat ats-stat-met"><strong>{displayedFound.length}</strong><span>requirements supported</span></div>
+          <div className="ats-stat ats-stat-partial"><strong>{partialKeywords.length}</strong><span>related evidence</span></div>
           <div className="ats-stat ats-stat-missing"><strong>{missingKeywords.length}</strong><span>requirements missing</span></div>
         </div>
       </div>
       <div className="ats-keywords">
         <div className="ats-keyword-group">
-          <span className="ats-keyword-label">{readOnly ? 'Supported requirements in AI suggestions' : 'Found in your resume'}</span>
+          <span className="ats-keyword-label">{readOnly ? 'Confirmed requirements in AI suggestions' : 'Supported by your resume'}</span>
           {displayedFound.length ? chips(displayedFound, 'matched') :
             <p className="ats-no-keywords">No matching keywords displayed.</p>}
 
         </div>
+        {!!partialKeywords.length && (
+          <div className="ats-keyword-group">
+            <span className="ats-keyword-label">Related evidence — not confirmed</span>
+            <div className="ats-chip-list">
+              {partialKeywords.map((keyword) => (
+                <span key={keyword} className="ats-chip ats-chip-partial">{keyword}</span>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="ats-keyword-group">
           <span className="ats-keyword-label">Missing from your resume</span>
           {missingKeywords.length ? chips(missingKeywords, 'missing') :
@@ -107,9 +134,9 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
             <h3 id="keyword-section-dialog-title" style={{ marginTop: 0 }}>Review missing keyword</h3>
             <p>Keyword: <strong>{selectedKeyword}</strong></p>
             {dialogStep === 'sections' && <>
-              <p>Choose where this experience may fit. You can select both sections.</p>
+              <p>Choose where to add this evidence. A new work or project entry will be drafted; the professional summary will be updated. You can select multiple sections.</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', rowGap: 12, margin: '16px 0 22px', width: '100%' }}>
-              {['Work Experience', 'Professional Summary'].map((section) => (
+              {evidenceSections.map((section) => (
                 <label key={section} style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 12, width: '100%', margin: 0, padding: '8px 0', cursor: 'pointer', textAlign: 'left' }}>
                   <input type="checkbox" style={{ width: 17, height: 17, margin: 0, flex: '0 0 17px' }} checked={selectedSections.includes(section)}
                     onChange={(event) => setSelectedSections((current) => event.target.checked
@@ -147,56 +174,49 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
                       setDialogStep('sections')
                       return
                     }
-                    try {
-                      const options = previewKeywordWording(selectedKeyword, userExplanation, selectedSections)
-                      if (!selectedSections.some((section) => (options[section] ?? []).length > 0)) {
-                        setGenerationError('No descriptions could be prepared. Return and choose a section again.')
-                        return
-                      }
-                      setDraftOptions(options)
-                      setReviewSections([...selectedSections])
-                      setGenerationError('')
-                      setFeedback('')
-                      setDialogStep('review')
-                    } catch {
-                      setGenerationError('Unable to prepare descriptions. Please try again.')
-                    }
+                    setReviewSections([...selectedSections])
+                    setGenerationError('')
+                    setFeedback('')
+                    setDialogStep('review')
                   }}>
-                  Generate Description</button>
+                  Review Evidence</button>
               </div>
             </>}
             {dialogStep === 'review' && <>
-              <h4 style={{ margin: '8px 0' }}>Review description</h4>
+              <h4 style={{ margin: '8px 0' }}>Review your evidence</h4>
               <div style={{ padding: 12, background: '#f3f6fb', borderRadius: 8, margin: '12px 0' }}>
-                <strong style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Your entered text</strong>
+                <strong style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Evidence you provided</strong>
                 <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{experience.trim()}</p>
               </div>
-              <p style={{ fontSize: 13 }}>Review the suggested wording below and select where to add it. This is a frontend-generated draft, not an AI-evaluated description.</p>
+              <p style={{ fontSize: 13 }}>The AI will create only new suggestions for the selected sections. It may add a work or project entry, or update your professional summary. Your text will not be pasted into the resume, and existing suggestions will remain unchanged.</p>
               <div style={{ display: 'grid', gap: 14, maxHeight: '46vh', overflowY: 'auto', margin: '14px 0' }}>
-                {selectedSections.map((section) => (
-                  <label key={section} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, textAlign: 'left', padding: 12, border: '1px solid #d1d5db', borderRadius: 8, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={reviewSections.includes(section)}
-                      style={{ width: 17, height: 17, margin: '3px 0 0', flex: '0 0 17px' }}
-                      onChange={(event) => setReviewSections((current) => event.target.checked
-                        ? [...current, section] : current.filter((value) => value !== section))} />
-                    <span style={{ display: 'grid', gap: 7, minWidth: 0 }}>
-                      <strong>{section}</strong>
-                      <span style={{ fontSize: 12, color: '#586273' }}>Suggested description</span>
-                      <span style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{draftOptions[section]?.[0] ?? ''}</span>
-                    </span>
-                  </label>
+                {reviewSections.map((section) => (
+                  <p key={section}><strong>Target section:</strong> {section}</p>
                 ))}
               </div>
-              <p style={{ fontSize: 12 }}>Only checked sections will be added to AI Suggestions. Nothing is applied to your tailored resume or ATS score yet.</p>
+              <p style={{ fontSize: 12 }}>Nothing is applied to your tailored resume until you review and apply the AI's new suggestion.</p>
               {feedback && <p role="alert">{feedback}</p>}
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
                 <button type="button" className="button button-secondary" onClick={() => { setFeedback(''); setDialogStep('explain') }}>Return</button>
-                <button type="button" className="button button-primary" disabled={!reviewSections.length} onClick={() => {
-                  const selectedOptions = Object.fromEntries(reviewSections.map((section) => [section, draftOptions[section] ?? []]))
-                  const problem = onAddSkill(selectedKeyword, reviewSections, experience.trim(), selectedOptions)
-                  if (problem) setFeedback(problem)
-                  else { setSelectedKeyword(null); setFeedback(`“${selectedKeyword}” added to AI Suggestions for review.`) }
-                }}>Add to AI Suggestions</button>
+                <button type="button" className="button button-primary" disabled={!reviewSections.length || submitting} onClick={async () => {
+                  setSubmitting(true)
+                  try {
+                    const evidence = reviewSections.map((target_section): UserEvidence => ({
+                      requirement: selectedKeyword,
+                      evidence: experience.trim(),
+                      target_section,
+                      source: 'user',
+                    }))
+                    const problem = await onAddUserEvidence(evidence)
+                    if (problem) setFeedback(problem)
+                    else {
+                      setSelectedKeyword(null)
+                      setFeedback(`New targeted suggestions added for “${selectedKeyword}”. Existing suggestions were kept.`)
+                    }
+                  } finally {
+                    setSubmitting(false)
+                  }
+                }}>{submitting ? 'Generating AI suggestions…' : 'Generate AI Suggestions'}</button>
               </div>
             </>}
           </div>
