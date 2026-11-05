@@ -74,6 +74,15 @@ export function ResumePreview({ profile, sections, renderField }: PreviewProps) 
               : section.key === 'certifications' ? ['issuer', 'date_earned'] : []
             const dateKeys = section.key === 'work_experience' || section.key === 'education'
               ? ['start_date', 'end_date'] : []
+            const startDate = dateKeys.length ? str(entry, dateKeys[0]).trim() : ''
+            const endDate = dateKeys.length ? str(entry, dateKeys[1]).trim() : ''
+            const dateRange = startDate && endDate
+              ? <>{show(section.key, index, dateKeys[0], startDate)} – {show(section.key, index, dateKeys[1], endDate)}</>
+              : startDate
+                ? show(section.key, index, dateKeys[0], startDate)
+                : endDate
+                  ? <>– {show(section.key, index, dateKeys[1], endDate)}</>
+                  : null
             const hasText = Object.entries(entry).some(([key, value]) => key !== 'id' && key !== 'sort_order' && typeof value === 'string' && value.trim())
             if (!hasText) return null
             const handled = new Set(['id', 'sort_order', 'description', titleKey, ...subtitleKeys, ...dateKeys])
@@ -86,7 +95,7 @@ export function ResumePreview({ profile, sections, renderField }: PreviewProps) 
                       <h3 className="preview-entry-title">{show(section.key, index, titleKey, entry[titleKey])}</h3>
                     )}
                     {dateKeys.some((key) => str(entry, key).trim()) && (
-                      <span className="preview-entry-dates">{pair(section.key, index, entry, dateKeys, ' – ')}</span>
+                      <span className="preview-entry-dates">{dateRange}</span>
                     )}
                   </div>
                 )}

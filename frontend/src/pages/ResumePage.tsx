@@ -368,6 +368,10 @@ export function ResumePage({
   }, [isGuest, latestExperienceJobTitle]);
   const [status, setStatus] = useState("");
   const [savingResume, setSavingResume] = useState(false);
+  const savingResumeRef = useRef(false);
+  const resumeFormRef = useRef<HTMLFormElement>(null);
+  const [invalidWorkExperienceEntry, setInvalidWorkExperienceEntry] =
+    useState<number | null>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [showGuestExportWarning, setShowGuestExportWarning] = useState(false);
   const [showUserContinueWarning, setShowUserContinueWarning] = useState(false);
@@ -630,14 +634,14 @@ export function ResumePage({
   // Normalize the editor's display-friendly date values to the concrete ISO
   // dates required by the current backend/database schema. This keeps the
   // frontend compatible without changing backend or database files.
-  const toApiDate = (value: string | undefined) => {
+  const toApiDate = (value: string | undefined, allowPresent = false) => {
     const trimmed = String(value ?? "").trim();
 
     if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
     if (/^\d{4}-\d{2}$/.test(trimmed)) return `${trimmed}-01`;
     if (/^\d{4}$/.test(trimmed)) return `${trimmed}-01-01`;
 
-    if (/^(present|current|now)$/i.test(trimmed)) {
+    if (allowPresent && /^(present|current|now)$/i.test(trimmed)) {
       const now = new Date();
       const year = now.getFullYear();
       const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -671,14 +675,14 @@ export function ResumePage({
     ).filter(hasEntryContent).map((entry,index)=> ({
       ...entry,
       start_date: toApiDate(entry.start_date),
-      end_date: toApiDate(entry.end_date),
+      end_date: toApiDate(entry.end_date, true),
       sort_order: index
     })),
     education: ((sections.find((section) => section.key === "education")?.entries as Education[]) ?? []
      ).filter(hasEntryContent).map((entry,index)=> ({
       ...entry,
       start_date: toApiDate(entry.start_date),
-      end_date: toApiDate(entry.end_date),
+      end_date: toApiDate(entry.end_date, true),
       sort_order: index
     })),
     skills:( (sections.find((section)=> section.key === "skills")?.entries as Skill[]) ?? []
@@ -700,10 +704,41 @@ export function ResumePage({
   }
 }
   const handleSave = async () => {
-    if (savingResume) return false;
+    if (savingResume || savingResumeRef.current) return false;
 
     if (!hasResumeContent) {
       setStatus("Add resume information before saving your resume.");
+      return false;
+    }
+
+    const payload = buildResumePayload();
+    const workExperienceEntries =
+      (sections.find((section) => section.key === "work_experience")
+        ?.entries as WorkExperience[]) ?? [];
+    const missingStartDateIndex = workExperienceEntries.findIndex(
+      (entry) => hasEntryContent(entry) && !toApiDate(entry.start_date),
+    );
+    if (missingStartDateIndex >= 0) {
+      setInvalidWorkExperienceEntry(missingStartDateIndex);
+      setOpenSections((current) => ({ ...current, work_experience: true }));
+      setShowUserContinueWarning(false);
+      setShowGuestExportWarning(false);
+      setStatus("Add a start date to each work experience entry before saving.");
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const invalidInput = document.getElementById(
+            `work_experience-${missingStartDateIndex}-start_date`,
+          );
+          if (!(invalidInput instanceof HTMLInputElement)) return;
+          invalidInput.scrollIntoView({ block: "center", behavior: "smooth" });
+          invalidInput.focus();
+          invalidInput.reportValidity();
+        });
+      });
+      return false;
+    }
+
+    if (resumeFormRef.current && !resumeFormRef.current.reportValidity()) {
       return false;
     }
 
@@ -723,12 +758,11 @@ export function ResumePage({
       );
     }
 
+      savingResumeRef.current = true;
       setSavingResume(true);
       setStatus("Saving resume…");
 
       try {
-        const payload = buildResumePayload();
-
         const createAndRememberResume = async () => {
           const result = await saveResumeToDatabase(payload);
           const savedId = result.id ?? result.resume_id ?? result.resume?.id;
@@ -796,6 +830,7 @@ export function ResumePage({
       console.error("Error saving resume:", error);
       return false;
     } finally {
+      savingResumeRef.current = false;
       setSavingResume(false);
     }
   };
@@ -994,6 +1029,7 @@ const hasExportableData = Boolean(
           </div>
       {/* Resume editor form */}
       <form
+        ref={resumeFormRef}
         id="resume-form"
         className="resume-editor"
         onSubmit={(event) => {
@@ -1289,10 +1325,34 @@ const hasExportableData = Boolean(
                                       <input
                                         id={`${section.key}-${entryIndex}-${fieldKey}`}
                                         type={fieldKey.endsWith("_date") || fieldKey === "date_earned" ? "date" : "text"}
-                                        value={fieldKey.endsWith("_date") || fieldKey === "date_earned" ? toDateInputValue(String(value)) : String(value)}
-                                        onChange={(event) =>
-                                          updateEntry(section.key, entryIndex, fieldKey, event.target.value)
+                                        className={
+                                          section.key === "work_experience" &&
+                                          fieldKey === "start_date" &&
+                                          invalidWorkExperienceEntry === entryIndex
+                                            ? "resume-invalid-field"
+                                            : undefined
                                         }
+                                        aria-invalid={
+                                          section.key === "work_experience" &&
+                                          fieldKey === "start_date" &&
+                                          invalidWorkExperienceEntry === entryIndex
+                                        }
+                                        required={
+                                          section.key === "work_experience" &&
+                                          fieldKey === "start_date" &&
+                                          hasEntryContent(entry)
+                                        }
+                                        value={fieldKey.endsWith("_date") || fieldKey === "date_earned" ? toDateInputValue(String(value)) : String(value)}
+                                        onChange={(event) => {
+                                          if (
+                                            section.key === "work_experience" &&
+                                            fieldKey === "start_date" &&
+                                            event.target.value
+                                          ) {
+                                            setInvalidWorkExperienceEntry(null);
+                                          }
+                                          updateEntry(section.key, entryIndex, fieldKey, event.target.value)
+                                        }}
                                       />
                                   )
                                 )}

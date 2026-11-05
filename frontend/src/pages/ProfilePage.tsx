@@ -50,7 +50,11 @@ function resumeContent(resume: SavedResume) {
         key === 'certifications' ? ['issuer', 'date_earned'] : []
       const dateKeys = key === 'work_experience' || key === 'education' ? ['start_date', 'end_date'] : []
       const title = asText(fields[titleKey])
-      const dates = dateKeys.map((field) => asText(fields[field])).filter(Boolean).join(' – ')
+      const startDate = dateKeys.length ? asText(fields[dateKeys[0]]) : ''
+      const endDate = dateKeys.length ? asText(fields[dateKeys[1]]) : ''
+      const dates = startDate && endDate
+        ? `${startDate} – ${endDate}`
+        : startDate || (endDate ? `– ${endDate}` : '')
       const subtitle = subtitleKeys.map((field) => asText(fields[field])).filter(Boolean).join(' | ')
       const description = asText(fields.description)
       const used = new Set(['id', 'resume_id', 'sort_order', 'description', titleKey, ...dateKeys, ...subtitleKeys])

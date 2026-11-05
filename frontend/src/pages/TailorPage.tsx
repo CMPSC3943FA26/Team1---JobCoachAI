@@ -154,12 +154,15 @@ export default function TailorPage({
     })
   }
 
-  function toApiDate(value: string): string {
+  function toApiDate(value: string, allowPresent = false): string {
     const trimmed = String(value ?? '').trim()
     if (!trimmed) return ''
     if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
     if (/^\d{4}$/.test(trimmed)) return `${trimmed}-01-01`
-    if (trimmed.toLowerCase() === 'present' || trimmed.toLowerCase() === 'current') {
+    if (
+      allowPresent &&
+      (trimmed.toLowerCase() === 'present' || trimmed.toLowerCase() === 'current')
+    ) {
       return new Date().toISOString().slice(0, 10)
     }
     return ''
@@ -171,13 +174,13 @@ export default function TailorPage({
       work_experience: payload.work_experience.map((entry, index) => ({
         ...entry,
         start_date: toApiDate(entry.start_date),
-        end_date: toApiDate(entry.end_date),
+        end_date: toApiDate(entry.end_date, true),
         sort_order: index,
       })),
       education: payload.education.map((entry, index) => ({
         ...entry,
         start_date: toApiDate(entry.start_date),
-        end_date: toApiDate(entry.end_date),
+        end_date: toApiDate(entry.end_date, true),
         sort_order: index,
       })),
       skills: payload.skills.map((entry, index) => ({ ...entry, sort_order: index })),
@@ -236,6 +239,12 @@ export default function TailorPage({
           title: normalizedPayload.resume.title || baseFilename,
           job_title: title,
         },
+      }
+      if (payload.work_experience.some((entry) => !entry.start_date.trim())) {
+        setTailoredSaveMessage(
+          'Add a start date to each work experience entry before saving.',
+        )
+        return
       }
 
       const createTailoredCopy = async () => {
