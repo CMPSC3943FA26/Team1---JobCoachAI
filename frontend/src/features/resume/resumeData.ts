@@ -98,6 +98,7 @@ export type SectionOrder = {
 export type ResumeSaveRequest = {
   resume: {
     title?: string;
+    job_title?: string | null;
     career_field?: string;
     is_default?: boolean;
     full_name: string;

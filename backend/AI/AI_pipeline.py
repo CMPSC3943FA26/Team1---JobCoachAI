@@ -15,13 +15,20 @@ from uuid import uuid4
 from dotenv import load_dotenv
 
 
+load_dotenv(
+    os.path.join(os.path.dirname(__file__), "..", ".env"),
+    override=True,
+)
 load_dotenv()
 
 
 from backend.services.resume import get_resume
 
 
-AI_MODEL_KEY = os.getenv("AI_MODEL_KEY")
+OPENROUTER_API_KEY = os.getenv("AI_MODEL_KEY")
+GROQ_API_KEY = os.getenv("groq_api_key")
+CEREBRAS_API_KEY = os.getenv("cerebras_api_key")
+AI_PROVIDER = os.getenv("AI_PROVIDER", "openrouter").strip().lower()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -57,6 +64,12 @@ def _safe_provider_error(response):
     elif isinstance(error, str):
         details["error_type"] = "string"
     return details
+
+
+def _diagnostic_output(content, limit=12000):
+    if len(content) <= limit:
+        return content
+    return content[:limit] + "... [truncated]"
 
 
 prompt= """
@@ -753,56 +766,207 @@ REQUIREMENTS_SCHEMA = _object_schema({
     })),
 })
 
+
 SUGGESTIONS_PROMPT = """
 You are a resume-tailoring assistant. Produce factual, actionable resume edits
 from the supplied current resume, job requirements, and requirement-to-evidence
-analysis. The resume is authoritative for existing claims. User-provided evidence
-is also an explicit candidate claim, but is not part of an unrelated resume field.
-Use it only for the target section identified by the user. Rewrite casual user
-wording professionally; do not copy it verbatim unless it is already polished.
-Do not infer missing tools, technologies, responsibilities, outcomes, or project
-details. A technology listed in skills does not prove it was used in a project.
-An API does not prove REST; a dashboard does not prove web, JavaScript,
-responsive design, real-time behavior, architecture, testing, or scalability.
-Do not generate a resume rewrite solely because substantial English-language
-resume text triggered the ATS-only English-proficiency heuristic.
+analysis.
+
+Your primary objective is to improve how effectively the resume presents the
+candidate's existing qualifications for the target job. Optimize for relevance,
+clarity, specificity, conciseness, and professional presentation without
+inventing or exaggerating experience.
+
+CORE PRINCIPLE:
+Be ambitious about PRESENTATION but conservative about FACTS.
+
+The full resume is authoritative for existing candidate claims. The job
+description establishes employer priorities, not candidate qualifications.
+User-provided evidence is an explicit candidate claim, but applies only to the
+target section identified by the user. Rewrite casual user wording professionally
+without changing its factual meaning.
+
+FACTUAL ACCURACY:
+- Every factual claim in a suggestion must be supported by the resume or
+  applicable user-provided evidence.
+- Never invent skills, technologies, responsibilities, accomplishments,
+  metrics, outcomes, qualifications, or project details.
+- Do not increase the candidate's actual responsibility, technical involvement,
+  leadership, ownership, experience level, or accomplishments.
+- A technology listed in skills does not prove it was used in a specific project.
+- Do not transfer facts between unrelated projects or work experiences.
+- You MAY reorganize and combine facts established within the same project or
+  work experience, including facts from its title, description, and other fields
+  clearly belonging to that entry.
+- Facts from elsewhere in the resume may be incorporated only when the resume
+  explicitly establishes their connection to the entry being edited.
+- Do not infer a technology merely because it is technically compatible with
+  another technology.
+- An API does not prove REST. A dashboard does not prove web development,
+  JavaScript, responsive design, real-time behavior, architecture, testing,
+  or scalability.
+- Git, teamwork, or software projects do not automatically prove AI
+  productivity-tool experience or project-management responsibility.
+- A job's design/test/deploy/maintain responsibilities do not prove the
+  candidate performed every software lifecycle activity.
+- Do not add testing, deployment, JavaScript, REST, machine-learning algorithms,
+  leadership, deadlines, or other qualifications unless the applicable resume
+  evidence establishes them.
+- Do not generate a rewrite solely because substantial English-language resume
+  text triggered the ATS-only English-proficiency heuristic.
 
 EVIDENCE CLASSIFICATIONS ARE AUTHORITATIVE:
 - "supported" means the supplied resume evidence directly establishes the
-  qualification. Still include only details explicitly supported by the exact
-  resume field being edited.
-- "partial" means the evidence is related but does not establish the full
-  qualification. Never rewrite it as a definite claim that the candidate has
-  that qualification. Describe only the established fact; if more is needed,
-  ask a specific question in improvements.
-- "unsupported" means there is no resume evidence. Do not claim or imply the
-  candidate has it. Do not use the job description as evidence.
-- Requirements sharing a group are evaluated using group_logic. For an "any"
-  group, one supported option satisfies the whole group; do not suggest or ask
-  for other options in a group that is already supported. For an "all" group,
-  every member must be supported.
+  qualification. This determines qualification coverage, not whether the
+  supporting resume text is already optimally written.
+- "partial" means relevant evidence exists but does not establish the full
+  qualification. Describe only the established facts. Never rewrite partial
+  evidence as definite proof of the complete qualification.
+- "unsupported" means there is no qualifying resume evidence. Do not claim
+  or imply that the candidate has the missing qualification.
+- The job description must never be treated as evidence of candidate experience.
+- Requirements sharing a group are evaluated using group_logic for ATS scoring.
+  Preserve the distinction between individual requirements and grouped coverage.
+- Do not change or exaggerate qualification coverage to justify a rewrite.
+- Do not omit a useful rewrite merely because a requirement or its group is
+  already classified as supported.
 
-In particular, Git, teamwork, or software projects do not by themselves prove
-AI productivity-tool experience or project-management responsibility. A role's
-design/test/deploy/maintain responsibilities do not prove the candidate
-performed every lifecycle activity. Do not add testing, deployment, JavaScript,
-REST, machine-learning algorithms, leadership, deadlines, or other job
-qualifications unless the exact relevant resume evidence establishes them.
+RESUME PRESENTATION AND TAILORING:
+Requirement coverage and presentation quality are separate considerations.
 
-Generate at most one suggestion for each original resume text field, considering
-all requirements that field supports together. Do not emit no-op suggestions,
-near-duplicates, keyword stuffing, or repeated rewrites. Suggestion and removal
-resume_id values must point to exact text fields, not section or record paths.
-Do not return original resume text; the backend restores it from the supplied
-resume. Improvements should only ask high-value clarifying questions where
-plausible relevant experience is missing or ambiguous; do not ask for facts
-already provided.
+A supported requirement does not mean its supporting resume entry is already
+written optimally. A meaningful rewrite does not need to establish an additional
+qualification. Presenting existing evidence more effectively is itself valuable.
 
-Return only JSON with suggestions, removals, and improvements matching the
-supplied schema. Suggestions must contain requirement, resume_id, suggestion,
-and reason. Improvements must contain requirement, resume_id, improvement, and
-reason. Removals must contain resume_id and reason.
+Review the entire resume, including relevant projects, work experience, and
+skills, rather than considering only fields directly matched to requirements.
+
+For each relevant entry, evaluate:
+1. Does it emphasize the experience most relevant to this particular job?
+2. Are important technical contributions or accomplishments buried in weak
+   or generic wording?
+3. Can established facts be reorganized or combined to communicate the
+   candidate's actual work more clearly?
+4. Are there redundant statements that could be shortened or consolidated?
+5. Can accurate terminology from the job description make existing experience
+   clearer, more specific, or easier to recognize?
+6. Would stronger action-oriented wording improve the description without
+   implying greater responsibility or accomplishments?
+7. Can the entry become more concise without losing meaningful factual details?
+
+When an evidence-supported rewrite would materially improve relevance, clarity,
+specificity, or conciseness, generate it even when the associated requirement
+is already supported.
+
+Prefer substantive, job-specific improvements to project and experience
+descriptions over superficial wording changes when both are justified.
+Still include legitimate typo corrections, capitalization fixes, terminology
+standardization, and duplicate removals.
+
+Do not rewrite entries that are already effective merely to increase the number
+of suggestions. Every suggested replacement must offer a meaningful improvement
+over the original.
+
+SUGGESTIONS:
+- Use suggestions for concrete edits to existing resume text fields.
+- Return the COMPLETE replacement text for the targeted field, not just the
+  modified sentence or a description of the requested change.
+- Preserve important established facts unless removing redundancy or less
+  relevant information genuinely improves the entry.
+- Use accurate, professional, action-oriented language.
+- Use relevant terminology from the job description when it accurately describes
+  qualifications already established by the resume.
+- Generate at most one suggestion per original resume text field, considering
+  all relevant requirements for that field together.
+- Do not generate duplicate, conflicting, or exact no-op suggestions.
+- Use an exact existing resume text-field path for resume_id, not a section,
+  collection, or record path.
+- Use the exact supplied requirement name most relevant to the edit.
+  Do not invent or rename requirements.
+- Do not return original resume text separately; the backend retrieves it
+  using resume_id.
+- Do not target resume.professional_summary. Professional summaries are
+  generated through a separate request.
+
+REMOVALS:
+- Recommend removing duplicated, redundant, or genuinely low-value content
+  when doing so improves the resume for the target job.
+- Do not remove legitimate experience simply because it lacks a job keyword
+  or does not directly satisfy a requirement.
+- Use exact existing text-field paths for resume_id.
+- Do not recommend removal of a field that also receives a replacement
+  suggestion in the same response.
+
+IMPROVEMENTS AND CLARIFICATIONS:
+- Use improvements for high-value questions about missing or ambiguous
+  qualifications that could materially improve the resume.
+- Inspect the entire resume before deciding that information is missing.
+- Ask for specific additional evidence rather than inventing qualifications.
+- Do not ask for facts already established in the resume.
+- Do not ask a question when a truthful rewrite can already address the issue.
+- A question about an unsupported qualification does not establish that
+  qualification.
+- Keep questions specific and actionable rather than generic career advice.
+
+USER-PROVIDED EVIDENCE:
+- Treat newly supplied user evidence as an explicit candidate claim.
+- Apply it only to the target section identified by the user.
+- Rewrite informal wording professionally while preserving its meaning.
+- Do not transfer user-provided claims to unrelated experiences or projects.
+- Do not use user evidence to strengthen facts beyond what the user actually
+  stated.
+
+FINAL VALIDATION:
+Before returning a suggestion, verify:
+1. Every factual claim is supported by applicable resume or user evidence.
+2. All technologies and responsibilities belong to the entry being edited.
+3. The rewrite does not exaggerate qualifications or accomplishments.
+4. The replacement meaningfully improves relevance, clarity, specificity,
+   or conciseness.
+5. The resume_id identifies an exact existing text field.
+6. The requirement name is copied exactly from the supplied job requirements.
+7. The replacement preserves important established information.
+
+If a proposed rewrite depends on missing or ambiguous factual information,
+do not invent the missing detail. Ask a specific clarification question
+in improvements when that information would be valuable.
+FIELD SEMANTICS AND INTEGRITY:
+- Resume field paths have specific meanings. Preserve those meanings.
+- Work experience job titles identify positions actually held. Never replace
+  them with a target job title, academic status, career objective, or
+  generalized professional identity.
+- Do not rewrite employer names, institution names, degrees, dates, or other
+  factual identifiers to improve relevance.
+- Focus substantive tailoring on project descriptions, work experience
+  descriptions, skills terminology, and other editable descriptive fields.
+- A resume headline is not interchangeable with a work experience title.
+- Never change a field into a different type of information, even if the
+  replacement sounds more relevant to the target job.
+OUTPUT:
+Return ONLY valid JSON matching the supplied schema.
+
+The response must contain suggestions, removals, and improvements.
+
+Each suggestion must contain:
+- requirement
+- resume_id
+- suggestion
+- reason
+
+Each removal must contain:
+- resume_id
+- reason
+
+Each improvement must contain:
+- requirement
+- resume_id
+- improvement
+- reason
+
+Do not include Markdown, code fences, additional fields, or explanatory text
+outside the JSON response.
 """
+
 
 ANALYSIS_SCHEMA = _object_schema({
     "evidence": _array_schema(_object_schema({
@@ -838,6 +1002,31 @@ SUGGESTIONS_SCHEMA = _object_schema({
     "improvements": ANALYSIS_SCHEMA["properties"]["improvements"],
 })
 
+PROFESSIONAL_SUMMARY_PROMPT = """
+Write three job-tailored professional summaries using the complete supplied
+resume and job description. Return one option for each requested tone:
+executive, technical, and concise.
+
+The resume is the sole source of candidate facts. Emphasize relevant experience,
+skills, education, and accomplishments already stated in the resume. Never
+invent qualifications, tools, responsibilities, outcomes, or metrics, and do
+not present requirements from the job description as candidate experience.
+Use the job description to select relevant facts and terminology. Keep each
+summary professional, accurate, and suitable for a resume.
+
+Return only JSON matching the supplied schema.
+"""
+
+PROFESSIONAL_SUMMARY_SCHEMA = _object_schema({
+    "summaries": _array_schema(_object_schema({
+        "tone": {
+            "type": "string",
+            "enum": ["executive", "technical", "concise"],
+        },
+        "text": _STRING,
+    })),
+})
+
 EVIDENCE_SUGGESTION_PROMPT = """
 You create targeted resume edits based only on the user's newly provided evidence.
 Do not regenerate, review, or return any existing suggestions.
@@ -866,10 +1055,14 @@ For every requested target section, create exactly one separate suggestion:
 The user evidence is an explicit candidate claim. The current resume and job
 description provide context, but do not use them to invent details for a new
 entry or transfer details from another experience. Keep the wording
-professionally cautious and accurate. Do not edit skills, education, existing
+professionally cautious and accurate. Respect subjective statements about
+interest, motivation, and passion as explicit user-provided evidence. When
+Projects is selected, incorporate such evidence naturally into a relevant
+existing project description while preserving its established technical details.
+Do not invent circumstances such as independent development unless the resume or
+user explicitly establishes them. Do not edit skills, education, existing
 entries outside the requested target section, or any section that was not
-requested. Do not rewrite an existing entry just to insert a keyword; make a
-real, evidence-backed improvement.
+requested.
 
 Return one suggestion for each distinct requirement/target-section pair in
 USER-PROVIDED EVIDENCE, and no other suggestions. Return only JSON matching the
@@ -904,20 +1097,77 @@ def request_ai(
     content,
     schema_name,
     schema,
-    reasoning_effort="medium",
+    reasoning_effort="high",
     request_id="unknown",
     stage="unknown",
 ):
     """Send a stage's prompt using the selected model's output settings."""
-    model = "nvidia/nemotron-3-ultra-550b-a55b:free"
-    payload = {
-        "model": model,
-        "max_tokens": 12000,
-        "messages": [{"role": "user", "content": content}],
-        "reasoning": {"enabled": True, "effort": reasoning_effort},
-    }
+    provider = AI_PROVIDER
+    if provider == "groq":
+        if not GROQ_API_KEY:
+            raise RuntimeError(
+                "AI_PROVIDER is groq, but groq_api_key is not configured"
+            )
+        AI_MODEL_KEY = GROQ_API_KEY
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        model = "qwen/qwen3.8-27b"
+        payload = {
+            "model": model,
+            "max_completion_tokens": 12000,
+            "messages": [{"role": "user", "content": content}],
+            "reasoning_effort": reasoning_effort,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": schema_name,
+                    "strict": True,
+                    "schema": schema,
+                },
+            },
+        }
+    elif provider == "cerebras":
+        if not CEREBRAS_API_KEY:
+            raise RuntimeError(
+                "AI_PROVIDER is cerebras, but cerebras_api_key is not configured"
+            )
+        AI_MODEL_KEY = CEREBRAS_API_KEY
+        url = "https://api.cerebras.ai/v1/chat/completions"
+        model = "qwen-3.8-27b"
+        payload = {
+            "model": model,
+            "max_completion_tokens": 6000,
+            "messages": [{"role": "user", "content": content}],
+            "reasoning_effort": reasoning_effort,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": schema_name,
+                    "strict": True,
+                    "schema": schema,
+                },
+            },
+        }
+    elif provider == "openrouter":
+        if not OPENROUTER_API_KEY:
+            raise RuntimeError(
+                "AI_PROVIDER is openrouter, but AI_MODEL_KEY is not configured"
+            )
+        AI_MODEL_KEY = OPENROUTER_API_KEY
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        model = "nvidia/nemotron-3-ultra-550b-a55b:free"
+        payload = {
+            "model": model,
+            "max_tokens": 12000,
+            "messages": [{"role": "user", "content": content}],
+            "reasoning": {"enabled": True, "effort": reasoning_effort},
+        }
+    else:
+        raise ValueError(
+            f"Unsupported AI_PROVIDER {provider!r}; "
+            "use 'openrouter', 'groq', or 'cerebras'"
+        )
 
-    if not model.endswith(":free"):
+    if provider == "openrouter" and not model.endswith(":free"):
         payload["response_format"] = {
             "type": "json_schema",
             "json_schema": {
@@ -930,13 +1180,22 @@ def request_ai(
 
     started = perf_counter()
     logger.info(
-        "AI provider call started request_id=%s stage=%s attempt=1",
+        "AI provider call started request_id=%s provider=%s model=%s "
+        "stage=%s attempt=1",
+        request_id,
+        provider,
+        model,
+        stage,
+    )
+    logger.info(
+        "AI provider request payload request_id=%s stage=%s payload=%s",
         request_id,
         stage,
+        json.dumps(payload, ensure_ascii=False),
     )
     try:
         response = requests.post(
-            url="https://openrouter.ai/api/v1/chat/completions",
+            url=url,
             headers={
             "Authorization": f"Bearer {AI_MODEL_KEY}",
             "Content-Type": "application/json",
@@ -966,6 +1225,42 @@ def request_ai(
         raise
 
     elapsed = perf_counter() - started
+    try:
+        response_body = response.json()
+    except ValueError:
+        response_body = {"body": response.text}
+    rate_limit_headers = {
+        key: value
+        for key, value in response.headers.items()
+        if key.casefold().startswith("x-ratelimit-")
+        or key.casefold() == "retry-after"
+    }
+    usage = response_body.get("usage", {})
+    usage = usage if isinstance(usage, dict) else {}
+    completion_details = usage.get("completion_tokens_details", {})
+    completion_details = (
+        completion_details if isinstance(completion_details, dict) else {}
+    )
+    choices = response_body.get("choices", [])
+    first_choice = choices[0] if isinstance(choices, list) and choices else {}
+    finish_reason = (
+        first_choice.get("finish_reason")
+        if isinstance(first_choice, dict) else None
+    )
+    logger.info(
+        "AI provider response request_id=%s stage=%s status=%s "
+        "elapsed_seconds=%.2f completion_tokens=%s reasoning_tokens=%s "
+        "finish_reason=%s headers=%s body=%s",
+        request_id,
+        stage,
+        response.status_code,
+        elapsed,
+        usage.get("completion_tokens"),
+        completion_details.get("reasoning_tokens", usage.get("reasoning_tokens")),
+        finish_reason,
+        json.dumps(rate_limit_headers, sort_keys=True),
+        json.dumps(response_body, ensure_ascii=False),
+    )
     if not response.ok:
         logger.warning(
             "AI provider call ended request_id=%s stage=%s status=%s "
@@ -1181,9 +1476,14 @@ SKILL_CATEGORIES = {
         "typescript", "c sharp", "c plus plus", "golang", "rust", "ruby",
         "php", "swift", "kotlin",
     ),
+    "software development": (
+        "software development", "software engineering", "full stack",
+        "full-stack", "application development", "web application development",
+    ),
     "databases": (
         "database", "databases", "sql", "mysql", "postgresql", "postgres",
-        "sqlite", "mongodb", "nosql", "data storage",
+        "sqlite", "mongodb", "nosql", "data storage", "database schema",
+        "relational schema",
     ),
     "cloud platforms": (
         "cloud", "cloud computing", "aws", "amazon web services", "azure",
@@ -1191,8 +1491,13 @@ SKILL_CATEGORIES = {
     ),
     "web development": (
         "web development", "frontend", "front end", "backend", "back end",
-        "web application development", "web application", "dashboard",
+        "web application development", "web application", "web applications",
+        "web app", "web apps", "application development", "dashboard",
         "html", "css", "javascript", "react", "angular", "vue",
+    ),
+    "generative AI": (
+        "generative AI", "large language model", "large language models",
+        "LLM", "LLMs", "AI workflow", "AI application",
     ),
     "data analytics": (
         "data analytics", "data analysis", "analytics", "data visualization",
@@ -1341,6 +1646,9 @@ def _broad_software_requirement(requirement):
             "software development",
             "software systems",
             "software design",
+            "software engineering",
+            "application development",
+            "web application development",
         )
     )
 
@@ -1359,6 +1667,83 @@ def _broad_programming_requirement(requirement):
             "software design",
         )
     )
+
+
+def _has_development_activity(text):
+    tokens = set(_search_tokens(text))
+    return bool(tokens.intersection({
+        "built", "build", "building", "created", "create", "creating",
+        "developed", "develop", "developing", "designed", "design",
+        "designing", "implemented", "implement", "implementing",
+        "engineered", "engineer", "engineering", "programmed", "program",
+        "programming", "constructed", "construct", "constructing",
+    }))
+
+
+def _substantive_category_match(text, category, requirement, resume_id):
+    normalized_text = _normalized_phrase(text)
+    if category == "version control":
+        normalized_requirement = _normalized_phrase(requirement)
+        if any(
+            mandatory in normalized_requirement
+            for mandatory in ("jenkins", "continuous integration", "ci cd")
+        ):
+            return False
+        return _exact_or_alias_match(text, "git")
+    if category == "software development" and _broad_software_requirement(requirement):
+        project_context = resume_id.startswith("projects[")
+        full_stack_project = "full stack" in normalized_text
+        software_project = "software development" in normalized_text
+        application_work = any(
+            phrase in normalized_text
+            for phrase in (
+                "application", "applications", "web app", "web apps",
+                "software system", "software systems",
+            )
+        )
+        return (
+            (project_context and (full_stack_project or software_project))
+            or (
+                application_work
+                and _has_development_activity(text)
+            )
+        )
+    if category == "databases":
+        schema_design = (
+            bool(
+                set(normalized_text.split()).intersection(
+                    {"designed", "design", "designing"}
+                )
+            )
+            and any(term in normalized_text for term in ("schema", "database"))
+            and any(
+                _exact_or_alias_match(text, term)
+                for term in ("postgresql", "postgres", "mysql", "sqlite", "database")
+            )
+        )
+        return schema_design
+    if category == "web development":
+        web_application = any(
+            phrase in normalized_text
+            for phrase in ("web application", "web applications", "web app", "web apps")
+        )
+        return web_application and _has_development_activity(text)
+    if category == "generative AI":
+        normalized_requirement = _normalized_phrase(requirement)
+        if not any(
+            phrase in normalized_requirement
+            for phrase in ("generative ai", "large language model", "llm")
+        ):
+            return False
+        llm_workflow = any(
+            phrase in normalized_text
+            for phrase in (
+                "large language model workflow", "llm workflow",
+                "generative ai workflow", "generative ai application",
+            )
+        )
+        return llm_workflow and _has_development_activity(text)
+    return False
 
 
 def _match_resume_requirements(evidence, requirements, user_evidence):
@@ -1429,9 +1814,26 @@ def _match_resume_requirements(evidence, requirements, user_evidence):
                 }
                 continue
             reasons = []
-            if any(_exact_or_alias_match(text, term) for term in direct_terms):
+            direct_matches = [
+                _exact_or_alias_match(text, term) for term in direct_terms
+            ]
+            direct_match = bool(direct_matches) and (
+                all(direct_matches) if group_logic == "all"
+                else any(direct_matches)
+            )
+            if direct_match:
                 classification = "supported"
                 reasons.append("Direct or alias match.")
+            elif any(
+                _substantive_category_match(
+                    text, category, requirement, resume_id
+                )
+                for category in categories
+            ):
+                classification = "supported"
+                reasons.append(
+                    "Substantive project or implementation evidence."
+                )
             elif any(_exact_or_alias_match(text, term) for term in related_terms):
                 if classification != "supported":
                     classification = "partial"
@@ -1470,12 +1872,11 @@ def _match_resume_requirements(evidence, requirements, user_evidence):
         )
         for index, item in enumerate(user_evidence):
             if _normalized_phrase(item["requirement"]) in requirement_aliases:
-                if classification != "supported":
-                    classification = "partial"
+                classification = "supported"
                 mappings[f"user_evidence[{index}]"] = {
                     "resume_id": f"user_evidence[{index}]",
                     "source": "user",
-                    "reason": "Candidate-provided evidence; not independently verified.",
+                    "reason": "Explicit candidate-provided evidence.",
                 }
 
         result.append({
@@ -1565,6 +1966,36 @@ def parse_ai_response(response, request_id="unknown", stage="unknown"):
         raise KeyError("AI provider response missing choices")
 
     first_choice = choices[0]
+    finish_reason = (
+        first_choice.get("finish_reason")
+        if isinstance(first_choice, dict) else None
+    )
+    usage = body.get("usage", {}) if isinstance(body, dict) else {}
+    usage = usage if isinstance(usage, dict) else {}
+    completion_details = usage.get("completion_tokens_details", {})
+    completion_details = (
+        completion_details if isinstance(completion_details, dict) else {}
+    )
+    if finish_reason == "length":
+        completion_tokens = usage.get("completion_tokens")
+        reasoning_tokens = completion_details.get(
+            "reasoning_tokens", usage.get("reasoning_tokens")
+        )
+        logger.warning(
+            "AI response exhausted completion tokens request_id=%s stage=%s "
+            "completion_tokens=%s reasoning_tokens=%s finish_reason=%s",
+            request_id,
+            stage,
+            completion_tokens,
+            reasoning_tokens,
+            finish_reason,
+        )
+        raise ValueError(
+            "AI response exhausted its completion-token budget "
+            f"(completion_tokens={completion_tokens}, "
+            f"reasoning_tokens={reasoning_tokens})"
+        )
+
     message = (
         first_choice.get("message")
         if isinstance(first_choice, dict) else None
@@ -1585,6 +2016,13 @@ def parse_ai_response(response, request_id="unknown", stage="unknown"):
     try:
         result = json.loads(content)
     except json.JSONDecodeError as exc:
+        if stage == "job_requirements":
+            logger.warning(
+                "AI output for failed job requirements JSON request_id=%s "
+                "output=%s",
+                request_id,
+                _diagnostic_output(content),
+            )
         logger.warning(
             "AI content JSON parsing failed request_id=%s stage=%s "
             "line=%s column=%s",
@@ -1600,34 +2038,100 @@ def parse_ai_response(response, request_id="unknown", stage="unknown"):
 
     if stage == "job_requirements":
         requirements = result.get("requirements") if isinstance(result, dict) else None
-        valid = isinstance(requirements, list) and all(
-            isinstance(item, dict)
-            and isinstance(item.get("requirement"), str)
-            and bool(item.get("requirement", "").strip())
-            and item.get("importance") in {"required", "desired", "mentioned"}
-            and isinstance(item.get("group"), str)
-            and bool(item.get("group", "").strip())
-            and item.get("group_logic") in {"all", "any"}
-            and isinstance(item.get("direct_search_terms"), list)
-            and isinstance(item.get("related_search_terms"), list)
-            for item in requirements
-        )
-        if valid:
-            seen_requirements = set()
+        validation_errors = []
+        if not isinstance(requirements, list):
+            validation_errors.append("'requirements' must be a list")
+        else:
+            normalized_requirements = []
+            seen_requirements = {}
             group_logic = {}
-            for item in requirements:
+            for index, item in enumerate(requirements):
+                if not isinstance(item, dict):
+                    validation_errors.append(
+                        f"requirements[{index}] must be an object"
+                    )
+                    continue
+                item_valid = True
+                if not isinstance(item.get("requirement"), str) or not item.get(
+                    "requirement", ""
+                ).strip():
+                    validation_errors.append(
+                        f"requirements[{index}].requirement must be a non-empty string"
+                    )
+                    item_valid = False
+                if item.get("importance") not in {
+                    "required", "desired", "mentioned"
+                }:
+                    validation_errors.append(
+                        f"requirements[{index}].importance is invalid"
+                    )
+                    item_valid = False
+                if not isinstance(item.get("group"), str) or not item.get(
+                    "group", ""
+                ).strip():
+                    validation_errors.append(
+                        f"requirements[{index}].group must be a non-empty string"
+                    )
+                    item_valid = False
+                if item.get("group_logic") not in {"all", "any"}:
+                    validation_errors.append(
+                        f"requirements[{index}].group_logic is invalid"
+                    )
+                    item_valid = False
+                for field in ("direct_search_terms", "related_search_terms"):
+                    if not isinstance(item.get(field), list):
+                        validation_errors.append(
+                            f"requirements[{index}].{field} must be a list"
+                        )
+                        item_valid = False
+                if not item_valid:
+                    continue
                 requirement_key = _normalized_phrase(item["requirement"])
                 group_key = _normalized_phrase(item["group"])
                 previous_logic = group_logic.setdefault(
                     group_key, item["group_logic"]
                 )
-                if (
-                    requirement_key in seen_requirements
-                    or previous_logic != item["group_logic"]
-                ):
-                    valid = False
-                    break
-                seen_requirements.add(requirement_key)
+                if previous_logic != item["group_logic"]:
+                    validation_errors.append(
+                        f"requirements[{index}] conflicts with group_logic "
+                        f"for group {item['group']!r}"
+                    )
+                    continue
+                if requirement_key in seen_requirements:
+                    existing = normalized_requirements[
+                        seen_requirements[requirement_key]
+                    ]
+                    if (
+                        _normalized_phrase(existing["group"]) != group_key
+                        or existing["group_logic"] != item["group_logic"]
+                        or existing["importance"] != item["importance"]
+                    ):
+                        validation_errors.append(
+                            f"requirements[{index}] duplicates a requirement "
+                            "with conflicting group or importance"
+                        )
+                        continue
+                    for field in (
+                        "direct_search_terms", "related_search_terms"
+                    ):
+                        existing_terms = {
+                            _normalized_phrase(term)
+                            for term in existing[field]
+                            if isinstance(term, str)
+                        }
+                        for term in item[field]:
+                            if (
+                                isinstance(term, str)
+                                and _normalized_phrase(term) not in existing_terms
+                            ):
+                                existing[field].append(term)
+                                existing_terms.add(_normalized_phrase(term))
+                    continue
+                seen_requirements[requirement_key] = len(normalized_requirements)
+                normalized_requirements.append(item)
+            if not validation_errors:
+                result["requirements"] = normalized_requirements
+        valid = not validation_errors
     elif stage == "resume_analysis":
         valid = isinstance(result, dict) and all(
             isinstance(result.get(key), list)
@@ -1656,13 +2160,22 @@ def parse_ai_response(response, request_id="unknown", stage="unknown"):
             "evidence_type": type(result.get("evidence")).__name__
             if isinstance(result, dict) else "unavailable",
         }
-        logger.warning(
-            "AI schema validation failed request_id=%s stage=%s "
-            "reason=invalid_response_shape response_shape=%s",
-            request_id,
-            stage,
-            json.dumps(shape, sort_keys=True),
-        )
+        if stage == "job_requirements":
+            logger.warning(
+                "AI job requirements validation failed request_id=%s "
+                "errors=%s output=%s",
+                request_id,
+                json.dumps(validation_errors),
+                _diagnostic_output(content),
+            )
+        else:
+            logger.warning(
+                "AI schema validation failed request_id=%s stage=%s "
+                "reason=invalid_response_shape response_shape=%s",
+                request_id,
+                stage,
+                json.dumps(shape, sort_keys=True),
+            )
         raise ValueError(f"AI response failed {stage} schema validation")
     return result
 
@@ -1731,8 +2244,6 @@ def build_frontend_response(stage_3, stage_2):
 
     for item in stage_3.get("suggestions", []):
         requirement = find_requirement(item["requirement"])
-        if requirement.get("group_classification") == "supported":
-            continue
         frontend_response["suggestions"].append({
             "suggestion": item["suggestion"],
             "type": requirement["classification"],
@@ -1745,8 +2256,6 @@ def build_frontend_response(stage_3, stage_2):
 
     for item in stage_3.get("improvements", []):
         requirement = find_requirement(item["requirement"])
-        if requirement.get("group_classification") == "supported":
-            continue
         frontend_response["improvements"].append({
             "improvement": item["improvement"],
             "type": requirement["classification"],
@@ -1778,6 +2287,14 @@ def restore_combined_resume_text(response, structured_resume):
 
     def resolve(item):
         path = item.get("resume_id")
+        # Summary text is nested under "resume" in the API payload, but the
+        # model may omit that prefix when returning a field reference.
+        if (
+            isinstance(path, str)
+            and path not in locations
+            and f"resume.{path}" in locations
+        ):
+            path = f"resume.{path}"
         # Some model outputs incorrectly put every section under resume.
         if isinstance(path, str) and path not in locations and path.startswith("resume."):
             candidate = path.removeprefix("resume.")
@@ -1910,6 +2427,70 @@ def _validate_user_evidence(user_evidence):
     return normalized
 
 
+USER_EVIDENCE_STOP_WORDS = {
+    "a", "an", "and", "for", "in", "of", "the", "to", "with",
+}
+
+
+def _resolve_requirement_name(requirement_name, requirements):
+    requested = _normalized_phrase(requirement_name)
+    requested_tokens = set(requested.split()) - USER_EVIDENCE_STOP_WORDS
+    requirement_rows = requirements.get("requirements", [])
+    matches = {}
+    for requirement_item in requirement_rows:
+        if not isinstance(requirement_item, dict):
+            continue
+        canonical = requirement_item.get("requirement")
+        if not isinstance(canonical, str) or not canonical.strip():
+            continue
+        identifiers = [
+            canonical,
+            requirement_item.get("group", ""),
+            *requirement_item.get("direct_search_terms", []),
+            *requirement_item.get("related_search_terms", []),
+        ]
+        score = 0
+        for identifier in identifiers:
+            if not isinstance(identifier, str):
+                continue
+            normalized = _normalized_phrase(identifier)
+            if not normalized:
+                continue
+            if requested == normalized or requested in _alias_terms(identifier):
+                score = max(score, 3)
+            elif (
+                f" {requested} " in f" {normalized} "
+                or f" {normalized} " in f" {requested} "
+            ):
+                score = max(score, 2)
+            else:
+                identifier_tokens = (
+                    set(normalized.split()) - USER_EVIDENCE_STOP_WORDS
+                )
+                if requested_tokens and requested_tokens <= identifier_tokens:
+                    score = max(score, 1)
+        if score:
+            matches[canonical] = max(matches.get(canonical, 0), score)
+    if not matches:
+        return None
+    highest = max(matches.values())
+    canonical_matches = [
+        name for name, score in matches.items() if score == highest
+    ]
+    return canonical_matches[0] if len(canonical_matches) == 1 else None
+
+
+def _canonicalize_user_evidence(user_evidence, requirements):
+    evidence = _validate_user_evidence(user_evidence)
+    for evidence_item in evidence:
+        canonical = _resolve_requirement_name(
+            evidence_item["requirement"], requirements
+        )
+        if canonical:
+            evidence_item["requirement"] = canonical
+    return evidence
+
+
 def analyze_resume_requirements(
     structured_resume,
     requirements,
@@ -1919,7 +2500,9 @@ def analyze_resume_requirements(
 ):
     request_id = request_id or uuid4().hex
     timings = timings if timings is not None else {}
-    user_evidence = _validate_user_evidence(user_evidence)
+    user_evidence = _canonicalize_user_evidence(
+        user_evidence, requirements
+    )
     started = perf_counter()
     logger.info(
         "AI pipeline stage started request_id=%s stage=evidence_preprocessing",
@@ -2045,27 +2628,39 @@ def analyze_resume_requirements(
     return analysis
 
 
-def _normalized_text(value):
-    return " ".join(value.casefold().split())
-
-
 def deduplicate_suggestions(response):
+    if not isinstance(response, dict):
+        raise ValueError("AI suggestions response must be an object")
+    suggestions = response.get("suggestions")
+    if not isinstance(suggestions, list):
+        raise ValueError("AI suggestions must be a list")
     unique = []
-    used_originals = set()
-    seen_pairs = set()
-    for item in response.get("suggestions", []):
-        original = _normalized_text(item.get("relevant_text", ""))
-        suggestion = _normalized_text(item.get("suggestion", ""))
-        reason = item.get("reason", "")
-        if not original or not suggestion or original == suggestion:
+    by_field = {}
+    for item in suggestions:
+        if not isinstance(item, dict):
+            raise ValueError("AI suggestions must contain objects")
+        original = item.get("relevant_text")
+        suggestion = item.get("suggestion")
+        resume_id = item.get("resume_id")
+        if (
+            not isinstance(original, str)
+            or not isinstance(suggestion, str)
+            or not isinstance(resume_id, str)
+            or not resume_id
+        ):
+            raise ValueError("AI suggestion fields are malformed")
+        if not original.strip() or not suggestion.strip():
+            raise ValueError("AI suggestions must contain replacement text")
+        if original == suggestion:
             continue
-        if "no change needed" in reason.casefold():
+        previous = by_field.get(resume_id)
+        if previous is not None and previous["suggestion"] != suggestion:
+            raise ValueError(
+                f"AI returned conflicting suggestions for resume field {resume_id!r}"
+            )
+        if previous is not None:
             continue
-        pair = (original, suggestion)
-        if pair in seen_pairs or original in used_originals:
-            continue
-        seen_pairs.add(pair)
-        used_originals.add(original)
+        by_field[resume_id] = item
         unique.append(item)
     return {**response, "suggestions": unique}
 
@@ -2094,6 +2689,14 @@ def generate_tailoring_suggestions(
         "company": job.get("company", job.get("company_name")),
         "description": job.get("description"),
     }
+    suggestion_resume = dict(structured_resume)
+    resume_section = structured_resume.get("resume")
+    if isinstance(resume_section, dict):
+        suggestion_resume["resume"] = {
+            key: value
+            for key, value in resume_section.items()
+            if key != "professional_summary"
+        }
     suggestions_prompt = (
         SUGGESTIONS_PROMPT
         + "\nJOB:\n"
@@ -2103,7 +2706,7 @@ def generate_tailoring_suggestions(
         + "\nSTAGE 2 REQUIREMENT MATCHES:\n"
         + json.dumps(analysis["evidence"])
         + "\nCURRENT RESUME:\n"
-        + json.dumps(structured_resume)
+        + json.dumps(suggestion_resume)
         + "\nUSER-PROVIDED EVIDENCE:\n"
         + json.dumps(user_evidence)
         + (
@@ -2121,13 +2724,22 @@ def generate_tailoring_suggestions(
         suggestions_prompt,
         schema_name="resume_suggestions",
         schema=SUGGESTIONS_SCHEMA,
-        reasoning_effort="low",
+        reasoning_effort="low" if AI_PROVIDER == "cerebras" else "high",
         request_id=request_id,
         stage="resume_suggestions",
     )
     suggestions = parse_ai_response(
         response, request_id=request_id, stage="resume_suggestions"
     )
+    if any(
+        item.get("resume_id") in {
+            "resume.professional_summary", "professional_summary",
+        }
+        for item in suggestions.get("suggestions", [])
+    ):
+        raise ValueError(
+            "Professional summaries must be generated by the summary request"
+        )
     suggestions = restore_combined_resume_text(suggestions, structured_resume)
     suggestions = deduplicate_suggestions(suggestions)
     suggestions["missing_requirements"] = analysis["missing_requirements"]
@@ -2152,7 +2764,9 @@ def generate_evidence_suggestions(
     request_id=None,
 ):
     request_id = request_id or uuid4().hex
-    user_evidence = _validate_user_evidence(user_evidence)
+    user_evidence = _canonicalize_user_evidence(
+        user_evidence, requirements
+    )
     if not user_evidence:
         raise ValueError("At least one user evidence item is required")
     allowed_sections = {
@@ -2236,6 +2850,17 @@ def generate_evidence_suggestions(
             raise ValueError(
                 f"AI evidence suggestion {index} has no requirement"
             )
+        canonical_requirement = _resolve_requirement_name(
+            item["requirement"], requirements
+        )
+        if canonical_requirement and (
+            canonical_requirement, item["target_section"]
+        ) in expected:
+            item["requirement"] = canonical_requirement
+        elif len(expected) == 1:
+            expected_requirement, expected_section = next(iter(expected))
+            if item["target_section"] == expected_section:
+                item["requirement"] = expected_requirement
 
         target_section = item["target_section"]
         resume_id = item.get("resume_id")
@@ -2382,6 +3007,61 @@ def generate_evidence_suggestions(
             "new_entry": entry,
         })
     return {"suggestions": normalized}
+
+
+def generate_professional_summary_options(
+    structured_resume,
+    job,
+    request_id=None,
+):
+    request_id = request_id or uuid4().hex
+    job_input = {
+        "title": job.get("title"),
+        "company": job.get("company", job.get("company_name")),
+        "description": job.get("description"),
+    }
+    prompt_content = (
+        PROFESSIONAL_SUMMARY_PROMPT
+        + "\nFULL JOB DESCRIPTION:\n"
+        + json.dumps(job_input)
+        + "\nFULL RESUME:\n"
+        + json.dumps(structured_resume)
+    )
+    response = request_ai(
+        prompt_content,
+        schema_name="professional_summary_options",
+        schema=PROFESSIONAL_SUMMARY_SCHEMA,
+        request_id=request_id,
+        stage="professional_summary",
+    )
+    parsed = parse_ai_response(
+        response, request_id=request_id, stage="professional_summary"
+    )
+    summaries = parsed.get("summaries")
+    expected_tones = {"executive", "technical", "concise"}
+    if not isinstance(summaries, list):
+        raise ValueError("AI professional summaries must be a list")
+    normalized = {}
+    for item in summaries:
+        if not isinstance(item, dict):
+            raise ValueError("AI professional summary options must be objects")
+        tone = item.get("tone")
+        text = item.get("text")
+        if tone not in expected_tones or not isinstance(text, str) or not text.strip():
+            raise ValueError("AI returned an invalid professional summary option")
+        if tone in normalized:
+            raise ValueError("AI returned duplicate professional summary tones")
+        normalized[tone] = text.strip()
+    if set(normalized) != expected_tones:
+        raise ValueError(
+            "AI must return one professional summary for each supported tone"
+        )
+    return {
+        "options": [
+            {"tone": tone, "text": normalized[tone]}
+            for tone in ("executive", "technical", "concise")
+        ],
+    }
 
 
 def analyze_resume_pipeline(

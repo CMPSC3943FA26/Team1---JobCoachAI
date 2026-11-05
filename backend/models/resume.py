@@ -63,6 +63,7 @@ class Resume(BaseModel):
     id: Optional[UUID] = None
     user_id: UUID
     title: str
+    job_title: Optional[str] = None
     career_field: str
     is_default: bool = False
     full_name: str

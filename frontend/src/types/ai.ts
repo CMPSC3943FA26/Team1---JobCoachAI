@@ -120,6 +120,10 @@ export type SummaryOption = {
   text: string
 }
 
+export type SummaryGenerationResponse = {
+  options: Array<Pick<SummaryOption, 'tone' | 'text'>>
+}
+
 export type TailoringResponse = AIResponse & {
   total_time_seconds?: number
   removals: { relevant_text: string; reason: string }[]

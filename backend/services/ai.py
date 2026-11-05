@@ -1,7 +1,8 @@
 
-from backend.AI.AI_test import (
+from backend.AI.AI_pipeline import (
     analyze_current_resume,
     generate_evidence_suggestions,
+    generate_professional_summary_options,
     generate_suggestions_for_resume,
     main_request_combined,
     regenerate,
@@ -82,5 +83,13 @@ def generate_evidence_section_suggestions(
         job,
         requirements,
         user_evidence,
+        request_id=request_id,
+    )
+
+
+def generate_resume_summary_options(current_resume, job, request_id=None):
+    return generate_professional_summary_options(
+        current_resume,
+        job,
         request_id=request_id,
     )

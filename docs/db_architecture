@@ -22,6 +22,8 @@ Backed by Supabase Auth (`auth.users`). Optional public-schema extension table i
 |---|---|---|
 | id | uuid, PK | |
 | user_id | uuid, FK → users.id | One master resume per user (or allow multiple, TBD) |
+| title | text | User-defined resume name |
+| job_title | text, nullable | Associated target job title; added by `docs/migrations/20261104_add_resumes_job_title.sql` |
 | full_name | text | Contact Info section |
 | email | text | Contact Info section |
 | phone | text, nullable | Contact Info section |
@@ -175,4 +177,4 @@ Restoring a previous state = copy an older `content` snapshot back into `tailore
 - `tailored_resume_versions` gives you undo/restore (Section 8 requirement) without needing to reconstruct state from the suggestions log — trade-off is storing full JSONB snapshots rather than diffs, which is simpler but less space-efficient. Fine for an MVP.
 - RLS policies on every table should scope rows to `auth.uid() = user_id` (directly or via the resume/tailored_resume chain).
 - Explicitly excluded per the MVP doc: `Application`, `Job_Cache`, `Career_Goal` tables from earlier drafts — application tracking, job board caching, and goal tracking are all stretch/out-of-scope now.
-
+- The application has a `jobs` table/API, but the current resume save path does not create job rows or store a `job_id` on resumes. The `tailored_resumes` relationship above is architectural guidance, not the relationship currently used by the application.

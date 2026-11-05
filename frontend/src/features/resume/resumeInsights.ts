@@ -2,11 +2,8 @@ import type {
   AIResponse,
   Improvement,
   Suggestion,
-  SummaryOption,
-  SummaryTone,
 } from '../../types/ai'
 import type {
-  ResumeProfile,
   ResumeSaveRequest,
 } from './resumeData'
 
@@ -131,93 +128,4 @@ export function analyzeResumeForJob(
     requirements_met: matched.map((requirement) => ({ requirement })),
     requirements_missing: missing.length,
   }
-}
-
-export type SummarySeed = {
-  profile: ResumeProfile
-  skills: string[]
-  highlights: string[]
-}
-
-function pickHighlights(seed: SummarySeed): string[] {
-  return [...seed.highlights].slice(0, 2)
-}
-
-export function generateSummaryOptions(
-  seed: SummarySeed,
-  jobDescription: string,
-  variation = 0,
-): SummaryOption[] {
-  const skills = [...seed.skills].filter(Boolean).slice(0, 5)
-  const highlights = pickHighlights(seed)
-  const headlineSkill = skills[0] ?? ''
-  const highlightSentence = highlights
-    .map((highlight) => {
-      const sentence = highlight.replace(/\s*\.[\s.]*$/, '').trim()
-      return sentence.charAt(0).toUpperCase() + sentence.slice(1)
-    })
-    .join(' In addition, ')
-  const skillsSentence = skills.length
-    ? `Skilled in ${skills.join(', ')}.`
-    : ''
-
-  const intro = variation % 3 === 0
-    ? 'Results-driven professional with a proven track record of delivering measurable outcomes.'
-    : variation % 3 === 1
-      ? 'Professional focused on delivering results through experience and practical skills.'
-      : 'Adaptable professional bringing a results-oriented approach to new challenges.'
-  const executiveText = [
-    intro,
-    highlightSentence ? `${highlightSentence}.` : 'Combines strategic insight with hands-on execution.',
-    skillsSentence ? `${skillsSentence}` : '',
-  ].filter(Boolean).join(' ')
-
-  const technicalText = [
-    variation % 2 === 0
-      ? `Detail-oriented professional focused on ${headlineSkill ? `${headlineSkill}, ` : ''}technical excellence and continuous improvement.`
-      : `Technical professional bringing ${headlineSkill ? `${headlineSkill} and ` : ''}a commitment to continuous improvement.`,
-    skillsSentence || 'Brings strong analytical and problem-solving abilities to every project.',
-    highlightSentence ? `${highlightSentence}.` : '',
-  ].filter(Boolean).join(' ')
-
-  const conciseText = variation % 2 === 0
-    ? `Professional with skills in ${skills.join(', ') || 'a wide range of areas'}, known for ${firstnameFallback(highlightSentence)}.`
-    : `Brings ${skills.join(', ') || 'a broad skill set'} and ${firstnameFallback(highlightSentence)}.`
-
-  function firstnameFallback(highlight: string): string {
-    if (highlight) return highlight.toLowerCase()
-    return 'delivering consistent, high-quality results'
-  }
-
-  const options: Array<{ tone: SummaryTone; title: string; description: string; text: string }> = [
-    {
-      tone: 'executive',
-      title: 'Executive / Results-focused',
-      description: 'Leadership-oriented tone emphasizing outcomes and impact.',
-      text: executiveText,
-    },
-    {
-      tone: 'technical',
-      title: 'Technical',
-      description: 'Skill-forward tone that highlights your technical strengths.',
-      text: technicalText,
-    },
-    {
-      tone: 'concise',
-      title: 'Concise',
-      description: 'Short and punchy summary perfect for quick scans.',
-      text: conciseText,
-    },
-  ]
-
-  if (jobDescription.trim()) {
-    const keywords = buildKeywordCandidates(jobDescription).slice(0, 3)
-    if (keywords.length) {
-      options.forEach((option) => {
-        option.text = `${option.text.replace(/[\s.]+$/, '')} Aligned with ${keywords.join(', ')} expectations.`
-      })
-    }
-  }
-
-  return options
 }

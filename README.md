@@ -142,6 +142,11 @@ cp frontend/.env.example frontend/.env
 
 Configure the environment values according to the team's Supabase and backend settings.
 
+Set `AI_PROVIDER` in `backend/.env` to select the AI provider: `openrouter`,
+`groq`, or `cerebras`. Groq uses `groq_api_key` with `qwen/qwen3.8-27b`;
+Cerebras uses `cerebras_api_key` with `qwen-3.8-27b`. OpenRouter remains the
+default when `AI_PROVIDER` is unset.
+
 Backend .env example:
 
 ```env

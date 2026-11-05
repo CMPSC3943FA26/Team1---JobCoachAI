@@ -2,6 +2,7 @@ import type {
   JobRequirements,
   EvidenceSuggestionResponse,
   ResumeAnalysisResponse,
+  SummaryGenerationResponse,
   TailoringResponse,
   UserEvidence,
 } from '../types/ai'
@@ -73,6 +74,7 @@ export function removeSavedResumeDisplayMeta(resumeId: string) {
 export type SavedResumeSummary = {
   id: string
   title?: string | null
+  job_title?: string | null
   career_field?: string | null
   full_name?: string | null
   email?: string | null
@@ -257,6 +259,20 @@ export async function analyze_resume(
   return deduplicatedAiRequest(
     '/ai/analyze_resume',
     JSON.stringify({ current_resume, job, requirements, user_evidence }),
+    client_request_id,
+    signal,
+  )
+}
+
+export async function generate_professional_summary_options(
+  current_resume: object,
+  job: { title: string; company: string; description: string },
+  client_request_id?: string,
+  signal?: AbortSignal,
+): Promise<SummaryGenerationResponse> {
+  return deduplicatedAiRequest(
+    '/ai/generate_summary_options',
+    JSON.stringify({ current_resume, job }),
     client_request_id,
     signal,
   )

@@ -217,8 +217,8 @@ export default function TailorPage({
     setTailoredSaveMessage('Saving tailored resume…')
 
     try {
-      const payload = normalizeTailoredPayload(JSON.parse(raw) as ResumeSaveRequest)
-      let baseFilename = jobTitle.trim() || 'resume'
+      const normalizedPayload = normalizeTailoredPayload(JSON.parse(raw) as ResumeSaveRequest)
+      let baseFilename = 'resume'
       try {
         const draftRaw = sessionStorage.getItem('jobcoachai.resumeDraft')
         if (draftRaw) {
@@ -226,9 +226,17 @@ export default function TailorPage({
           if (draft.filename?.trim()) baseFilename = draft.filename.trim()
         }
       } catch {
-        // Keep the job-title fallback if the local draft is unavailable.
+        // Keep the existing resume-name fallback if the local draft is unavailable.
       }
       const tailoredDisplayFilename = baseFilename.replace(/-(original|tailored)$/i, '')
+      const payload: ResumeSaveRequest = {
+        ...normalizedPayload,
+        resume: {
+          ...normalizedPayload.resume,
+          title: normalizedPayload.resume.title || baseFilename,
+          job_title: title,
+        },
+      }
 
       const createTailoredCopy = async () => {
         const result = await saveResumeToDatabase(payload)

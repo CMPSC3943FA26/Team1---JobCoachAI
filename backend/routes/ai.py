@@ -1,6 +1,7 @@
 from backend.services.ai import (
     analyze_resume,
     generate_evidence_section_suggestions,
+    generate_resume_summary_options,
     generate_suggestions,
     regenerate_resume,
     tailor_resume,
@@ -15,17 +16,13 @@ import requests
 ai_bp=Blueprint("ai",__name__,url_prefix='/ai')
 
 def configure_ai_logger():
-    ai_logger = logging.getLogger("backend.AI.AI_test")
+    ai_logger = logging.getLogger("backend.AI.AI_pipeline")
     if not ai_logger.handlers:
         app_handlers = current_app.logger.handlers
         if app_handlers:
             ai_logger.handlers = app_handlers[:]
-        else:
-            ai_logger.setLevel(logging.INFO)
-            ai_logger.propagate = True
-            return
     ai_logger.setLevel(logging.INFO)
-    ai_logger.propagate = False
+    ai_logger.propagate = not bool(ai_logger.handlers)
 
 
 def start_ai_request():
@@ -159,8 +156,14 @@ def tailor():
 @ai_bp.route('/analyze_resume', methods=['POST'])
 def analyze():
     start_ai_request()
+    auth_started = perf_counter()
     if authenticated_user() is None:
         return jsonify({'error': 'Missing or invalid bearer token'}), 401
+    current_app.logger.info(
+        "AI request authenticated request_id=%s elapsed_seconds=%.2f",
+        g.ai_request_id,
+        perf_counter() - auth_started,
+    )
     data = request.get_json()
     if (
         not isinstance(data, dict)
@@ -181,6 +184,31 @@ def analyze():
         return jsonify(result)
     except Exception as error:
         return handle_ai_error(error, "resume_matching")
+
+
+@ai_bp.route('/generate_summary_options', methods=['POST'])
+def generate_summary_options():
+    start_ai_request()
+    if authenticated_user() is None:
+        return jsonify({'error': 'Missing or invalid bearer token'}), 401
+    data = request.get_json()
+    if (
+        not isinstance(data, dict)
+        or not isinstance(data.get('current_resume'), dict)
+        or not isinstance(data.get('job'), dict)
+    ):
+        return jsonify({'error': 'current_resume and job are required'}), 400
+    started = perf_counter()
+    try:
+        result = generate_resume_summary_options(
+            data['current_resume'],
+            data['job'],
+            request_id=g.ai_request_id,
+        )
+        result['total_time_seconds'] = round(perf_counter() - started, 2)
+        return jsonify(result)
+    except Exception as error:
+        return handle_ai_error(error, "professional_summary")
 
 
 @ai_bp.route('/generate_suggestions', methods=['POST'])

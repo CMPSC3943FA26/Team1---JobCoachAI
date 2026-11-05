@@ -9,6 +9,7 @@ export interface SummaryOptionsProps {
   onRegenerate: () => void
   onEdit: (option: SummaryOption) => void
   onDelete: (option: SummaryOption) => void
+  isLoading?: boolean
 }
 
 export function SummaryOptions({
@@ -18,6 +19,7 @@ export function SummaryOptions({
   onRegenerate,
   onEdit,
   onDelete,
+  isLoading = false,
 }: SummaryOptionsProps) {
   const [editingTone, setEditingTone] = useState<SummaryTone | null>(null)
   const [editValue, setEditValue] = useState('')
@@ -35,11 +37,11 @@ export function SummaryOptions({
           </p>
         </div>
 
-        <button className="summary-regenerate" type="button" onClick={() => {
+        <button className="summary-regenerate" type="button" disabled={isLoading} onClick={() => {
           setRestoredTone(null)
           onRegenerate()
         }}>
-          Regenerate
+          {isLoading ? 'Generating…' : 'Regenerate'}
         </button>
       </div>
 

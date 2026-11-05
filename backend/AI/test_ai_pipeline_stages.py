@@ -283,6 +283,29 @@ def test_requirement_extraction_preserves_boolean_logic_examples():
         )
 
 
+def test_restore_resume_text_accepts_unprefixed_professional_summary_path():
+    response = {
+        "suggestions": [{
+            "requirement": "Professional summary",
+            "resume_id": "professional_summary",
+            "suggestion": "A clearer summary.",
+            "reason": "Improves clarity.",
+        }],
+        "removals": [],
+        "improvements": [],
+        "evidence": [],
+    }
+    resume = {
+        "resume": {"professional_summary": "Original summary."},
+        "skills": [],
+    }
+
+    restored = AI_test.restore_combined_resume_text(response, resume)
+
+    assert restored["suggestions"][0]["resume_id"] == "resume.professional_summary"
+    assert restored["suggestions"][0]["relevant_text"] == "Original summary."
+
+
 def test_local_matching_handles_aliases_fuzzy_terms_and_categories():
     resume = {
         "skills": [
@@ -431,7 +454,7 @@ def test_any_requirement_group_counts_once_when_one_option_is_supported():
     assert response["missing_requirements"] == []
 
 
-def test_suggestions_do_not_target_other_options_in_satisfied_any_group():
+def test_suggestions_and_improvements_are_preserved_for_satisfied_any_group():
     analysis = {
         "evidence": [
             {
@@ -464,8 +487,10 @@ def test_suggestions_do_not_target_other_options_in_satisfied_any_group():
 
     response = AI_test.build_frontend_response(stage_3, analysis)
 
-    assert response["suggestions"] == []
-    assert response["improvements"] == []
+    assert [item["requirement"] for item in response["suggestions"]] == ["C++"]
+    assert [item["requirement"] for item in response["improvements"]] == [
+        "Programming language experience",
+    ]
 
 
 def test_bachelors_degree_does_not_match_masters_degree_requirement():

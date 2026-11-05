@@ -124,6 +124,7 @@ class SectionOrderUpdate(BaseModel):
 
 class ResumeCreate(BaseModel):
     title: Optional[str] = None 
+    job_title: Optional[str] = None
     career_field: Optional[str] = None
     is_default: Optional[bool] = False
     full_name: str
@@ -136,6 +137,7 @@ class ResumeCreate(BaseModel):
 class ResumeUpdate(BaseModel):
     id: Optional[UUID] = None
     title: Optional[str] = None
+    job_title: Optional[str] = None
     career_field: Optional[str] = None
     is_default: Optional[bool] = None
     full_name: str

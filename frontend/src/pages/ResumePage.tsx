@@ -354,11 +354,16 @@ export function ResumePage({
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [importedCsvFilename, setImportedCsvFilename] = useState<string | null>(storedDraft?.csvSourceFilename ?? null);
   const [resumeFilename, setResumeFilename] = useState(storedDraft?.filename ?? "");
-  const [jobTitle, setJobTitle] = useState(() => getMostRecentExperienceTitle(storedDraft?.sections ?? []));
+  const [jobTitle, setJobTitle] = useState(() =>
+    storedDraft?.jobTitle ?? getMostRecentExperienceTitle(storedDraft?.sections ?? []),
+  );
   const latestExperienceJobTitle = getMostRecentExperienceTitle(sections);
+  const previousExperienceJobTitle = useRef(latestExperienceJobTitle);
   // Keep the account's top Job Title in sync when work experience changes.
   // A manual edit remains intact until the derived work-experience title changes.
   useEffect(() => {
+    if (latestExperienceJobTitle === previousExperienceJobTitle.current) return;
+    previousExperienceJobTitle.current = latestExperienceJobTitle;
     if (!isGuest) setJobTitle(latestExperienceJobTitle);
   }, [isGuest, latestExperienceJobTitle]);
   const [status, setStatus] = useState("");
@@ -646,6 +651,8 @@ export function ResumePage({
  function buildResumePayload(): ResumeSaveRequest {
  return {
   resume: {
+    title: resumeFilename.trim() || undefined,
+    job_title: jobTitle.trim() || null,
     full_name: `${profile.first_name} ${profile.last_name}`.trim(),
     email: profile.email,
     phone: profile.phone,

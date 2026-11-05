@@ -321,9 +321,10 @@ function saveDatabaseResumeAsDraft(databaseResume: Record<string, any>) {
       profile,
       sections,
       filename:
+        databaseResume.title?.trim() ||
         savedMeta?.filename ||
         `${databaseResume.full_name || 'saved-resume'}-resume`,
-      jobTitle: savedMeta?.jobTitle?.trim() || databaseResume.title?.trim() || "",
+      jobTitle: databaseResume.job_title?.trim() || savedMeta?.jobTitle?.trim() || "",
     }),
   )
 }
@@ -334,7 +335,7 @@ function getDisplayResumeFilename(filename: string) {
 }
 
 function getJobTitle(resume: SavedResumeSummary) {
-  return getSavedResumeDisplayMeta(resume.id)?.jobTitle?.trim() || resume.title?.trim() || 'Untitled'
+  return resume.job_title?.trim() || getSavedResumeDisplayMeta(resume.id)?.jobTitle?.trim() || 'Untitled'
 }
 
 export function ProfilePage({
@@ -769,6 +770,7 @@ export function ProfilePage({
                       <strong>
                         {(() => {
                           const meta = getSavedResumeDisplayMeta(resume.id)
+                          if (resume.title?.trim()) return resume.title.trim()
                           if (meta) return getDisplayResumeFilename(meta.filename)
                           return resume.full_name?.trim()
                             ? `${resume.full_name} Resume`
