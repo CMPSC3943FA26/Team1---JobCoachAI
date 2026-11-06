@@ -92,3 +92,41 @@ def test_update_resume_keeps_resume_name_and_job_title_separate():
     }]
     assert result["title"] == "Product Designer Resume"
     assert result["job_title"] == "Senior Product Designer"
+
+
+def test_create_resume_persists_education_description():
+    request = ResumeSaveRequest(
+        resume=ResumeCreate(**_resume_payload()),
+        education=[{
+            "school": "Example University",
+            "degree": "B.S.",
+            "field_of_study": "Computer Science",
+            "description": "Relevant coursework: database systems.",
+            "sort_order": 0,
+        }],
+    )
+    supabase = MagicMock()
+    supabase.table.return_value.insert.return_value.execute.return_value.data = [
+        {"id": "resume-id"},
+    ]
+    returned_resume = {
+        "id": "resume-id",
+        "education": [{
+            "school": "Example University",
+            "description": "Relevant coursework: database systems.",
+        }],
+    }
+
+    with (
+        patch.object(resume_service, "supabase", supabase),
+        patch.object(resume_service, "get_resume", return_value=returned_resume),
+    ):
+        result = resume_service.create_resume(request, "user-id")
+
+    education_insert = supabase.table.return_value.insert.call_args_list[1].args[0]
+    assert education_insert[0]["description"] == (
+        "Relevant coursework: database systems."
+    )
+    assert result["education"][0]["description"] == (
+        "Relevant coursework: database systems."
+    )

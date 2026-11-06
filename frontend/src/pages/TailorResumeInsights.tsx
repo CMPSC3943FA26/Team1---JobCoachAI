@@ -22,9 +22,11 @@ import {
   setSavedResumeDisplayMeta,
 } from '../services/resumeService'
 import type {
+  Education,
   Project,
   ResumeProfile,
   ResumeSaveRequest,
+  Skill,
   WorkExperience,
 } from '../features/resume/resumeData'
 import type { ResumeRecommendation, SuggestionChange } from '../features/resume/resumeSuggestions'
@@ -98,7 +100,18 @@ function readDraft(): Draft | null {
     const d = draft as Partial<Draft>
     if (!d.profile || !Array.isArray(d.sections)) return null
     // Do not share object references with the original draft.
-    return JSON.parse(JSON.stringify(d)) as Draft
+    const copy = JSON.parse(JSON.stringify(d)) as Draft
+    return {
+      ...copy,
+      sections: copy.sections.map((section) => section.key !== 'education'
+        ? section
+        : {
+          ...section,
+          entries: section.entries.map((entry) => typeof entry === 'string'
+            ? entry
+            : { ...entry, description: (entry as Education).description ?? '' }),
+        }),
+    }
   } catch {
     return null
   }
@@ -148,12 +161,114 @@ function sectionNameFromPath(path: string): string {
   }
   return labels[section] ?? 'Other'
 }
+function recommendationFromApi(
+  item: TailoringResponse['suggestions'][number],
+): ResumeRecommendation {
+  const isAddition = item.action === 'add'
+    || (!item.resume_id && item.section_name === 'Skills' && Boolean(item.new_entry))
+  const skillName = (item.new_entry?.skill_name || item.suggestion || '').trim()
+  const newEntry = isAddition && skillName
+    ? { skill_name: skillName }
+    : undefined
+  return createRecommendation({
+    action: isAddition ? 'add' : 'replace',
+    section_name: isAddition
+      ? item.section_name ?? 'Skills'
+      : sectionNameFromPath(item.resume_id),
+    original_text: item.before ?? '',
+    suggested_change: newEntry?.skill_name ?? item.suggestion,
+    reasoning: item.reason,
+    resume_id: item.resume_id,
+    ...(newEntry ? { new_entry: newEntry } : {}),
+  })
+}
+function recommendationFromRemoval(
+  item: TailoringResponse['removals'][number],
+  sections: TailorSection[],
+): ResumeRecommendation {
+  const inferredSkillIndex = item.resume_id
+    ? null
+    : skillRemovalEntryIndex(item.relevant_text, sections)
+  const resumeId = item.resume_id
+    ?? (inferredSkillIndex === null
+      ? undefined
+      : `skills[${inferredSkillIndex}].skill_name`)
+  return createRecommendation({
+    action: 'remove',
+    section_name: resumeId
+      ? sectionNameFromPath(resumeId)
+      : 'Other',
+    original_text: item.relevant_text,
+    suggested_change: '',
+    reasoning: item.reason,
+    resume_id: resumeId,
+  })
+}
 function recommendationKey(recommendation: ResumeRecommendation): string {
   return JSON.stringify([
+    recommendation.action ?? 'replace',
     recommendation.section_name,
     recommendation.original_text,
     recommendation.suggested_change,
   ])
+}
+function recommendationTargetKey(recommendation: ResumeRecommendation): string {
+  if (recommendation.resume_id) return `field:${recommendation.resume_id}`
+  if (recommendation.new_entry && 'skill_name' in recommendation.new_entry) {
+    return `add:skills:${skillKey(recommendation.new_entry.skill_name)}`
+  }
+  return `${recommendation.action ?? 'replace'}:${recommendation.section_name}:${skillKey(recommendation.original_text)}`
+}
+function mergeRecommendations(
+  current: ResumeRecommendation[],
+  incoming: ResumeRecommendation[],
+): ResumeRecommendation[] {
+  const merged = [...current]
+  for (const recommendation of incoming) {
+    const key = recommendationTargetKey(recommendation)
+    const existingIndex = merged.findIndex(
+      (item) => recommendationTargetKey(item) === key,
+    )
+    if (existingIndex < 0) merged.push(recommendation)
+    else merged[existingIndex] = recommendation
+  }
+  return merged
+}
+function recommendationsFromResponse(
+  response: TailoringResponse,
+  sections: TailorSection[],
+): ResumeRecommendation[] {
+  const existingSkills = new Set(
+    (sections.find((section) => section.key === 'skills')?.entries ?? [])
+      .flatMap((entry) => typeof entry !== 'string' && 'skill_name' in entry
+        ? [skillKey(entry.skill_name)]
+        : []),
+  )
+  const additionsAndReplacements = response.suggestions
+    .map(recommendationFromApi)
+    .filter((recommendation) =>
+      !recommendation.new_entry ||
+      !('skill_name' in recommendation.new_entry) ||
+      !existingSkills.has(skillKey(recommendation.new_entry.skill_name)),
+    )
+  return mergeRecommendations(
+    additionsAndReplacements,
+    (response.removals ?? []).map((item) => recommendationFromRemoval(item, sections)),
+  )
+}
+function skillRemovalEntryIndex(
+  relevantText: string,
+  sections: TailorSection[],
+): number | null {
+  const skills = sections.find((section) => section.key === 'skills')
+  if (!skills) return null
+  const matchingIndexes = skills.entries.flatMap((entry, index) =>
+    typeof entry !== 'string'
+    && 'skill_name' in entry
+    && skillKey(entry.skill_name) === skillKey(relevantText)
+      ? [index]
+      : [])
+  return matchingIndexes.length ? matchingIndexes[matchingIndexes.length - 1] : null
 }
 function createRecommendation(
   recommendation: Omit<ResumeRecommendation, 'id'>,
@@ -210,9 +325,14 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     useState<
       Extract<
         UserEvidence['target_section'],
-        'Work Experience' | 'Projects' | 'Professional Summary'
+        | 'Let AI decide'
+        | 'Work Experience'
+        | 'Projects'
+        | 'Professional Summary'
+        | 'Education'
+        | 'Skills'
       >
-    >('Work Experience')
+    >('Let AI decide')
   const [loading,setLoading]=useState(false)
   const [loadingStage, setLoadingStage] = useState<'analysis' | 'suggestions'>('analysis')
   const [regenerating, setRegenerating] = useState(false)
@@ -342,12 +462,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
         )
         if (cancelled || controller.signal.aborted) return
         setResult({ ...matched, ...response })
-        setRecommendations(response.suggestions.map((item) => createRecommendation({
-          section_name: sectionNameFromPath(item.resume_id),
-          original_text: item.before,
-          suggested_change: item.suggestion,
-          reasoning: item.reason,
-        })))
+        setRecommendations(recommendationsFromResponse(response, draft.sections))
       } catch (error) {
         if (!cancelled && !controller.signal.aborted) {
           setError(error instanceof Error ? error.message : 'Tailoring failed.')
@@ -432,13 +547,15 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       }
       setResult({ ...matched, ...response })
       setRequirementsJobKey(jobRequirementsKey(job))
+      const unappliedRecommendations = recommendations.filter(
+        (recommendation) =>
+          !appliedRecommendationKeys.has(recommendationKey(recommendation)),
+      )
       setAppliedRecommendationKeys(new Set())
-      setRecommendations(response.suggestions.map((item) => createRecommendation({
-        section_name: sectionNameFromPath(item.resume_id),
-        original_text: item.before,
-        suggested_change: item.suggestion,
-        reasoning: item.reason,
-      })))
+      setRecommendations(mergeRecommendations(
+        unappliedRecommendations,
+        recommendationsFromResponse(response, tailored.sections),
+      ))
     } catch (error) {
       if (!controller.signal.aborted) {
         setError(error instanceof Error ? error.message : 'Tailoring failed.')
@@ -647,7 +764,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       )
       if (controller.signal.aborted) return 'Evidence generation was canceled.'
       const additions = suggestions.suggestions.map((item) => {
-        const newEntry: WorkExperience | Project | undefined =
+        const newEntry: WorkExperience | Project | Skill | undefined =
           item.new_entry && item.section_name === 'Work Experience'
             ? {
               job_title: item.new_entry.job_title ?? '',
@@ -655,27 +772,34 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
               location: item.new_entry.location ?? '',
               start_date: item.new_entry.start_date ?? '',
               end_date: item.new_entry.end_date ?? '',
-              description: item.new_entry.description,
+              description: item.new_entry.description ?? '',
             }
             : item.new_entry && item.section_name === 'Projects'
               ? {
                 name: item.new_entry.name ?? '',
-                description: item.new_entry.description,
+                description: item.new_entry.description ?? '',
                 link: item.new_entry.link ?? '',
               }
+              : item.new_entry && item.section_name === 'Skills'
+                ? { skill_name: item.new_entry.skill_name ?? '' }
               : undefined
+        const newEntryDescription = newEntry && 'description' in newEntry
+          ? newEntry.description
+          : ''
         return createRecommendation({
+          action: item.action,
           section_name: item.section_name,
           original_text: item.original_text,
-          suggested_change: item.suggestion || newEntry?.description || '',
+          suggested_change: item.suggestion || newEntryDescription,
           reasoning: item.reason || 'Based on the experience you provided.',
+          resume_id: item.resume_id,
           ...(newEntry ? { new_entry: newEntry } : {}),
         })
       })
-      setRecommendations((current) => [...current, ...additions])
+      setRecommendations((current) => mergeRecommendations(current, additions))
       const evidenceKeywords = items.map((item) => skillKey(item.requirement))
       const addressedRequirements = new Set(
-        matched.requirements.requirements
+        suggestions.suggestions.map((item) => skillKey(item.requirement)).concat(matched.requirements.requirements
           .filter((requirement) => [
             requirement.requirement,
             ...requirement.direct_search_terms,
@@ -686,7 +810,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
               normalizedTerm.startsWith(`${keyword} `) ||
               normalizedTerm.includes(` ${keyword} `))
           }))
-          .map((requirement) => skillKey(requirement.requirement)),
+          .map((requirement) => skillKey(requirement.requirement))),
       )
       setResult((current) => current ? {
         ...current,
@@ -870,36 +994,86 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
     return null
   }
   const applyRecommendation = (change: SuggestionChange): string | null => {
-    if (change.newEntry) {
-      const newEntry = {
-        ...change.newEntry,
-        description: change.newText.trim(),
+    if (change.suggestion.action === 'remove') {
+      const target = change.target
+      if (!target || !tailored) return 'This removal does not target an existing resume entry.'
+      const section = tailored.sections.find((item) => item.key === target.sectionKey)
+      const entry = section?.entries[target.entryIndex]
+      if (entry === undefined) return 'The entry targeted for removal no longer exists.'
+
+      if (target.sectionKey === 'skills' && typeof entry !== 'string'
+        && 'skill_name' in entry) {
+        if (skillKey(entry.skill_name) !== skillKey(change.previousText)) {
+          return 'The skill changed since this removal was suggested. Review it before removing.'
+        }
+        markChanged(target.sectionKey, target.entryIndex, '__removed__')
+        setTailored((current) => current && ({
+          ...current,
+          sections: current.sections.map((item) => item.key !== target.sectionKey
+            ? item
+            : {
+              ...item,
+              entries: item.entries.filter((_, index) => index !== target.entryIndex),
+            }),
+        }))
+        setAppliedTone(null)
+        setMessage('Removal applied to the tailored copy only.')
+      } else {
+        const error = applySuggestion({ ...change, newText: '' })
+        if (error) return error
       }
-      const newSection: TailorSection = 'job_title' in newEntry
-        ? {
-          key: 'work_experience',
-          title: 'Work Experience',
-          entries: [newEntry],
-        }
-        : {
-          key: 'projects',
-          title: 'Projects',
-          entries: [newEntry],
-        }
-      const sectionKey = newSection.key
+      setAppliedRecommendationKeys((current) => new Set(current).add(
+        recommendationKey(change.suggestion),
+      ))
+      return null
+    }
+
+    if (change.newEntry) {
+      const newEntry = change.newEntry
+      if ('skill_name' in newEntry && tailored?.sections
+        .find((section) => section.key === 'skills')?.entries.some((entry) =>
+          typeof entry !== 'string' && 'skill_name' in entry
+          && skillKey(entry.skill_name) === skillKey(newEntry.skill_name))) {
+        return 'This skill is already listed in the resume.'
+      }
+      const sectionKey = 'job_title' in newEntry
+        ? 'work_experience'
+        : 'skill_name' in newEntry
+          ? 'skills'
+          : 'school' in newEntry
+            ? 'education'
+            : 'projects'
+      const fieldKey = sectionKey === 'skills' ? 'skill_name' : 'description'
+      const updatedEntry = 'skill_name' in newEntry
+        ? { ...newEntry, skill_name: change.newText.trim() }
+        : 'description' in newEntry
+          ? { ...newEntry, description: change.newText.trim() }
+          : newEntry
+      const newSection: TailorSection = {
+        key: sectionKey,
+        title: {
+          work_experience: 'Work Experience',
+          education: 'Education',
+          skills: 'Skills',
+          projects: 'Projects',
+          certifications: 'Certifications',
+          summary: 'Professional Summary',
+        }[sectionKey],
+        entries: [updatedEntry],
+      }
       if (sectionNameFromPath(sectionKey) !== change.suggestion.section_name) {
         return 'This suggestion targets an invalid resume section.'
       }
       if (!tailored) return 'No tailored resume is available.'
       const section = tailored.sections.find((item) => item.key === sectionKey)
       const entryIndex = section?.entries.length ?? 0
-      markChanged(sectionKey, entryIndex, 'description')
+      markChanged(sectionKey, entryIndex, fieldKey)
       setTailored((current) => {
         if (!current) return current
         const exists = current.sections.some((item) => item.key === sectionKey)
         const sections = exists
           ? current.sections.map((item) => item.key === sectionKey
-            ? { ...item, entries: [...item.entries, newEntry] }
+            ? { ...item, entries: [...item.entries, updatedEntry] }
             : item)
           : [...current.sections, newSection]
         return { ...current, sections }
@@ -918,6 +1092,16 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
       ))
     }
     return error
+  }
+  const dismissRecommendation = (recommendation: ResumeRecommendation) => {
+    setRecommendations((current) =>
+      current.filter((item) => item.id !== recommendation.id),
+    )
+    setAppliedRecommendationKeys((current) => {
+      const next = new Set(current)
+      next.delete(recommendationKey(recommendation))
+      return next
+    })
   }
   // Export the live tailored state, never the original sessionStorage draft.
   const tailoredFilename = () => {
@@ -1007,15 +1191,14 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
                 onRemoveKeyword={removeAtsKeyword}
                 onAddUserEvidence={addUserEvidence}
                 manuallyFoundSkills={manuallyFoundSkills}
+                educationAvailable={Boolean(
+                  tailored.sections.find((section) => section.key === 'education')
+                    ?.entries.some((entry) =>
+                      typeof entry !== 'string'
+                      && 'school' in entry
+                      && Boolean(entry.school.trim())),
+                )}
               />
-              {result?.requirements && (
-                <details className="tailor-requirements-debug">
-                  <summary>
-                    Exact AI-extracted requirements ({result.requirements.requirements.length})
-                  </summary>
-                  <pre>{JSON.stringify(result.requirements, null, 2)}</pre>
-                </details>
-              )}
             </section>
           )}
           {loading && <TailoringLoading stage={loadingStage} />}
@@ -1081,7 +1264,9 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
                 {!loading && result && (
                   recommendations.length > 0 ? (
                     <ResumeSuggestions recommendations={recommendations}
-                      sections={tailored.sections} onApplySuggestion={applyRecommendation} />
+                      sections={tailored.sections}
+                      onApplySuggestion={applyRecommendation}
+                      onDismissSuggestion={dismissRecommendation} />
                   ) : <p>No wording changes were recommended.</p>
                 )}
                 {!loading && result && (
@@ -1107,7 +1292,7 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
                             onClick={() => {
                               setEvidenceImprovement(item)
                               setImprovementEvidenceText('')
-                              setImprovementEvidenceSection('Work Experience')
+                              setImprovementEvidenceSection('Let AI decide')
                             }}
                           >
                             Add evidence
@@ -1197,9 +1382,17 @@ export function TailorResumeInsights({ jobDescription,title,company,resume_id, o
                   )}
                   style={{ display: 'block', width: '100%', margin: '8px 0 16px', padding: 10 }}
                 >
+                  <option value="Let AI decide">Let AI decide</option>
                   <option value="Work Experience">Work Experience</option>
                   <option value="Projects">Projects</option>
                   <option value="Professional Summary">Professional Summary</option>
+                  {tailored.sections.find((section) => section.key === 'education')
+                    ?.entries.some((entry) =>
+                      typeof entry !== 'string'
+                      && 'school' in entry
+                      && Boolean(entry.school.trim()))
+                    && <option value="Education">Education</option>}
+                  <option value="Skills">Skills</option>
                 </select>
                 <label htmlFor="improvement-evidence-text">Your evidence</label>
                 <textarea

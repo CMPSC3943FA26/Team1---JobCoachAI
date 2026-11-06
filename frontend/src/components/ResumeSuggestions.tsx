@@ -12,6 +12,7 @@ interface ResumeSuggestionsProps {
   recommendations: ResumeRecommendation[]
   sections: ResumeSectionLike[]
   onApplySuggestion: (change: SuggestionChange) => string | null
+  onDismissSuggestion: (suggestion: ResumeRecommendation) => void
   onRegenerateSection?: (sectionName: string) => void
 }
 
@@ -98,6 +99,7 @@ export function ResumeSuggestions({
   recommendations,
   sections,
   onApplySuggestion,
+  onDismissSuggestion,
   onRegenerateSection,
 }: ResumeSuggestionsProps) {
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
@@ -276,6 +278,7 @@ export function ResumeSuggestions({
                     const isEditing = editingKey === key
                     const appliedChange = visibleAppliedChanges[key]
                     const isApplied = Boolean(appliedChange)
+                    const isRemoval = suggestion.action === 'remove'
                     const suggestedText = appliedChange?.text ?? suggestion.suggested_change
                     const originalText = suggestion.original_text
 
@@ -294,7 +297,11 @@ export function ResumeSuggestions({
                         <div className="suggestion-diff">
                           <div className="suggestion-diff-block suggestion-diff-original">
                             <span className="suggestion-diff-label">
-                              {suggestion.new_entry ? 'New resume entry' : 'Original'}
+                              {isRemoval
+                                ? 'Existing entry'
+                                : suggestion.new_entry
+                                  ? 'New resume entry'
+                                  : 'Original'}
                             </span>
 
                             <p className="suggestion-diff-text">
@@ -318,7 +325,14 @@ export function ResumeSuggestions({
                             </p>
                           </div>
 
-                          {isEditing ? (
+                          {isRemoval ? (
+                            <div className="suggestion-diff-block suggestion-diff-suggested">
+                              <span className="suggestion-diff-label">Removal</span>
+                              <p className="suggestion-diff-text">
+                                This entry will be removed if you confirm.
+                              </p>
+                            </div>
+                          ) : isEditing ? (
                             <div className="suggestion-edit">
                               <span className="suggestion-edit-label">
                                 Edited suggestion
@@ -380,7 +394,7 @@ export function ResumeSuggestions({
                               <line x1="12" y1="8" x2="12.01" y2="8" />
                             </svg>
 
-                            Why this change
+                            {isRemoval ? 'Why remove this entry?' : 'Why this change'}
                           </span>
 
                           <p>
@@ -397,7 +411,7 @@ export function ResumeSuggestions({
                         )}
 
                         <div className="suggestion-actions">
-                          {isEditing ? (
+                          {isEditing && !isRemoval ? (
                             <>
                               <button
                                 type="button"
@@ -422,20 +436,22 @@ export function ResumeSuggestions({
                             </>
                           ) : (
                             <>
-                              <button
-                                type="button"
-                                className="suggestion-btn suggestion-btn-edit"
-                                disabled={isApplied && Boolean(suggestion.new_entry)}
-                                onClick={() => {
-                                  setEditingKey(key)
-                                  setEditValue(suggestedText)
-                                  setApplyError(null)
-                                }}
-                              >
-                                Edit Suggestion
-                              </button>
+                              {!isRemoval && (
+                                <button
+                                  type="button"
+                                  className="suggestion-btn suggestion-btn-edit"
+                                  disabled={isApplied && Boolean(suggestion.new_entry)}
+                                  onClick={() => {
+                                    setEditingKey(key)
+                                    setEditValue(suggestedText)
+                                    setApplyError(null)
+                                  }}
+                                >
+                                  Edit Suggestion
+                                </button>
+                              )}
 
-                              {onRegenerateSection && (
+                              {!isRemoval && onRegenerateSection && (
                                 <button
                                   type="button"
                                   className="suggestion-btn suggestion-btn-edit"
@@ -449,13 +465,28 @@ export function ResumeSuggestions({
                                 </button>
                               )}
 
+                              {isRemoval && (
+                                <button
+                                  type="button"
+                                  className="suggestion-btn suggestion-btn-cancel"
+                                  onClick={() => {
+                                    onDismissSuggestion(suggestion)
+                                    setApplyError(null)
+                                  }}
+                                >
+                                  Dismiss
+                                </button>
+                              )}
+
                               <button
                                 type="button"
                                 className="suggestion-btn suggestion-btn-apply"
-                                disabled={isApplied && Boolean(suggestion.new_entry)}
+                                disabled={isApplied && (isRemoval || Boolean(suggestion.new_entry))}
                                 onClick={() => applyChange(suggestion, suggestedText, key)}
                               >
-                                {isApplied && suggestion.new_entry ? 'Applied' : 'Apply to Resume'}
+                                {isApplied
+                                  ? isRemoval ? 'Removed' : 'Applied'
+                                  : isRemoval ? 'Remove from Resume' : 'Apply to Resume'}
                               </button>
                             </>
                           )}
@@ -477,7 +508,7 @@ export function ResumeSuggestions({
                               <polyline points="20 6 9 17 4 12" />
                             </svg>
 
-                            Applied to your resume
+                            {isRemoval ? 'Removed from your resume' : 'Applied to your resume'}
                           </div>
                         )}
                       </div>

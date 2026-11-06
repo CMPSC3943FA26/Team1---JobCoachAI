@@ -24,6 +24,7 @@ export type Education = {
   school: string;
   degree: string;
   field_of_study: string;
+  description: string;
   start_date: string;
   end_date: string;
   sort_order?: number;
@@ -152,6 +153,7 @@ export const initialResume: Resume = {
       school: "California College of the Arts",
       degree: "B.A.",
       field_of_study: "Interaction Design",
+      description: "",
       start_date: "2015",
       end_date: "2019",
     },
@@ -198,6 +200,7 @@ export const resumeSectionEntries: ResumeSectionEntries = {
     school: "",
     degree: "",
     field_of_study: "",
+    description: "",
     start_date: "",
     end_date: "",
   },

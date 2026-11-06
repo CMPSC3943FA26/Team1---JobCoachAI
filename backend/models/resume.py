@@ -22,6 +22,7 @@ class Education(BaseModel):
     school: str
     degree: Optional[str] = None
     field_of_study: Optional[str] = None
+    description: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     sort_order: int

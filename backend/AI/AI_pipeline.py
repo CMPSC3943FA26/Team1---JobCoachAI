@@ -7,6 +7,8 @@ import json
 import os
 import logging
 import re
+from pathlib import Path
+from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from time import perf_counter
 from uuid import uuid4
@@ -72,6 +74,54 @@ def _diagnostic_output(content, limit=12000):
     return content[:limit] + "... [truncated]"
 
 
+def _write_ai_capture(capture):
+    """Write an AI capture to a sortable local file when capture is enabled."""
+    if os.getenv("AI_CAPTURE_RESPONSES", "").strip().lower() not in {
+        "1", "true", "yes", "on",
+    }:
+        return
+
+    output_dir = Path(os.getenv(
+        "AI_RESPONSE_CAPTURE_DIR",
+        os.path.join(os.path.dirname(__file__), "test-output"),
+    ))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    stage = capture.get("stage", "unknown")
+    safe_stage = re.sub(r"[^a-zA-Z0-9_-]+", "_", stage).strip("_") or "unknown"
+    captured_at = datetime.now(timezone.utc)
+    timestamp = captured_at.strftime("%Y%m%dT%H%M%S.%fZ")
+    output_path = output_dir / f"{timestamp}_{safe_stage}.json"
+    duplicate = 1
+    while output_path.exists():
+        output_path = output_dir / f"{timestamp}_{safe_stage}_{duplicate:02d}.json"
+        duplicate += 1
+    capture["captured_at"] = captured_at.isoformat(timespec="microseconds")
+    output_path.write_text(
+        json.dumps(capture, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    logger.info(
+        "AI output captured request_id=%s stage=%s path=%s",
+        capture.get("request_id"),
+        safe_stage,
+        output_path,
+    )
+
+
+def _capture_provider_response(
+    response_body, provider, model, stage, request_id, status,
+):
+    """Write a full provider response to a local file when capture is enabled."""
+    _write_ai_capture({
+        "request_id": request_id,
+        "provider": provider,
+        "model": model,
+        "stage": stage,
+        "status": status,
+        "response": response_body,
+    })
+
+
 prompt= """
 you are a job description analyzer. 
 you must analyze the job description and extract the requirements.
@@ -120,7 +170,8 @@ response=
 
 
 prompt = """
-You analyze job descriptions and extract concise, independent qualifications.
+You analyze job descriptions and extract concise, independently verifiable
+qualifications and meaningful job responsibilities.
 Return a JSON object with a "requirements" array. Each item must have:
 "requirement" (a concise qualification), "importance" ("required", "desired",
 or "mentioned"), "group" (a concise name for the scoring unit),
@@ -151,6 +202,11 @@ Group requirements according to the posting's actual logic:
   into independent mandatory requirements. Use "any" only when the posting
   says alternatives (e.g. "or", "one or more", "any of"). A comma-separated
   list without alternative wording is not automatically a set of requirements.
+- Split distinct skills when each is independently verifiable. For example,
+  "Strong C++, C programming" means separate C++ and C requirement rows in a
+  shared "all" group. Keep them together with "any" only when the posting
+  explicitly accepts either. Do not split a single qualification into
+  redundant subtopics.
 - If one sentence combines mandatory conditions with alternatives, split it
   into the smallest independently matchable requirements. Put each mandatory
   experience, setting, or duration condition in its own row in a shared "all"
@@ -176,15 +232,23 @@ Group requirements according to the posting's actual logic:
   conditions such as years of experience, industry setting, or degree field in
   the requirement itself; do not make those conditions disappear by grouping
   only their example technologies.
-- Do not extract marketing copy, responsibilities, benefits, compensation,
-  equal-opportunity/legal text, or boilerplate as qualifications unless the
-  posting explicitly makes them applicant requirements.
+- Extract a small set of relevant, concrete responsibilities or capabilities
+  stated outside formal qualification sections (such as software development,
+  testing, documentation, collaboration, or technical communication) as
+  "mentioned", unless the posting explicitly makes them required or desired.
+  Exclude generic company descriptions, benefits, compensation,
+  equal-opportunity/legal text, boilerplate, and redundant responsibilities.
+- Keep the set focused; do not turn every task or sentence into a separate
+  requirement.
 - Do not add a qualification merely because it is common for the job title.
 - Preserve qualifiers and negation. Do not invent dates or requirements.
 
-Direct search terms should be explicit wording or true aliases, not related
-skills. Related terms may support only a partial match. Keep the output limited
-to material qualifications and avoid duplicate or overlapping groups.
+Direct search terms should be specific to the stated qualification or its true
+aliases, not merely related skills. For example, C is not C++, and Linux is not
+embedded Linux development. Put potentially relevant but insufficient evidence
+in related_search_terms; it may support only a partial match. Include useful
+wording variations without broadening the qualification. Avoid duplicate or
+overlapping requirements.
 """
 
 prompt_combined = """
@@ -838,8 +902,9 @@ A supported requirement does not mean its supporting resume entry is already
 written optimally. A meaningful rewrite does not need to establish an additional
 qualification. Presenting existing evidence more effectively is itself valuable.
 
-Review the entire resume, including relevant projects, work experience, and
-skills, rather than considering only fields directly matched to requirements.
+Review the entire resume, including relevant projects, work experience,
+education, and skills, rather than considering only fields directly matched to
+requirements.
 
 For each relevant entry, evaluate:
 1. Does it emphasize the experience most relevant to this particular job?
@@ -867,6 +932,11 @@ Do not rewrite entries that are already effective merely to increase the number
 of suggestions. Every suggested replacement must offer a meaningful improvement
 over the original.
 
+Keep the editing process focused: identify the strongest evidence-supported
+edit for each field and draft it once. Once a suggestion is accurate and
+meaningfully improves the resume, use it; do not spend time on repeated minor
+wording revisions or near-duplicate alternatives.
+
 SUGGESTIONS:
 - Use suggestions for concrete edits to existing resume text fields.
 - Return the COMPLETE replacement text for the targeted field, not just the
@@ -878,11 +948,31 @@ SUGGESTIONS:
   qualifications already established by the resume.
 - Generate at most one suggestion per original resume text field, considering
   all relevant requirements for that field together.
+- Combine compatible improvements to clarity, terminology, relevance,
+  conciseness, and factual correction into one complete replacement. Preserve
+  important facts and do not combine unrelated facts or transfer experience
+  between entries.
 - Do not generate duplicate, conflicting, or exact no-op suggestions.
 - Use an exact existing resume text-field path for resume_id, not a section,
   collection, or record path.
+- If a relevant skill is not listed but is clearly established by the resume,
+  add it as a separate Skills entry. Never replace or combine it with an
+  unrelated existing skill. Do not add a skill based only on the job
+  description, a related technology, or an inference about what the candidate
+  may know. If the resume does not establish the skill, ask whether the
+  candidate has used or learned it in improvements instead.
+- Never add a skill that is already listed, including an equivalent spelling
+  or alias.
+- Education descriptions may summarize only relevant coursework, academic
+  projects, or other details explicitly supported by the education entry or
+  applicable user evidence. Preserve school, degree, field of study, and dates.
 - Use the exact supplied requirement name most relevant to the edit.
   Do not invent or rename requirements.
+  For general replacement edits such as typo corrections, capitalization,
+  formatting, or clarity with no meaningful job requirement, set requirement
+  to null. Skill additions and clarification requests still need a requirement.
+  User evidence may establish multiple skills regardless of which requirement
+  the user selected when submitting it; use explicit facts across that evidence.
 - Do not return original resume text separately; the backend retrieves it
   using resume_id.
 - Do not target resume.professional_summary. Professional summaries are
@@ -924,7 +1014,8 @@ Before returning a suggestion, verify:
 4. The replacement meaningfully improves relevance, clarity, specificity,
    or conciseness.
 5. The resume_id identifies an exact existing text field.
-6. The requirement name is copied exactly from the supplied job requirements.
+6. The requirement name is copied exactly from the supplied job requirements,
+   or is null for a general replacement edit with no meaningful requirement.
 7. The replacement preserves important established information.
 
 If a proposed rewrite depends on missing or ambiguous factual information,
@@ -952,6 +1043,9 @@ Each suggestion must contain:
 - resume_id
 - suggestion
 - reason
+- action ("replace" or "add")
+- section_name (empty for replacements; "Skills" for skill additions)
+- new_entry (empty skill_name for replacements; a skill_name for additions)
 
 Each removal must contain:
 - resume_id
@@ -997,7 +1091,17 @@ ANALYSIS_SCHEMA = _object_schema({
 })
 
 SUGGESTIONS_SCHEMA = _object_schema({
-    "suggestions": ANALYSIS_SCHEMA["properties"]["suggestions"],
+    "suggestions": _array_schema(_object_schema({
+        "requirement": {"type": ["string", "null"]},
+        "resume_id": _STRING,
+        "suggestion": _STRING,
+        "reason": _STRING,
+        "action": {"type": "string", "enum": ["replace", "add"]},
+        "section_name": _STRING,
+        "new_entry": _object_schema({
+            "skill_name": _STRING,
+        }),
+    })),
     "removals": ANALYSIS_SCHEMA["properties"]["removals"],
     "improvements": ANALYSIS_SCHEMA["properties"]["improvements"],
 })
@@ -1007,12 +1111,25 @@ Write three job-tailored professional summaries using the complete supplied
 resume and job description. Return one option for each requested tone:
 executive, technical, and concise.
 
+Aim for 40-55 words in executive and technical summaries; keep each at
+60 words or fewer, usually two sentences. Aim for 25-35 words in the concise
+summary and keep it to 40 words or fewer, usually one or two sentences. There is no
+minimum word count; prioritize complete, accurate wording over padding.
+Select only the strongest relevant facts rather than listing every skill or
+project. Tone changes emphasis, not length or the candidate's experience level.
+
 The resume is the sole source of candidate facts. Emphasize relevant experience,
 skills, education, and accomplishments already stated in the resume. Never
 invent qualifications, tools, responsibilities, outcomes, or metrics, and do
 not present requirements from the job description as candidate experience.
 Use the job description to select relevant facts and terminology. Keep each
 summary professional, accurate, and suitable for a resume.
+Preserve factual accuracy and the strength of the original claims: coursework
+is not professional experience, participation is not leadership, and using a
+tool does not imply expertise. Do not add unsupported qualitative claims.
+Check the facts and relevance, then draft it once. Do not spend reasoning on
+minor wording revisions or repeatedly debate equivalent word choices. Focus
+reasoning on factual accuracy, meaningful relevance, and concise presentation.
 
 Return only JSON matching the supplied schema.
 """
@@ -1032,11 +1149,15 @@ You create targeted resume edits based only on the user's newly provided evidenc
 Do not regenerate, review, or return any existing suggestions.
 
 For every requested target section, create exactly one separate suggestion:
+- If target_section is "Let AI decide", choose the single most appropriate
+  concrete section using the user's evidence and existing resume. Return that
+  concrete target_section, never "Let AI decide". Coursework usually belongs
+  in an existing Education description. Do not turn interests, motivation,
+  broad qualifications, or entire requirement sentences into skill names.
 - Every suggestion field must contain a non-empty, useful value. In particular,
-  "suggestion" must never be empty or whitespace-only. For action "add", put
-  the complete proposed entry description in both "suggestion" and
-  new_entry.description. For action "replace", put the complete replacement
-  text in "suggestion".
+  "suggestion" must never be empty or whitespace-only. For action "add",
+  include the complete proposed entry in "suggestion". For action "replace",
+  put the complete replacement text in "suggestion".
 - Professional Summary: return a complete replacement for the current
   professional summary. Use action "replace", resume_id
   "resume.professional_summary", and leave new_entry fields empty.
@@ -1051,6 +1172,17 @@ For every requested target section, create exactly one separate suggestion:
   new entry with action "add", leave resume_id empty, and fill only facts
   stated in the supplied user evidence. Unknown employer, title, location,
   dates, project name, or link must remain empty.
+- Skills: add the explicitly supported skill as its own entry with action
+  "add", an empty resume_id, and new_entry.skill_name set to the skill named
+  by the requirement. Do not edit or combine it with an existing skill.
+- Education: add only supported details to an existing education entry's
+  description. Prefer action "replace" with resume_id set to that exact
+  education description field (for example
+  "education[0].description"), including when the current description is
+  empty. Return the complete description and preserve the institution, degree,
+  field of study, and dates. If no existing education entry is a fit, do not
+  create an education record unless the user evidence explicitly supplies the
+  institution and all facts needed for that record.
 
 The user evidence is an explicit candidate claim. The current resume and job
 description provide context, but do not use them to invent details for a new
@@ -1060,9 +1192,10 @@ interest, motivation, and passion as explicit user-provided evidence. When
 Projects is selected, incorporate such evidence naturally into a relevant
 existing project description while preserving its established technical details.
 Do not invent circumstances such as independent development unless the resume or
-user explicitly establishes them. Do not edit skills, education, existing
-entries outside the requested target section, or any section that was not
-requested.
+user explicitly establishes them. Do not edit existing entries outside the
+requested target section or any section that was not requested. For education
+descriptions, do not invent courses, grades, qualifications, or academic
+accomplishments.
 
 Return one suggestion for each distinct requirement/target-section pair in
 USER-PROVIDED EVIDENCE, and no other suggestions. Return only JSON matching the
@@ -1074,7 +1207,10 @@ EVIDENCE_SUGGESTION_SCHEMA = _object_schema({
         "requirement": _STRING,
         "target_section": {
             "type": "string",
-            "enum": ["Professional Summary", "Work Experience", "Projects"],
+            "enum": [
+                "Professional Summary", "Work Experience", "Projects",
+                "Education", "Skills",
+            ],
         },
         "action": {"type": "string", "enum": ["add", "replace"]},
         "resume_id": _STRING,
@@ -1088,6 +1224,10 @@ EVIDENCE_SUGGESTION_SCHEMA = _object_schema({
             "end_date": _STRING,
             "description": _STRING,
             "link": _STRING,
+            "skill_name": _STRING,
+            "school": _STRING,
+            "degree": _STRING,
+            "field_of_study": _STRING,
         }),
     })),
 })
@@ -1135,7 +1275,7 @@ def request_ai(
         model = "qwen-3.8-27b"
         payload = {
             "model": model,
-            "max_completion_tokens": 6000,
+            "max_completion_tokens": 8000,
             "messages": [{"role": "user", "content": content}],
             "reasoning_effort": reasoning_effort,
             "response_format": {
@@ -1187,12 +1327,6 @@ def request_ai(
         model,
         stage,
     )
-    logger.info(
-        "AI provider request payload request_id=%s stage=%s payload=%s",
-        request_id,
-        stage,
-        json.dumps(payload, ensure_ascii=False),
-    )
     try:
         response = requests.post(
             url=url,
@@ -1229,6 +1363,14 @@ def request_ai(
         response_body = response.json()
     except ValueError:
         response_body = {"body": response.text}
+    _capture_provider_response(
+        response_body,
+        provider,
+        model,
+        stage,
+        request_id,
+        response.status_code,
+    )
     rate_limit_headers = {
         key: value
         for key, value in response.headers.items()
@@ -1250,7 +1392,7 @@ def request_ai(
     logger.info(
         "AI provider response request_id=%s stage=%s status=%s "
         "elapsed_seconds=%.2f completion_tokens=%s reasoning_tokens=%s "
-        "finish_reason=%s headers=%s body=%s",
+        "finish_reason=%s headers=%s",
         request_id,
         stage,
         response.status_code,
@@ -1259,7 +1401,6 @@ def request_ai(
         completion_details.get("reasoning_tokens", usage.get("reasoning_tokens")),
         finish_reason,
         json.dumps(rate_limit_headers, sort_keys=True),
-        json.dumps(response_body, ensure_ascii=False),
     )
     if not response.ok:
         logger.warning(
@@ -1410,7 +1551,7 @@ def process_resume(test_resume):
         "skills": ["skill_name"],
         "work_experience": ["job_title", "description"],
         "projects": ["name", "description"],
-        "education": ["degree", "field_of_study"],
+        "education": ["degree", "field_of_study", "description"],
         "certifications": ["name"],
     }
 
@@ -1449,7 +1590,8 @@ SKILL_ALIASES = (
     ("postgresql", "postgres"),
     ("microsoft sql server", "sql server", "mssql"),
     ("c sharp", "c#"),
-    ("c plus plus", "c++"),
+    ("c", "c programming", "c language"),
+    ("c plus plus", "c++", "c++ programming"),
     ("node js", "nodejs", "node.js"),
     ("react", "reactjs"),
     ("vue js", "vue.js", "vuejs"),
@@ -2016,13 +2158,6 @@ def parse_ai_response(response, request_id="unknown", stage="unknown"):
     try:
         result = json.loads(content)
     except json.JSONDecodeError as exc:
-        if stage == "job_requirements":
-            logger.warning(
-                "AI output for failed job requirements JSON request_id=%s "
-                "output=%s",
-                request_id,
-                _diagnostic_output(content),
-            )
         logger.warning(
             "AI content JSON parsing failed request_id=%s stage=%s "
             "line=%s column=%s",
@@ -2163,10 +2298,9 @@ def parse_ai_response(response, request_id="unknown", stage="unknown"):
         if stage == "job_requirements":
             logger.warning(
                 "AI job requirements validation failed request_id=%s "
-                "errors=%s output=%s",
+                "errors=%s",
                 request_id,
                 json.dumps(validation_errors),
-                _diagnostic_output(content),
             )
         else:
             logger.warning(
@@ -2208,7 +2342,11 @@ def build_frontend_response(stage_3, stage_2):
         "suggestions": [],
         "improvements": [],
         "removals": [
-            {"relevant_text": item["text"], "reason": item["reason"]}
+            {
+                "relevant_text": item["text"],
+                "reason": item["reason"],
+                "resume_id": item["resume_id"],
+            }
             for item in stage_3.get("removals", [])
         ],
         "missing_requirements": [
@@ -2243,16 +2381,26 @@ def build_frontend_response(stage_3, stage_2):
         return matching_group
 
     for item in stage_3.get("suggestions", []):
-        requirement = find_requirement(item["requirement"])
-        frontend_response["suggestions"].append({
+        requirement = (
+            find_requirement(item["requirement"])
+            if item["requirement"] is not None else None
+        )
+        suggestion = {
             "suggestion": item["suggestion"],
-            "type": requirement["classification"],
+            "type": requirement["classification"] if requirement else "general",
             "requirement": item["requirement"],
-            "importance": importance_values[requirement["importance"]],
+            "importance": importance_values[requirement["importance"]] if requirement else 0,
             "before": item["relevant_text"],
             "reason": item["reason"],
             "resume_id": item["resume_id"],
-        })
+        }
+        if item.get("action") == "add":
+            suggestion.update({
+                "action": "add",
+                "section_name": item["section_name"],
+                "new_entry": item["new_entry"],
+            })
+        frontend_response["suggestions"].append(suggestion)
 
     for item in stage_3.get("improvements", []):
         requirement = find_requirement(item["requirement"])
@@ -2337,20 +2485,62 @@ def restore_combined_resume_text(response, structured_resume):
         for item in requirement.get("evidence", []):
             resolve(item)
 
+    normalized_suggestions = []
+    normalized_removals = [
+        {**item, "resume_id": resolve(item), "text": original(item)}
+        for item in response.get("removals", [])
+    ]
+    for item in response.get("suggestions", []):
+        if item.get("action") == "add":
+            entry = item.get("new_entry")
+            skill_name = entry.get("skill_name") if isinstance(entry, dict) else None
+            if (
+                item.get("section_name") != "Skills"
+                or item.get("resume_id") not in {
+                    "", "skills", "resume.skills",
+                    "skills.skill_name", "resume.skills.skill_name",
+                }
+                or not isinstance(skill_name, str)
+                or not skill_name.strip()
+            ):
+                raise ValueError("AI returned an invalid new skill suggestion")
+            normalized_suggestions.append({
+                **item,
+                "resume_id": "",
+                "relevant_text": "",
+                "suggestion": skill_name.strip(),
+                "new_entry": {"skill_name": skill_name.strip()},
+            })
+        else:
+            # An empty replacement deletes content; present it through the
+            # removal review flow rather than failing the entire response.
+            if isinstance(item.get("suggestion"), str) and not item["suggestion"].strip():
+                text = original(item)
+                if not text.strip():
+                    continue
+                path = resolve(item)
+                if not any(removal["resume_id"] == path for removal in normalized_removals):
+                    normalized_removals.append({
+                        "resume_id": path,
+                        "text": text,
+                        "reason": item["reason"],
+                    })
+                continue
+            normalized_suggestions.append({
+                **item,
+                "resume_id": resolve(item),
+                "relevant_text": original(item),
+                "action": "replace",
+            })
+
     return {
         **response,
-        "suggestions": [
-            {**item, "resume_id": resolve(item), "relevant_text": original(item)}
-            for item in response.get("suggestions", [])
-        ],
+        "suggestions": normalized_suggestions,
         "improvements": [
             {**item, "resume_id": resolve(item) if item.get("resume_id") else None}
             for item in response.get("improvements", [])
         ],
-        "removals": [
-            {**item, "resume_id": resolve(item), "text": original(item)}
-            for item in response.get("removals", [])
-        ],
+        "removals": normalized_removals,
     }
 
 
@@ -2402,6 +2592,7 @@ def _validate_user_evidence(user_evidence):
     if not isinstance(user_evidence, list):
         raise ValueError("user_evidence must be a list")
     valid_sections = {
+        "Let AI decide",
         "Work Experience", "Professional Summary", "Projects", "Education",
         "Skills", "Certifications",
     }
@@ -2642,27 +2833,66 @@ def deduplicate_suggestions(response):
         original = item.get("relevant_text")
         suggestion = item.get("suggestion")
         resume_id = item.get("resume_id")
+        action = item.get("action", "replace")
         if (
             not isinstance(original, str)
             or not isinstance(suggestion, str)
             or not isinstance(resume_id, str)
-            or not resume_id
+            or action not in {"replace", "add"}
         ):
             raise ValueError("AI suggestion fields are malformed")
-        if not original.strip() or not suggestion.strip():
+        if (action == "replace" and (not resume_id or not original.strip())) or not suggestion.strip():
             raise ValueError("AI suggestions must contain replacement text")
-        if original == suggestion:
+        if action == "replace" and original == suggestion:
             continue
-        previous = by_field.get(resume_id)
+        if action == "add":
+            if (
+                item.get("section_name") != "Skills"
+                or resume_id
+                or item.get("new_entry", {}).get("skill_name") != suggestion
+            ):
+                raise ValueError("AI returned an invalid skill addition")
+            key = f"add:skills:{_normalized_phrase(suggestion)}"
+        else:
+            key = f"replace:{resume_id}"
+        previous = by_field.get(key)
         if previous is not None and previous["suggestion"] != suggestion:
             raise ValueError(
-                f"AI returned conflicting suggestions for resume field {resume_id!r}"
+                f"AI returned conflicting suggestions for resume field {key!r}"
             )
         if previous is not None:
             continue
-        by_field[resume_id] = item
+        by_field[key] = item
         unique.append(item)
     return {**response, "suggestions": unique}
+
+
+def _keep_supported_skill_additions(
+    response, structured_resume, analysis, requirements, user_evidence=None
+):
+    """Pass AI skill suggestions through, excluding already-listed skills."""
+    existing_skills = {
+        _normalized_phrase(item["skill_name"])
+        for item in structured_resume.get("skills", [])
+        if isinstance(item, dict) and isinstance(item.get("skill_name"), str)
+    }
+    suggestions = []
+    addressed = set()
+    for item in response.get("suggestions", []):
+        if item.get("action") == "add":
+            skill_name = item["new_entry"]["skill_name"]
+            addressed.add(_normalized_phrase(item.get("requirement", "")))
+            if any(
+                _normalized_phrase(skill_name) in _alias_terms(existing)
+                for existing in existing_skills
+            ):
+                continue
+        suggestions.append(item)
+    improvements = [
+        item for item in response.get("improvements", [])
+        if _normalized_phrase(item.get("requirement", "")) not in addressed
+    ]
+    return {**response, "suggestions": suggestions, "improvements": improvements}
 
 
 def generate_tailoring_suggestions(
@@ -2741,6 +2971,9 @@ def generate_tailoring_suggestions(
             "Professional summaries must be generated by the summary request"
         )
     suggestions = restore_combined_resume_text(suggestions, structured_resume)
+    suggestions = _keep_supported_skill_additions(
+        suggestions, structured_resume, analysis, requirements, user_evidence
+    )
     suggestions = deduplicate_suggestions(suggestions)
     suggestions["missing_requirements"] = analysis["missing_requirements"]
     result = build_frontend_response(suggestions, analysis)
@@ -2770,10 +3003,11 @@ def generate_evidence_suggestions(
     if not user_evidence:
         raise ValueError("At least one user evidence item is required")
     allowed_sections = {
-        "Professional Summary", "Work Experience", "Projects",
+        "Professional Summary", "Work Experience", "Projects", "Education",
+        "Skills",
     }
-    if any(item["target_section"] not in allowed_sections for item in user_evidence):
-        raise ValueError("Evidence suggestions only support summary, work, or projects")
+    if any(item["target_section"] not in allowed_sections | {"Let AI decide"} for item in user_evidence):
+        raise ValueError("Evidence suggestions contain an unsupported target section")
 
     job_input = {
         "title": job.get("title"),
@@ -2810,6 +3044,23 @@ def generate_evidence_suggestions(
         raise ValueError("AI evidence suggestions must be a list")
     if not suggestions:
         raise ValueError("AI returned no suggestions for the supplied evidence")
+
+    # Resolve automatic targets from the model's concrete section choice.
+    for requirement, section in list(expected):
+        if section != "Let AI decide":
+            continue
+        choices = [
+            item for item in suggestions if isinstance(item, dict)
+            and _resolve_requirement_name(item.get("requirement", ""), requirements) == requirement
+        ]
+        if len(choices) != 1:
+            raise ValueError("AI must choose one section for automatic evidence")
+        chosen = choices[0].get("target_section", choices[0].get("section_name"))
+        if chosen not in allowed_sections:
+            raise ValueError("AI must choose a concrete resume section")
+        choices[0]["target_section"] = chosen
+        expected.remove((requirement, section))
+        expected.add((requirement, chosen))
 
     normalized_items = []
     for index, raw_item in enumerate(suggestions):
@@ -2870,6 +3121,9 @@ def generate_evidence_suggestions(
         if target_section == "Professional Summary":
             action = "replace"
             resume_id = "resume.professional_summary"
+        elif target_section == "Skills":
+            action = "add"
+            resume_id = ""
         elif isinstance(action, str) and action in {"new", "create", "add_entry"}:
             action = "add"
         elif isinstance(action, str) and action in {"edit", "update", "modify"}:
@@ -2907,6 +3161,10 @@ def generate_evidence_suggestions(
                 and isinstance(item["suggestion"], str) else ""
             ),
             "link": entry_text("link", "url"),
+            "skill_name": entry_text("skill_name", "skill"),
+            "school": entry_text("school", "institution"),
+            "degree": entry_text("degree"),
+            "field_of_study": entry_text("field_of_study", "major"),
         }
         if not isinstance(item.get("suggestion"), str):
             item["suggestion"] = ""
@@ -2936,6 +3194,8 @@ def generate_evidence_suggestions(
         target = item["target_section"]
         is_summary = target == "Professional Summary"
         entry = item["new_entry"]
+        action = item["action"]
+        resume_id = item["resume_id"]
         if is_summary:
             action = "replace"
             resume_id = "resume.professional_summary"
@@ -2947,6 +3207,45 @@ def generate_evidence_suggestions(
                 raise ValueError("Summary replacement suggestion cannot be empty")
             entry = None
             original_text = summary
+        elif target == "Skills":
+            if item["action"] != "add" or item["resume_id"]:
+                raise ValueError("AI returned an invalid skill addition")
+            skill_name = entry.get("skill_name", "").strip()
+            if not skill_name:
+                raise ValueError("New skill suggestions must include a skill name")
+            existing_skills = structured_resume.get("skills", [])
+            if not isinstance(existing_skills, list):
+                existing_skills = []
+            if any(
+                isinstance(skill, dict)
+                and isinstance(skill.get("skill_name"), str)
+                and (
+                    _normalized_phrase(skill_name)
+                    in _alias_terms(skill["skill_name"])
+                )
+                for skill in existing_skills
+            ):
+                raise ValueError("AI returned a skill that is already listed")
+            item["suggestion"] = skill_name
+            entry = {"skill_name": skill_name}
+            original_text = ""
+            action = "add"
+            resume_id = ""
+        elif target == "Education":
+            if item["action"] != "replace":
+                raise ValueError("Education suggestions must update an existing description")
+            match = re.fullmatch(r"education\[(\d+)\]\.description", resume_id)
+            education = structured_resume.get("education", [])
+            if not match or not isinstance(education, list):
+                raise ValueError("AI returned a replacement outside the education section")
+            entry_index = int(match.group(1))
+            if entry_index >= len(education) or not isinstance(education[entry_index], dict):
+                raise ValueError("AI returned an unknown education description")
+            original_text = education[entry_index].get("description", "")
+            if not isinstance(original_text, str) or not item["suggestion"].strip():
+                raise ValueError("Education description replacement cannot be empty")
+            entry = None
+            action = "replace"
         else:
             action = item["action"]
             resume_id = item["resume_id"]
@@ -3006,7 +3305,20 @@ def generate_evidence_suggestions(
             "reason": item["reason"],
             "new_entry": entry,
         })
-    return {"suggestions": normalized}
+    result = {"suggestions": normalized}
+    _write_ai_capture({
+        "request_id": request_id,
+        "provider": AI_PROVIDER,
+        "model": {
+            "cerebras": "qwen-3.8-27b",
+            "groq": "qwen/qwen3.8-27b",
+            "openrouter": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        }.get(AI_PROVIDER, ""),
+        "stage": "targeted_suggestions",
+        "status": "processed",
+        "response": result,
+    })
+    return result
 
 
 def generate_professional_summary_options(
@@ -3031,6 +3343,7 @@ def generate_professional_summary_options(
         prompt_content,
         schema_name="professional_summary_options",
         schema=PROFESSIONAL_SUMMARY_SCHEMA,
+        reasoning_effort="low",
         request_id=request_id,
         stage="professional_summary",
     )
@@ -3049,6 +3362,10 @@ def generate_professional_summary_options(
         text = item.get("text")
         if tone not in expected_tones or not isinstance(text, str) or not text.strip():
             raise ValueError("AI returned an invalid professional summary option")
+        maximum_words = 40 if tone == "concise" else 60
+        words = text.split()
+        if len(words) > maximum_words:
+            text = " ".join(words[:maximum_words])
         if tone in normalized:
             raise ValueError("AI returned duplicate professional summary tones")
         normalized[tone] = text.strip()

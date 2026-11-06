@@ -15,11 +15,14 @@
 export type Suggestion = {
   suggestion: string
   type: string
-  requirement: string
+  requirement: string | null
   importance: number
   before: string
   reason: string
   resume_id: string
+  action?: 'add' | 'replace'
+  section_name?: 'Skills'
+  new_entry?: { skill_name: string }
 }
 
 // A resume requirement that needs improvement.
@@ -48,6 +51,7 @@ export type UserEvidence = {
   requirement: string
   evidence: string
   target_section:
+    | 'Let AI decide'
     | 'Work Experience'
     | 'Professional Summary'
     | 'Projects'
@@ -59,8 +63,14 @@ export type UserEvidence = {
 
 export type EvidenceSectionSuggestion = {
   requirement: string
-  section_name: 'Professional Summary' | 'Work Experience' | 'Projects'
+  section_name:
+    | 'Professional Summary'
+    | 'Work Experience'
+    | 'Projects'
+    | 'Education'
+    | 'Skills'
   action: 'add' | 'replace'
+  resume_id: string
   original_text: string
   suggestion: string
   reason: string
@@ -70,9 +80,13 @@ export type EvidenceSectionSuggestion = {
     location?: string
     start_date?: string
     end_date?: string
-    description: string
+    description?: string
     name?: string
     link?: string
+    skill_name?: string
+    school?: string
+    degree?: string
+    field_of_study?: string
   } | null
 }
 
@@ -126,7 +140,7 @@ export type SummaryGenerationResponse = {
 
 export type TailoringResponse = AIResponse & {
   total_time_seconds?: number
-  removals: { relevant_text: string; reason: string }[]
+  removals: { relevant_text: string; reason: string; resume_id?: string }[]
   missing_requirements: { requirement: string }[]
   requirements: JobRequirements
   evidence?: RequirementMatch[]
@@ -134,7 +148,7 @@ export type TailoringResponse = AIResponse & {
 
 export type ResumeAnalysisResponse = AIResponse & {
   improvements: Improvement[]
-  removals: { relevant_text: string; reason: string }[]
+  removals: { relevant_text: string; reason: string; resume_id?: string }[]
   missing_requirements: { requirement: string }[]
   requirements: JobRequirements
   evidence: RequirementMatch[]

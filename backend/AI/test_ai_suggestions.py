@@ -7,6 +7,95 @@ from backend.AI import AI_pipeline
 from backend.AI.AI_pipeline import build_frontend_response
 
 
+def test_general_replacement_has_no_requirement_and_does_not_affect_score():
+    result = build_frontend_response({
+        "suggestions": [{
+            "requirement": None,
+            "resume_id": "skills[0].skill_name",
+            "relevant_text": "LInux",
+            "suggestion": "Linux",
+            "reason": "Corrects capitalization.",
+            "action": "replace",
+        }],
+        "improvements": [],
+        "removals": [],
+    }, {"evidence": []})
+    suggestion = result["suggestions"][0]
+    assert suggestion["requirement"] is None
+    assert suggestion["type"] == "general"
+    assert suggestion["importance"] == 0
+    assert suggestion["suggestion"] == "Linux"
+    assert result["ATS_score"] == 0
+    assert result["requirements_met"] == []
+
+
+def test_cpp_evidence_does_not_establish_c():
+    assert not AI_pipeline._exact_or_alias_match("Used C++ in Operating Systems.", "C")
+
+
+def test_c_skill_accepts_c_programming_search_term_and_cross_requirement_evidence():
+    requirement = "Strong C programming"
+    clarification = {
+        "requirement": requirement,
+        "resume_id": None,
+        "improvement": "Have you used C?",
+        "reason": "Confirm experience.",
+    }
+    normalized = AI_pipeline.restore_combined_resume_text({
+        "suggestions": [{
+            "requirement": requirement,
+            "resume_id": "",
+            "suggestion": "",
+            "action": "add",
+            "section_name": "Skills",
+            "new_entry": {"skill_name": "C"},
+            "reason": "User confirmed C coursework.",
+        }],
+        "improvements": [clarification],
+        "removals": [],
+    }, {"skills": []})
+    result = AI_pipeline._keep_supported_skill_additions(
+        normalized, {"skills": []}, {"evidence": []},
+        {"requirements": [
+            {"requirement": requirement, "direct_search_terms": ["C programming"]},
+            {"requirement": "Strong C++ programming", "direct_search_terms": ["C++"]},
+        ]},
+        [{
+            "requirement": "Strong C++ programming",
+            "evidence": "I used C in Programming 1 and 2 and C++ in Operating Systems.",
+            "target_section": "Let AI decide",
+        }],
+    )
+    assert result["suggestions"][0]["new_entry"] == {"skill_name": "C"}
+    assert result["improvements"] == []
+
+
+@pytest.mark.parametrize("text", ["", "   "])
+@pytest.mark.parametrize("existing_removal", [False, True])
+def test_empty_replacement_is_normalized_to_reviewable_removal(text, existing_removal):
+    removal = {
+        "resume_id": "skills[1].skill_name",
+        "reason": "Duplicate Git skill.",
+    }
+    response = AI_pipeline.restore_combined_resume_text({
+        "suggestions": [{
+            **removal,
+            "requirement": None,
+            "action": "replace",
+            "suggestion": text,
+        }],
+        "removals": [removal] if existing_removal else [],
+    }, {"skills": [{"skill_name": "Git"}, {"skill_name": "Git"}]})
+    response = AI_pipeline.deduplicate_suggestions(response)
+    frontend = build_frontend_response(response, {"evidence": []})
+    assert frontend["suggestions"] == []
+    assert frontend["removals"] == [{
+        "resume_id": "skills[1].skill_name",
+        "relevant_text": "Git",
+        "reason": "Duplicate Git skill.",
+    }]
+
+
 def _suggestion(requirement, resume_id, before, suggestion):
     return {
         "requirement": requirement,
@@ -339,9 +428,18 @@ def test_professional_summary_options_use_full_resume_and_job_input():
     }
     provider_result = {
         "summaries": [
-            {"tone": "executive", "text": "Results-focused software engineer."},
-            {"tone": "technical", "text": "Software engineer who builds web applications."},
-            {"tone": "concise", "text": "Software engineer with web application experience."},
+            {
+                "tone": "executive",
+                "text": " ".join(f"executive{i}" for i in range(38)),
+            },
+            {
+                "tone": "technical",
+                "text": " ".join(f"technical{i}" for i in range(120)),
+            },
+            {
+                "tone": "concise",
+                "text": " ".join(f"concise{i}" for i in range(50)),
+            },
         ],
     }
 
@@ -360,7 +458,273 @@ def test_professional_summary_options_use_full_resume_and_job_input():
         "executive", "technical", "concise",
     ]
     prompt_content = request_ai.call_args.args[0]
+    normalized_prompt = " ".join(prompt_content.split())
     assert "FULL RESUME" in prompt_content
     assert "FULL JOB DESCRIPTION" in prompt_content
     assert "Jordan Lee" in prompt_content
     assert "Software Engineer" in prompt_content
+    assert "60 words or fewer" in normalized_prompt
+    assert "no minimum word count" in normalized_prompt
+    assert len(result["options"][0]["text"].split()) == 38
+    assert "minor wording revisions" in normalized_prompt
+    assert "Preserve factual accuracy" in normalized_prompt
+    assert request_ai.call_args.kwargs["reasoning_effort"] == "low"
+
+
+def test_minor_revision_guidance_is_in_tailoring_suggestions_prompt():
+    suggestions_prompt = " ".join(AI_pipeline.SUGGESTIONS_PROMPT.split())
+    summary_prompt = " ".join(AI_pipeline.PROFESSIONAL_SUMMARY_PROMPT.split())
+    assert "draft it once" in suggestions_prompt
+    assert "minor wording revisions" in suggestions_prompt
+    assert "minor wording revisions" in summary_prompt
+
+
+def test_professional_summary_options_truncate_above_word_limits():
+    provider_result = {
+        "summaries": [
+            {
+                "tone": "executive",
+                "text": " ".join(f"executive{i}" for i in range(125)),
+            },
+            {
+                "tone": "technical",
+                "text": " ".join(f"technical{i}" for i in range(121)),
+            },
+            {
+                "tone": "concise",
+                "text": " ".join(f"concise{i}" for i in range(65)),
+            },
+        ],
+    }
+
+    with patch.object(
+        AI_pipeline,
+        "request_ai",
+        return_value=FakeProviderResponse(provider_result),
+    ):
+        result = AI_pipeline.generate_professional_summary_options({}, {})
+
+    assert [len(option["text"].split()) for option in result["options"]] == [
+        60, 60, 40,
+    ]
+
+
+@pytest.mark.parametrize("confirmed", [False, True])
+@pytest.mark.parametrize("evidence_requirement", ["C programming", "Python"])
+@pytest.mark.parametrize("addition_path", [
+    "", "skills", "resume.skills", "skills.skill_name", "resume.skills.skill_name",
+])
+@pytest.mark.parametrize("addition_text", ["", "Add C programming to the skills list"])
+def test_skill_additions_pass_without_evidence_classification(
+    confirmed, addition_path, addition_text, evidence_requirement,
+):
+    requirements = {
+        "requirements": [
+            {
+                "requirement": "Python",
+                "importance": "required",
+                "group": "Python",
+                "group_logic": "all",
+                "direct_search_terms": ["Python"],
+                "related_search_terms": [],
+            },
+            {
+                "requirement": "C programming",
+                "importance": "desired",
+                "group": "C programming",
+                "group_logic": "all",
+                "direct_search_terms": ["C programming", "C"],
+                "related_search_terms": [],
+            },
+        ],
+    }
+    analysis = {
+        "evidence": [
+            {
+                "requirement": "Python",
+                "group": "Python",
+                "group_logic": "all",
+                "classification": "supported",
+                "importance": "required",
+                "evidence": [{
+                    "resume_id": "projects[0].description",
+                    "source": "resume",
+                    "reason": "The project describes Python use.",
+                }],
+            },
+            {
+                "requirement": "C programming",
+                "group": "C programming",
+                "group_logic": "all",
+                "classification": "unsupported",
+                "importance": "desired",
+                "evidence": [],
+            },
+        ],
+        "missing_requirements": [{"requirement": "C programming"}],
+    }
+    provider_result = {
+        "suggestions": [
+            {
+                "requirement": "Python",
+                "resume_id": "",
+                "suggestion": "Python",
+                "reason": "The project description establishes Python use.",
+                "action": "add",
+                "section_name": "Skills",
+                "new_entry": {"skill_name": "Python"},
+            },
+            {
+                "requirement": "C programming",
+                "resume_id": addition_path,
+                "suggestion": addition_text,
+                "reason": "The job requests C.",
+                "action": "add",
+                "section_name": "Skills",
+                "new_entry": {"skill_name": "C programming"},
+            },
+        ],
+        "removals": [],
+        "improvements": [],
+    }
+    resume = {
+        "resume": {"professional_summary": ""},
+        "projects": [{"name": "Data cleanup", "description": "Used Python to clean data."}],
+        "skills": [{"skill_name": "JavaScript"}],
+    }
+
+    with patch.object(
+        AI_pipeline,
+        "request_ai",
+        return_value=FakeProviderResponse(provider_result),
+    ):
+        response = AI_pipeline.generate_tailoring_suggestions(
+            resume,
+            {"title": "Engineer", "company": "Example", "description": "Requires Python and C."},
+            requirements,
+            analysis,
+            user_evidence=[{
+                "requirement": evidence_requirement,
+                "evidence": "I used C programming in coursework assignments.",
+                "target_section": "Skills",
+            }] if confirmed else None,
+        )
+
+    assert [(item["section_name"], item["new_entry"]["skill_name"])
+            for item in response["suggestions"]] == [
+                ("Skills", "Python"), ("Skills", "C programming"),
+            ]
+    added = response["suggestions"][1]
+    assert added["suggestion"] == "C programming"
+    assert added["resume_id"] == ""
+    assert added["before"] == ""
+    assert response["improvements"] == []
+
+
+@pytest.mark.parametrize("automatic", [False, True])
+def test_targeted_evidence_can_add_skill_and_fill_existing_education_description(automatic):
+    requirements = {
+        "requirements": [
+            {
+                "requirement": "C programming",
+                "importance": "desired",
+                "group": "C programming",
+                "group_logic": "all",
+                "direct_search_terms": ["C programming", "C"],
+                "related_search_terms": [],
+            },
+            {
+                "requirement": "Database coursework",
+                "importance": "desired",
+                "group": "Database coursework",
+                "group_logic": "all",
+                "direct_search_terms": ["database coursework"],
+                "related_search_terms": [],
+            },
+        ],
+    }
+    resume = {
+        "resume": {"professional_summary": ""},
+        "skills": [{"skill_name": "Python"}],
+        "education": [{
+            "school": "Example University",
+            "degree": "B.S.",
+            "field_of_study": "Computer Science",
+            "description": "",
+            "start_date": "2022",
+            "end_date": "2026",
+        }],
+    }
+    evidence = [
+        {
+            "requirement": "C programming",
+            "target_section": "Skills",
+            "evidence": "Used C in a programming course project.",
+            "source": "user",
+        },
+        {
+            "requirement": "Database coursework",
+            "target_section": "Education",
+            "evidence": "Completed coursework in relational database design.",
+            "source": "user",
+        },
+    ]
+    empty_entry = {
+        "entry_title": "",
+        "company": "",
+        "location": "",
+        "start_date": "",
+        "end_date": "",
+        "description": "",
+        "link": "",
+        "skill_name": "",
+        "school": "",
+        "degree": "",
+        "field_of_study": "",
+    }
+    provider_result = {
+        "suggestions": [
+            {
+                "requirement": "C programming",
+                "target_section": "Skills",
+                "action": "add",
+                "resume_id": "",
+                "suggestion": "C programming",
+                "reason": "The user confirmed using C in coursework.",
+                "new_entry": {**empty_entry, "skill_name": "C programming"},
+            },
+            {
+                "requirement": "Database coursework",
+                "target_section": "Education",
+                "action": "replace",
+                "resume_id": "education[0].description",
+                "suggestion": "Completed coursework in relational database design.",
+                "reason": "Adds the coursework the user confirmed.",
+                "new_entry": empty_entry,
+            },
+        ],
+    }
+
+    if automatic:
+        for item in evidence:
+            item["target_section"] = "Let AI decide"
+
+    with patch.object(
+        AI_pipeline,
+        "request_ai",
+        return_value=FakeProviderResponse(provider_result),
+    ):
+        response = AI_pipeline.generate_evidence_suggestions(
+            resume,
+            {"title": "Engineer", "company": "Example", "description": "Job"},
+            requirements,
+            evidence,
+        )
+
+    skills, education = response["suggestions"]
+    assert skills["action"] == "add"
+    assert skills["new_entry"] == {"skill_name": "C programming"}
+    assert education["action"] == "replace"
+    assert education["resume_id"] == "education[0].description"
+    assert education["original_text"] == ""
+    assert resume["education"][0]["school"] == "Example University"

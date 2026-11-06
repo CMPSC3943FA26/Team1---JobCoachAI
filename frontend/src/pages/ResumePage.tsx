@@ -207,7 +207,19 @@ export const loadResumeProfileCsv = async (file: File): Promise<ResumeDraft> =>
 const readResumeDraft = (): ResumeDraft | null => {
   try {
     const storedDraft = sessionStorage.getItem(resumeDraftStorageKey);
-    return storedDraft ? (JSON.parse(storedDraft) as ResumeDraft) : null;
+    if (!storedDraft) return null;
+    const draft = JSON.parse(storedDraft) as ResumeDraft;
+    return {
+      ...draft,
+      sections: draft.sections.map((section) => section.key !== "education"
+        ? section
+        : {
+          ...section,
+          entries: section.entries.map((entry) => typeof entry === "string"
+            ? entry
+            : { ...resumeSectionEntries.education, ...entry }),
+        }),
+    };
   } catch {
     return null;
   }

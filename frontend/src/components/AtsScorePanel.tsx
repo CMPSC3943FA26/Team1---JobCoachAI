@@ -9,6 +9,7 @@ export interface AtsScorePanelProps {
   onAddUserEvidence: (evidence: UserEvidence[]) => Promise<string | null>
   manuallyFoundSkills: readonly string[]
   missingRequirements?: readonly { requirement: string }[]
+  educationAvailable?: boolean
   readOnly?: boolean
 }
 
@@ -22,17 +23,24 @@ const scoreBand = (score: number): { label: string; className: string } => {
 const keywordKey = (keyword: string) => keyword.trim().replace(/\s+/g, ' ').toLocaleLowerCase()
 type EvidenceSection = Extract<
   UserEvidence['target_section'],
-  'Work Experience' | 'Professional Summary' | 'Projects'
+  | 'Let AI decide'
+  | 'Work Experience'
+  | 'Professional Summary'
+  | 'Projects'
+  | 'Education'
+  | 'Skills'
 >
-const evidenceSections: EvidenceSection[] = [
+const baseEvidenceSections: EvidenceSection[] = [
+  'Let AI decide',
   'Work Experience',
   'Projects',
   'Professional Summary',
+  'Skills',
 ]
 
-export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAddUserEvidence, manuallyFoundSkills, missingRequirements, readOnly = false }: AtsScorePanelProps) {
+export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAddUserEvidence, manuallyFoundSkills, missingRequirements, educationAvailable = false, readOnly = false }: AtsScorePanelProps) {
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null)
-  const [selectedSections, setSelectedSections] = useState<EvidenceSection[]>(['Work Experience'])
+  const [selectedSections, setSelectedSections] = useState<EvidenceSection[]>(['Let AI decide'])
   const [dialogStep, setDialogStep] = useState<'sections' | 'explain' | 'review'>('sections')
   const [experience, setExperience] = useState('')
   const [reviewSections, setReviewSections] = useState<EvidenceSection[]>([])
@@ -60,6 +68,9 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
     .map((item) => item.requirement).filter(Boolean))]
     .filter((keyword) =>
       !manuallyFoundSkills.some((skill) => keywordKey(skill) === keywordKey(keyword)))
+  const evidenceSections = educationAvailable
+    ? [...baseEvidenceSections.slice(0, 4), 'Education' as const, 'Skills' as const]
+    : baseEvidenceSections
 
   const chips = (keywords: string[], kind: 'matched' | 'missing') => (
     <div className="ats-chip-list">
@@ -70,7 +81,7 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
             <button type="button" className="ats-chip-add"
               aria-label={`Choose a section for ${keyword}`}
               title="Choose an AI Suggestions section"
-              onClick={() => { setSelectedKeyword(keyword); setSelectedSections(['Work Experience']); setDialogStep('sections'); setExperience(''); setGenerationError(''); setReviewSections([]); setFeedback('') }}>+</button>
+              onClick={() => { setSelectedKeyword(keyword); setSelectedSections(['Let AI decide']); setDialogStep('sections'); setExperience(''); setGenerationError(''); setReviewSections([]); setFeedback('') }}>+</button>
           ) : (
             <button type="button" className="ats-chip-remove"
               aria-label={`Remove ${keyword} from found keywords`}
@@ -134,13 +145,14 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
             <h3 id="keyword-section-dialog-title" style={{ marginTop: 0 }}>Review missing keyword</h3>
             <p>Keyword: <strong>{selectedKeyword}</strong></p>
             {dialogStep === 'sections' && <>
-              <p>Choose where to add this evidence. A new work or project entry will be drafted; the professional summary will be updated. You can select multiple sections.</p>
+              <p>Choose where to use this evidence. Work, project, education, and skill suggestions are added for your review; the professional summary can be updated. You can select multiple sections.</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', rowGap: 12, margin: '16px 0 22px', width: '100%' }}>
               {evidenceSections.map((section) => (
                 <label key={section} style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 12, width: '100%', margin: 0, padding: '8px 0', cursor: 'pointer', textAlign: 'left' }}>
                   <input type="checkbox" style={{ width: 17, height: 17, margin: 0, flex: '0 0 17px' }} checked={selectedSections.includes(section)}
                     onChange={(event) => setSelectedSections((current) => event.target.checked
-                      ? [...current, section] : current.filter((value) => value !== section))} />
+                      ? section === 'Let AI decide' ? [section] : [...current.filter((value) => value !== 'Let AI decide'), section]
+                      : current.filter((value) => value !== section))} />
                   <span style={{ textAlign: 'left', flex: 1 }}>{section}</span>
                 </label>
               ))}
@@ -188,7 +200,7 @@ export function AtsScorePanel({ response, hiddenKeywords, onRemoveKeyword, onAdd
                 <strong style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Evidence you provided</strong>
                 <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{experience.trim()}</p>
               </div>
-              <p style={{ fontSize: 13 }}>The AI will create only new suggestions for the selected sections. It may add a work or project entry, or update your professional summary. Your text will not be pasted into the resume, and existing suggestions will remain unchanged.</p>
+              <p style={{ fontSize: 13 }}>The AI will create only new suggestions for the selected sections. It may add work, project, or skill entries, update an education description or professional summary, or replace a related description. Your text will not be pasted into the resume, and existing suggestions will remain unchanged.</p>
               <div style={{ display: 'grid', gap: 14, maxHeight: '46vh', overflowY: 'auto', margin: '14px 0' }}>
                 {reviewSections.map((section) => (
                   <p key={section}><strong>Target section:</strong> {section}</p>

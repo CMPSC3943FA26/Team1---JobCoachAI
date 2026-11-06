@@ -6,6 +6,7 @@ class UserEvidence(BaseModel):
     requirement: str
     evidence: str
     target_section: Literal[
+        "Let AI decide",
         "Work Experience",
         "Professional Summary",
         "Projects",
@@ -35,7 +36,7 @@ class RequirementMatch(BaseModel):
 class Suggestion(BaseModel):
     suggestion: str
     type: str
-    requirement: str
+    requirement: str | None
     importance: int
     before: str
     reason: str

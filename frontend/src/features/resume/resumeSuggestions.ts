@@ -9,11 +9,13 @@ import type {
 // A single AI recommendation for a resume section (Issue #4 schema).
 export type ResumeRecommendation = {
   id?: string
+  action?: 'add' | 'replace' | 'remove'
   section_name: string
   original_text: string
   suggested_change: string
   reasoning: string
-  new_entry?: WorkExperience | Project
+  resume_id?: string
+  new_entry?: WorkExperience | Project | Skill | Education
 }
 
 export type SectionKey =
@@ -48,7 +50,7 @@ export type SuggestionTarget = {
 export type SuggestionChange = {
   suggestion: ResumeRecommendation
   target: SuggestionTarget | null
-  newEntry?: WorkExperience | Project
+  newEntry?: WorkExperience | Project | Skill | Education
   previousText: string
   newText: string
 }
@@ -89,6 +91,30 @@ export function resolveSuggestionTarget(
   suggestion: ResumeRecommendation,
   sections: ResumeSectionLike[],
 ): SuggestionTarget | null {
+  const fieldPath = suggestion.resume_id?.replace(/^resume\./, '')
+  const pathMatch = fieldPath?.match(
+    /^(summary|education|work_experience|skills|projects|certifications)\[(\d+)\]\.([a-z_]+)$/,
+  )
+  if (pathMatch) {
+    const [, sectionKey, indexText, fieldKey] = pathMatch
+    const entryIndex = Number(indexText)
+    const section = sections.find((candidate) => candidate.key === sectionKey)
+    const entry = section?.entries[entryIndex]
+    if (
+      entry !== undefined
+      && typeof entry !== 'string'
+      && fieldKey in entry
+      && typeof entry[fieldKey as keyof typeof entry] === 'string'
+    ) {
+      return {
+        sectionKey: sectionKey as SectionKey,
+        entryIndex,
+        fieldKey,
+      }
+    }
+    return null
+  }
+
   const sectionKey = normalizeSectionKey(suggestion.section_name)
   if (!sectionKey) return null
 
@@ -133,6 +159,15 @@ export function replaceTextInField(
 ): string {
   const original = originalText.trim()
   const replacement = newText.trim()
+
+  if (!original) {
+    if (currentValue.trim()) {
+      throw new Error(
+        'The original text changed. Review this field before applying.',
+      )
+    }
+    return replacement
+  }
 
   const start = original ? currentValue.indexOf(original) : -1
   if (start < 0 || currentValue.indexOf(original, start + 1) !== -1) {
