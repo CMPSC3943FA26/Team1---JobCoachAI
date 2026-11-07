@@ -5,6 +5,7 @@ import { Button } from "../components/Button";
 import { ResumePreview, type PreviewSection } from "../components/ResumePreview";
 import {
   deleteResumeFromDatabase,
+  getSavedResumeDisplayMeta,
   saveResumeToDatabase,
   setSavedResumeDisplayMeta,
   updateResumeToDatabase,
@@ -60,6 +61,7 @@ type ResumeDraft = {
   filename: string;
   jobTitle?: string;
   targetJobTitle?: string;
+  savedJobTitle?: string;
   csvSourceFilename?: string;
 };
 // Prefer a current role, then the most recent dated Work Experience entry.
@@ -397,6 +399,17 @@ export function ResumePage({
   const [resumeId, setResumeID] = useState<string | null>(() =>
     sessionStorage.getItem(resumeIdStorageKey),
   );
+  // The saved record's title is the baseline, not the live editor's title.
+  // Changing the title must create a different resume instead of renaming
+  // the record the user opened from Saved Resumes.
+  const savedJobTitleRef = useRef<string>(
+    (() => {
+      const id = sessionStorage.getItem(resumeIdStorageKey);
+      return (id ? getSavedResumeDisplayMeta(id)?.jobTitle : null) ??
+        storedDraft?.savedJobTitle ??
+        (storedDraft?.jobTitle ?? getMostRecentExperienceTitle(storedDraft?.sections ?? []));
+    })(),
+  );
   // Track which resume sections are expanded
   const [openSections, setOpenSections] = useState<Partial<Record<SectionKey, boolean>>>({
     summary: true,
@@ -448,7 +461,7 @@ export function ResumePage({
     if (hasDraftContent) {
       sessionStorage.setItem(
         resumeDraftStorageKey,
-        JSON.stringify({ profile, sections, filename: resumeFilename, jobTitle, targetJobTitle: jobTitle, csvSourceFilename: importedCsvFilename ?? undefined }),
+        JSON.stringify({ profile, sections, filename: resumeFilename, jobTitle, targetJobTitle: jobTitle, savedJobTitle: savedJobTitleRef.current, csvSourceFilename: importedCsvFilename ?? undefined }),
       );
     } else {
       // Do not revive a draft once every field has been cleared.
@@ -785,6 +798,7 @@ export function ResumePage({
 
           sessionStorage.setItem(resumeIdStorageKey, savedId);
           setResumeID(savedId);
+          savedJobTitleRef.current = jobTitle.trim();
 
           const currentSavedFilename =
             resumeFilename.trim().replace(/-(original|tailored)$/i, "") || "resume";
@@ -798,7 +812,12 @@ export function ResumePage({
           return savedId;
         };
 
-        if (resumeId) {
+        if (resumeId && !isGuest && jobTitle.trim() !== savedJobTitleRef.current.trim()) {
+          // Preserve the original record when a signed-in user changes the
+          // target job title (whether typed or derived from work experience).
+          await createAndRememberResume();
+          setStatus("New resume saved to your account with the updated job title.");
+        } else if (resumeId) {
           try {
             await updateResumeToDatabase(resumeId, payload);
 
@@ -810,6 +829,7 @@ export function ResumePage({
               jobTitle: jobTitle.trim(),
               kind: "original",
             });
+            savedJobTitleRef.current = jobTitle.trim();
 
             setStatus(isGuest ? "Resume updated for your guest session." : "Resume updated in your account.");
           } catch (updateError) {
@@ -1282,7 +1302,10 @@ const hasExportableData = Boolean(
                       return (
                         <div className="resume-entry-card" key={`${section.key}-${entryIndex}`}>
                           <div className="resume-entry-grid" style={section.key === "projects" ? { gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gridTemplateRows: "repeat(2, auto)", alignItems: "stretch", gap: "16px" } : undefined}>
-                            {Object.entries(entry).map(([fieldKey, value]) => (
+                            {Object.entries(entry)
+                              // Keep database IDs in the entry data, but do not expose them as editable fields.
+                              .filter(([fieldKey]) => fieldKey.toLowerCase() !== "id")
+                              .map(([fieldKey, value]) => (
                               <div
                                 className={`field-group ${section.key === "work_experience" && fieldKey === "description" ? "resume-responsibilities-field" : ""}`}
                                 key={`${section.key}-${entryIndex}-${fieldKey}`}

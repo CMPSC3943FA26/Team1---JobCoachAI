@@ -89,6 +89,9 @@ export default function TailorPage({
   const [previewingTailoredResume, setPreviewingTailoredResume] = useState(false)
   const [tailoredReady, setTailoredReady] = useState(false)
   const [tailoredResumeId, setTailoredResumeId] = useState<string | null>(null)
+  // Associate each saved tailored copy with the job title used to create it.
+  // A different title always produces a new saved resume.
+  const savedTailoredJobTitleRef = useRef<string | null>(null)
   const [showNewCopyConfirmation, setShowNewCopyConfirmation] = useState(false)
 
   const cancelConfirmationRef = useRef<HTMLButtonElement>(null)
@@ -136,6 +139,7 @@ export default function TailorPage({
     setError('')
     setShowNewCopyConfirmation(false)
     setTailoredResumeId(null)
+    savedTailoredJobTitleRef.current = null
     setTailoredReady(false)
     sessionStorage.removeItem(TAILORED_PAYLOAD_KEY)
     setSubmitted((previous) => ({
@@ -254,6 +258,7 @@ export default function TailorPage({
           throw new Error('The saved tailored resume response did not include an ID.')
         }
         setTailoredResumeId(savedId)
+        savedTailoredJobTitleRef.current = title
         setSavedResumeDisplayMeta(savedId, {
           filename: tailoredDisplayFilename,
           jobTitle: title,
@@ -261,7 +266,9 @@ export default function TailorPage({
         })
       }
 
-      if (tailoredResumeId) {
+      if (tailoredResumeId && savedTailoredJobTitleRef.current !== title) {
+        await createTailoredCopy()
+      } else if (tailoredResumeId) {
         try {
           await updateResumeToDatabase(tailoredResumeId, payload)
           setSavedResumeDisplayMeta(tailoredResumeId, {

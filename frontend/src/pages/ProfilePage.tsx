@@ -329,6 +329,7 @@ function saveDatabaseResumeAsDraft(databaseResume: Record<string, any>) {
         savedMeta?.filename ||
         `${databaseResume.full_name || 'saved-resume'}-resume`,
       jobTitle: databaseResume.job_title?.trim() || savedMeta?.jobTitle?.trim() || "",
+      savedJobTitle: databaseResume.job_title?.trim() || savedMeta?.jobTitle?.trim() || "",
     }),
   )
 }
