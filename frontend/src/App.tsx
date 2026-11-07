@@ -226,12 +226,25 @@ function App() {
 
     setShowHomeWarning(false)
     bypassWelcomeWarningRef.current = true
+    // Leaving as a guest ends the workspace session, not just its resume draft.
+    // Both the sidebar and the hashchange guard use this session state.
+    accountTypeRef.current = null
+    setAccountType(null)
+    setProfileInitials(null)
+    setAccountName(null)
+
     sessionStorage.removeItem(resumeDraftStorageKey)
     sessionStorage.removeItem(resumeIdStorageKey)
+    sessionStorage.removeItem('jobcoachai.page3Draft')
+    sessionStorage.removeItem(tailoredPayloadStorageKey)
+    allowSavedContinueRef.current = false
+    openingSavedTailorRef.current = false
+    setPage2NeedsContinue(false)
     setResumeSession(current => current + 1)
     setResumeReady(false)
     setPage2RequiredFieldsComplete(false)
     setSidebarResumePreview(null)
+    setTailorMounted(false)
 
     window.dispatchEvent(new Event('resetWelcomeForm'))
     window.location.hash = '#welcome'
