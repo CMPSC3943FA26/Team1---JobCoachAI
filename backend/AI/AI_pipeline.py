@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from time import perf_counter
 from uuid import uuid4
+import re
 
 
 from dotenv import load_dotenv
@@ -35,6 +36,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
+
+def normalize_path(path):
+    return re.sub(r"\.(\d+)(?=\.|$)", r"[\1]", path)
 def _safe_provider_error(response):
     """Return bounded provider error metadata without logging response content."""
     try:
@@ -2435,6 +2439,8 @@ def restore_combined_resume_text(response, structured_resume):
 
     def resolve(item):
         path = item.get("resume_id")
+        if isinstance(path, str):
+                path = normalize_path(path)
         # Summary text is nested under "resume" in the API payload, but the
         # model may omit that prefix when returning a field reference.
         if (
